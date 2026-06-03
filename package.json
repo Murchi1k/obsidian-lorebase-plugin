@@ -1,0 +1,31 @@
+{
+    "name": "lorebase",
+    "version": "1.0.0",
+    "description": "Track games and anime in Obsidian with card views, status filters, ratings, and metadata integrations",
+    "main": "main.js",
+    "scripts": {
+        "dev": "node esbuild.config.mjs",
+        "build": "node esbuild.config.mjs production",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run"
+    },
+    "keywords": [
+        "obsidian",
+        "plugin",
+        "games",
+        "anime",
+        "movies",
+        "books",
+        "library"
+    ],
+    "author": "Murch1k",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "builtin-modules": "^3.3.0",
+        "esbuild": "^0.19.8",
+        "obsidian": "latest",
+        "typescript": "^5.3.2",
+        "vitest": "^4.0.18"
+    }
+}
