@@ -1,124 +1,107 @@
-# 🎮 LOREBASE
+# Lorebase
 
-**LOREBASE** is an Obsidian plugin that transforms regular Markdown notes into a beautiful personal media library.
+Lorebase is an Obsidian plugin for tracking games and anime in a local Markdown-based library.
 
-It helps you store games, anime in the future other types of content all in one place, without relying on third-party services. All your data remains in your Vault as regular Markdown files, so you always have full control over your collection.
+It lets you organize titles with card views, statuses, ratings, favorites, tags, metadata integrations, and collection statistics. Your data stays in your vault as regular Markdown files.
 
----
+## Features
 
-## ✨ What is LOREBASE?
+- Game and anime libraries
+- Vertical and horizontal card views
+- Search, filters, and sorting
+- Status tracking
+- Personal ratings and favorites
+- Tags, genres, and series grouping
+- Collection statistics
+- Custom card appearance
+- English and Russian interface
+- Metadata integrations for faster note creation
 
-Many people have an endless list of games and anime they want to play or watch someday. Over time, this list grows; some items are forgotten, some remain unfinished, and others get lost among your notes.
+## Integrations
 
-LOREBASE was created to bring all of this together in one place.
+Lorebase can search external metadata providers when creating new notes.
 
-You can store your collection, track your progress, rate titles, add them to your favorites, and quickly find the title you're looking for using search and filters. Instead of a collection of scattered notes, you get a full-fledged library right inside Obsidian.
+Game providers:
 
----
+- RAWG
+- Steam
+- HowLongToBeat
 
-## 🎯 Key Features
+Anime providers:
 
-### 🎮 Games
+- AniList
+- Shikimori
 
-For games, the following features are available: completion status, ratings, favorites, tags, genres, and statistics.
+RAWG requires an API key. You can enter it in the plugin settings under Integrations.
 
-Supported:
+## Installation
 
-✅ Playing
-✅ Completed
-✅ Dropped
-✅ Sandbox
-✅ Not Started
+### Manual installation
 
----
+1. Download the latest release from GitHub.
+2. Copy these files from the release:
 
-### 📺 Anime
+```text
+main.js
+manifest.json
+styles.css
+```
 
-The app offers separate viewing statuses for anime, as well as progress tracking by season and episode.
+3. Place them in this folder inside your vault:
 
-Supported:
+```text
+Vault/.obsidian/plugins/lorebase/
+```
 
-✅ Planned
-✅ Watching
-✅ Completed
-✅ Dropped
-✅ On Hold
+4. Restart Obsidian or reload plugins.
+5. Enable Lorebase in Settings -> Community plugins.
 
----
+### Build from source
 
-## 🖼️ A beautiful library display
+Install dependencies:
 
-LOREBASE turns your notes into handy cards featuring posters and additional information.
+```bash
+npm install
+```
 
-Available features:
+Build the plugin:
 
-🔹 Card grid
-🔹 Horizontal cards
-🔹 Quick search
-🔹 Filter by status, tags, and genres
-🔹 Sort by title, year, rating, and completion date
-🔹 Random title selection
-🔹 Collection statistics
+```bash
+npm run build
+```
 
-Even large libraries run smoothly thanks to card virtualization.
+Run tests:
 
----
+```bash
+npm test
+```
 
-## 🔗 Integrations
+## Basic Usage
 
-To save you from having to enter everything manually, LOREBASE can retrieve data from external services.
+1. Open Lorebase from the ribbon icon or command palette.
+2. Choose Games or Anime.
+3. Use the add button to search for a title through the configured providers.
+4. Review the selected result and create a note.
+5. Edit status, rating, favorite flag, tags, dates, and progress from the card or edit modal.
 
-### 🎮 Games
+## Settings
 
-* Steam
-* RAWG
-* HowLongToBeat
+The settings tab lets you configure:
 
-### 📺 Anime
+- Library folders
+- Enabled media types
+- Interface language
+- Accent color
+- Card layout and size
+- Status labels
+- Game plan tags
+- Metadata providers
+- Note templates
 
-* AniList
-* Shikimori
+## Data Storage
 
-Just select a search result, and the plugin will automatically create a card with a poster, description, genres, release year, and other information.
+Lorebase stores items as Markdown files in your vault. This keeps your library portable, editable, and easy to back up.
 
----
+## License
 
-## 🎨 Customizing the appearance
-
-You can customize LOREBASE to your liking.
-
-✨ Accent color
-✨ Card size
-✨ Vertical or horizontal orientation
-✨ Display of statuses and ratings
-✨ Customization of descriptions and text on cards
-✨ Russian and English interface
-
----
-
-## 🚧 What’s Next?
-
-Development of LOREBASE is ongoing.
-
-Planned sections:
-
-📚 Books
-
-🎬 Movies
-
-📺 TV Shows
-
-The main goal of the project is to create a unified local media library for all content within Obsidian.
-
----
-
-## 💾 Your data belongs only to you
-
-LOREBASE does not lock information inside its own database.
-
-All entries are stored in regular Markdown files, so you can always:
-
-🔹 edit them manually
-🔹 create backups
-🔹 use them offline
-🔹 avoid relying on third-party services
+MIT

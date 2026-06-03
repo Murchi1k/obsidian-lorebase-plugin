@@ -150,11 +150,13 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     }
 
     onOpen(): void {
+        this.modalEl.addClass('lorebase-select-modal-container');
         this.renderSearchView();
         this.modalEl.addEventListener('keydown', this.onKeydown);
     }
 
     onClose(): void {
+        this.modalEl.removeClass('lorebase-select-modal-container');
         this.modalEl.removeEventListener('keydown', this.onKeydown);
         this.clearSearchTimer();
         if (!this.hasResolved) {

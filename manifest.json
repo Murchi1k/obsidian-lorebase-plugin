@@ -1,9 +1,9 @@
 {
     "id": "lorebase",
-    "name": "LOREBASE",
-    "version": "1.0.0",
+    "name": "Lorebase",
+    "version": "1.0.1",
     "minAppVersion": "1.0.0",
-    "description": "Track games and anime in Obsidian with card views, status filters, ratings, and metadata integrations",
+    "description": "Track games and anime with card views, status filters, ratings, and metadata integrations.",
     "author": "Murch1k",
     "isDesktopOnly": false
 }

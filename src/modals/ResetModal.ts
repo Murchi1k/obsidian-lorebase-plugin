@@ -28,6 +28,7 @@ export class ResetModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
         contentEl.addClass('lorebase-reset-modal');
+        this.modalEl.addClass('lorebase-reset-modal-container');
 
         // Header with icon
         const header = contentEl.createDiv({ cls: 'lorebase-reset-header' });
@@ -100,6 +101,7 @@ export class ResetModal extends Modal {
 
     onClose(): void {
         const { contentEl } = this;
+        this.modalEl.removeClass('lorebase-reset-modal-container');
         contentEl.empty();
     }
 }

@@ -58,7 +58,6 @@
     justify-content: space-between;
     gap: 16px;
     padding: 10px 14px;
-    background-color: #1b1c22;
     background-color: color-mix(in srgb, var(--background-primary) 92%, #000 8%);
     border-radius: 10px;
     margin: 10px;
@@ -306,7 +305,6 @@
 
 .lorebase-dropdown-choice.is-selected {
     color: var(--lorebase-accent);
-    background-color: rgba(228, 164, 126, 0.12);
     background-color: color-mix(in srgb, var(--lorebase-accent) 15%, transparent);
 }
 
@@ -498,7 +496,6 @@
 }
 
 .lorebase-tag-chip.is-active {
-    background: rgba(228, 164, 126, 0.15);
     background: color-mix(in srgb, var(--lorebase-accent) 15%, transparent);
     color: var(--lorebase-accent);
     border-color: var(--lorebase-accent);
@@ -530,7 +527,6 @@
     width: 100%;
     height: 36px;
     padding: 8px 14px;
-    background: var(--background-primary);
     background: color-mix(in srgb, var(--background-primary) 96%, #fff 4%);
     border: 1px solid var(--background-modifier-border);
     border-radius: 10px;
@@ -542,7 +538,6 @@
 
 .lorebase-search-input:focus {
     border-color: var(--lorebase-accent);
-    background: var(--background-primary);
     background: color-mix(in srgb, var(--background-primary) 94%, #fff 6%);
 }
 
@@ -1036,7 +1031,7 @@
 
 
 /* Widen the edit modal itself */
-.modal-container:has(.lorebase-edit-modal) .modal {
+.modal.lorebase-edit-modal-container {
     width: 860px;
     max-width: 95vw;
     background: var(--lorebase-edit-surface);
@@ -1264,8 +1259,6 @@
     flex-wrap: nowrap;
     gap: 6px;
     overflow-x: auto;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
     padding-bottom: 2px;
     min-width: 0;
 }
@@ -1535,7 +1528,7 @@
    EDIT MODE (CINEMATIC WORKSPACE STYLE)
    ============================================================================= */
 
-.modal-container:has(.lorebase-editmode-root) .modal {
+.modal.lorebase-editmode-modal-shell {
     width: min(1580px, 98vw);
     max-width: 98vw;
     height: min(94vh, 1100px);
@@ -1546,7 +1539,7 @@
     box-shadow: var(--shadow-m);
 }
 
-.modal-container:has(.lorebase-editmode-root) .modal-content {
+.modal.lorebase-editmode-modal-shell .modal-content {
     height: 100%;
     max-height: 100%;
     padding: 0;
@@ -1573,7 +1566,7 @@
     gap: 0;
 }
 
-.lorebase-edit-modal:has(.lorebase-editmode-root) {
+.lorebase-edit-modal {
     height: 100%;
     padding: 0;
     overflow: hidden;
@@ -2511,7 +2504,7 @@
 }
 
 @media (max-width: 940px) {
-    .modal-container:has(.lorebase-editmode-root) .modal {
+    .modal.lorebase-editmode-modal-shell {
         width: 99vw;
         max-width: 99vw;
         height: 98vh;
@@ -3841,7 +3834,7 @@
 .lorebase-provider-setting .setting-item-control {
     display: grid;
     grid-template-columns: 52px 56px 28px;
-    column-gap: 10px;
+    gap: 10px;
     align-items: center;
     justify-content: end;
 }
@@ -4035,7 +4028,7 @@
    ============================================================================= */
 
 /* Reset Modal Styles */
-.modal-container:has(.lorebase-reset-modal) .modal {
+.modal.lorebase-reset-modal-container {
     background: var(--lorebase-bg-secondary);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
@@ -4385,7 +4378,7 @@
 }
 
 /* Integrations select modal */
-.modal-container:has(.lorebase-select-modal) .modal {
+.modal.lorebase-select-modal-container {
     width: 900px;
     max-width: min(94vw, 900px);
     border: 1px solid var(--background-modifier-border);
@@ -4393,7 +4386,7 @@
     background: color-mix(in srgb, var(--background-primary) 86%, var(--background-secondary) 14%);
 }
 
-.modal-container:has(.lorebase-select-modal) .modal-content {
+.modal.lorebase-select-modal-container .modal-content {
     padding: 18px;
 }
 
@@ -4786,7 +4779,7 @@
 }
 
 @media (max-width: 640px) {
-    .modal-container:has(.lorebase-select-modal) .modal-content {
+    .modal.lorebase-select-modal-container .modal-content {
         padding: 14px;
     }
 
