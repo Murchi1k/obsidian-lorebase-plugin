@@ -4,24 +4,29 @@
  */
 
 import { App, Notice, TFile, TFolder, requestUrl } from 'obsidian';
-import { IntegrationTemplateSettings, LorebaseSettings } from '../types';
+import { AnimeItem, IntegrationTemplateSettings, LorebaseSettings } from '../types';
 import { t } from '../localization';
 import { ChoiceModal, MultiSelectSearchModal, SearchProviderOption } from '../modals/IntegrationModals';
-import { AnimeDetails, GameDetails, MediaKind, ProviderId, SearchResult } from './integrations/types';
+import { AnimePartsReviewModal } from '../modals/AnimePartsReviewModal';
+import { AnimeDetails, GameDetails, IntegrationAnimePart, MediaKind, ProviderId, SearchResult } from './integrations/types';
 import { buildSimpleTemplate, getDefaultTemplateFields, renderTemplate, sanitizeFileName } from './integrations/templateUtils';
 import { getAniListDetails, searchAniList } from './integrations/providers/anilist';
 import { getHowLongToBeatTimes } from './integrations/providers/howlongtobeat';
+import { getIgdbDetails, searchIgdb } from './integrations/providers/igdb';
 import { getRawgDetails, searchRawg } from './integrations/providers/rawg';
 import { getShikimoriDetails, searchShikimori } from './integrations/providers/shikimori';
 import { getSteamDetails, searchSteam } from './integrations/providers/steam';
+import { localizeTemplateImages } from './integrations/imageStorage';
 
 export class IntegrationService {
     private app: App;
     private getSettings: () => LorebaseSettings;
+    private runSteamSync?: () => void;
 
-    constructor(app: App, getSettings: () => LorebaseSettings) {
+    constructor(app: App, getSettings: () => LorebaseSettings, runSteamSync?: () => void) {
         this.app = app;
         this.getSettings = getSettings;
+        this.runSteamSync = runSteamSync;
     }
 
     async addGame(): Promise<void> {
@@ -44,12 +49,17 @@ export class IntegrationService {
             return { ok: false, reason: 'disabled' };
         }
 
-        if (this.requiresApiKey(providerId) && !providerSettings.apiKey) {
+        if (!this.hasRequiredCredentials(providerId, providerSettings)) {
             return { ok: false, reason: 'missing_key' };
         }
 
-        const query = providerId === 'rawg' || providerId === 'steam' ? 'portal' : 'naruto';
-        const results = await this.search(providerId, query, providerSettings.apiKey || '');
+        const query = providerId === 'rawg' || providerId === 'steam' || providerId === 'igdb' ? 'portal' : 'naruto';
+        const results = await this.search(
+            providerId,
+            query,
+            providerSettings.apiKey || '',
+            providerSettings.clientSecret || ''
+        );
         if (!results.length) {
             return { ok: false, reason: 'no_results' };
         }
@@ -93,24 +103,40 @@ export class IntegrationService {
                     new Notice(t('noticeProviderDisabled'));
                     continue;
                 }
-                if (this.requiresApiKey(itemProviderId) && !providerSettings.apiKey) {
+                if (!this.hasRequiredCredentials(itemProviderId, providerSettings)) {
                     new Notice(t('noticeMissingApiKey'));
                     continue;
                 }
 
-                const details = await this.fetchDetails(itemProviderId, item.id, providerSettings.apiKey || '');
+                const details = await this.fetchDetails(
+                    itemProviderId,
+                    item.id,
+                    providerSettings.apiKey || '',
+                    providerSettings.clientSecret || ''
+                );
                 if (!details) {
                     new Notice(t('noticeNoResults'));
                     continue;
                 }
 
-                const values = kind === 'games'
-                    ? await this.buildGameValues(details as GameDetails, shouldLoadHltb)
-                    : this.buildAnimeValues(details as AnimeDetails);
+                let values: Record<string, unknown>;
+                if (kind === 'games') {
+                    values = await this.buildGameValues(details as GameDetails, shouldLoadHltb, item.image);
+                } else {
+                    const itemProviderId = item.provider as ProviderId;
+                    values = this.buildAnimeValues(details as AnimeDetails, {
+                        provider: itemProviderId,
+                        id: item.id,
+                        parts: [],
+                    });
+                }
 
                 const title = this.toStringSafe(values.name || item.title || 'Untitled');
+                const renderedValues = template
+                    ? await localizeTemplateImages(this.app, kind, title, values, integrations.imageStorage, template)
+                    : values;
                 const content = template
-                    ? renderTemplate(template, values)
+                    ? renderTemplate(template, renderedValues)
                     : `# ${title}\n`;
 
                 const folderPath = kind === 'games' ? settings.games.folderPath : settings.anime.folderPath;
@@ -163,9 +189,14 @@ export class IntegrationService {
                 if (!selectedProviderId) return [];
                 const providerSettings = this.getSettings().integrations?.providers[selectedProviderId];
                 if (!providerSettings?.enabled) return [];
-                if (this.requiresApiKey(selectedProviderId) && !providerSettings.apiKey) return [];
+                if (!this.hasRequiredCredentials(selectedProviderId, providerSettings)) return [];
                 new Notice(t('notifyLoading'), 1200);
-                return this.search(selectedProviderId, query, providerSettings.apiKey || '');
+                return this.search(
+                    selectedProviderId,
+                    query,
+                    providerSettings.apiKey || '',
+                    providerSettings.clientSecret || ''
+                );
             },
             {
                 titleText: kind === 'games' ? t('promptSearchGame') : t('promptSearchAnime'),
@@ -176,13 +207,29 @@ export class IntegrationService {
                 selectedLabelText: t('promptSelectedLabel'),
                 providerOptions,
                 initialProviderId,
+                titleIcon: kind === 'games' ? 'gamepad-2' : 'clapperboard',
+                syncActionText: kind === 'games' ? 'Steam Sync' : undefined,
+                onSyncAction: kind === 'games' ? this.runSteamSync : undefined,
             }
         );
         return (await modal.openAndGetValues()) ?? [];
     }
 
     private requiresApiKey(provider: ProviderId): boolean {
-        return provider === 'rawg';
+        return provider === 'rawg' || provider === 'igdb';
+    }
+
+    private hasRequiredCredentials(
+        provider: ProviderId,
+        settings: { apiKey?: string; clientSecret?: string } | undefined
+    ): boolean {
+        if (provider === 'igdb') {
+            return Boolean(settings?.apiKey && settings.clientSecret);
+        }
+        if (this.requiresApiKey(provider)) {
+            return Boolean(settings?.apiKey);
+        }
+        return true;
     }
 
     private getProviderOptions(kind: MediaKind): SearchProviderOption[] {
@@ -190,6 +237,7 @@ export class IntegrationService {
             ? [
                 { id: 'rawg' as ProviderId, label: 'RAWG' },
                 { id: 'steam' as ProviderId, label: 'Steam' },
+                { id: 'igdb' as ProviderId, label: 'IGDB' },
             ]
             : [
                 { id: 'anilist' as ProviderId, label: 'AniList' },
@@ -200,7 +248,7 @@ export class IntegrationService {
         return providers.map((provider) => {
             const settings = integrations?.providers[provider.id];
             const needsKey = this.requiresApiKey(provider.id);
-            const missingKey = needsKey && !settings?.apiKey;
+            const missingKey = needsKey && !this.hasRequiredCredentials(provider.id, settings);
             const disabled = !settings?.enabled || missingKey;
             const disabledReason = !settings?.enabled
                 ? t('noticeProviderDisabled')
@@ -228,18 +276,23 @@ export class IntegrationService {
         const templateMode = mode ?? 'advanced';
         if (templateMode === 'advanced') return advancedTemplate;
         const selected = fields && fields.length ? fields : getDefaultTemplateFields(kind);
+        const withHltb = kind === 'games' && howLongToBeatEnabled
+            ? Array.from(new Set([...selected, 'main', 'main_plus_sides', 'perfectionist']))
+            : selected;
         const filtered = kind === 'games' && !howLongToBeatEnabled
             ? selected.filter((key) => key !== 'main' && key !== 'main_plus_sides' && key !== 'perfectionist' && key !== 'completionist')
-            : selected;
+            : withHltb;
         return buildSimpleTemplate(kind, filtered);
     }
 
-    private async search(provider: ProviderId, query: string, apiKey: string): Promise<SearchResult[]> {
+    private async search(provider: ProviderId, query: string, apiKey: string, clientSecret = ''): Promise<SearchResult[]> {
         switch (provider) {
             case 'rawg':
                 return searchRawg(this.fetchJson.bind(this), query, apiKey);
             case 'steam':
                 return searchSteam(this.fetchJson.bind(this), query);
+            case 'igdb':
+                return searchIgdb(this.fetchJson.bind(this), query, apiKey, clientSecret);
             case 'anilist':
                 return searchAniList(this.fetchJson.bind(this), query);
             case 'shikimori':
@@ -249,12 +302,14 @@ export class IntegrationService {
         }
     }
 
-    private async fetchDetails(provider: ProviderId, id: string, apiKey: string): Promise<GameDetails | AnimeDetails | null> {
+    private async fetchDetails(provider: ProviderId, id: string, apiKey: string, clientSecret = ''): Promise<GameDetails | AnimeDetails | null> {
         switch (provider) {
             case 'rawg':
                 return getRawgDetails(this.fetchJson.bind(this), id, apiKey);
             case 'steam':
                 return getSteamDetails(this.fetchJson.bind(this), id);
+            case 'igdb':
+                return getIgdbDetails(this.fetchJson.bind(this), id, apiKey, clientSecret);
             case 'anilist':
                 return getAniListDetails(this.fetchJson.bind(this), id);
             case 'shikimori':
@@ -264,14 +319,53 @@ export class IntegrationService {
         }
     }
 
-    private async buildGameValues(details: GameDetails, includeHowLongToBeat: boolean): Promise<Record<string, unknown>> {
+    async fetchAnimePartsForItem(anime: AnimeItem): Promise<IntegrationAnimePart[] | null> {
+        const provider = anime.integrationProvider;
+        const id = anime.integrationId;
+        if (!provider || !id) return null;
+
+        const providerSettings = this.getSettings().integrations?.providers[provider];
+        if (!providerSettings?.enabled || !this.hasRequiredCredentials(provider, providerSettings)) return null;
+
+        const details = await this.fetchDetails(
+            provider,
+            id,
+            providerSettings.apiKey || '',
+            providerSettings.clientSecret || ''
+        ) as AnimeDetails | null;
+        if (!details) return null;
+        return this.getAnimeParts(details);
+    }
+
+    async reviewAnimePartsForItem(anime: AnimeItem, providerParts: IntegrationAnimePart[]): Promise<{
+        parts: IntegrationAnimePart[];
+        activePartId: string | null;
+        status: AnimeItem['status'];
+    } | null> {
+        return this.reviewAnimeParts({ ...this.detailsFromAnime(anime), parts: providerParts }, {
+            provider: anime.integrationProvider ?? 'anilist',
+            id: anime.integrationId ?? '',
+            title: anime.displayName,
+            existingParts: anime.parts ?? [],
+            activePartId: anime.activePartId ?? null,
+            status: anime.status,
+            markNewParts: true,
+        });
+    }
+
+    private async buildGameValues(
+        details: GameDetails,
+        includeHowLongToBeat: boolean,
+        fallbackImage = ''
+    ): Promise<Record<string, unknown>> {
         const hltb = includeHowLongToBeat
             ? await this.fetchHowLongToBeatValues(details.name, details.year)
             : null;
 
         return {
             name: details.name,
-            Poster: details.poster,
+            Poster: details.poster || details.posterHorizontal || fallbackImage,
+            PosterHorizontal: details.posterHorizontal || details.poster || fallbackImage,
             Plot: details.description,
             genres: details.genres,
             platforms: details.platforms,
@@ -296,11 +390,7 @@ export class IntegrationService {
 
         const mode = mediaSettings.templateMode ?? 'advanced';
         if (mode === 'simple') {
-            const fields = new Set(mediaSettings.templateFields ?? []);
-            return fields.has('main')
-                || fields.has('main_plus_sides')
-                || fields.has('perfectionist')
-                || fields.has('completionist');
+            return true;
         }
 
         return /\{\{VALUE:(main|main_plus_sides|perfectionist|completionist)\}\}/.test(mediaSettings.template);
@@ -319,19 +409,117 @@ export class IntegrationService {
         }
     }
 
-    private buildAnimeValues(details: AnimeDetails): Record<string, unknown> {
+    private buildAnimeValues(details: AnimeDetails, source?: {
+        parts?: IntegrationAnimePart[];
+        activePartId?: string | null;
+        status?: AnimeItem['status'];
+        provider?: ProviderId;
+        id?: string;
+    }): Record<string, unknown> {
+        const parts = source && Object.prototype.hasOwnProperty.call(source, 'parts')
+            ? source.parts ?? []
+            : this.getAnimeParts(details);
+        const activePart = parts.find((part) => part.id === source?.activePartId) ?? parts[0] ?? null;
         return {
             name: details.name,
             image: details.image,
+            ImageHorizontal: details.imageHorizontal ?? details.image,
             Plot: details.description,
             imdbRating: details.imdbRating,
             tags: details.tags,
             Year: details.year,
             studios: details.studios,
             url: details.url,
-            status: 'planned',
+            status: source?.status ?? 'planned',
             format: details.format || '',
+            seasonCurrent: activePart?.seasonNumber ?? '',
+            episodeCurrent: activePart?.episodeCurrent ?? '',
+            episodeTotal: activePart?.episodeTotal ?? '',
+            activePartId: activePart?.id ?? '',
+            animePartsYaml: this.renderAnimePartsYaml(parts),
+            integrationProvider: source?.provider ?? '',
+            integrationId: source?.id ?? '',
         };
+    }
+
+    private async reviewAnimeParts(details: AnimeDetails, options: {
+        provider: ProviderId;
+        id: string;
+        title: string;
+        existingParts?: AnimeItem['parts'];
+        activePartId?: string | null;
+        status?: AnimeItem['status'];
+        markNewParts?: boolean;
+    }): Promise<{
+        parts: IntegrationAnimePart[];
+        activePartId: string | null;
+        status: AnimeItem['status'];
+    } | null> {
+        const modal = new AnimePartsReviewModal(this.app, {
+            title: t('animePartsProviderTitle'),
+            subtitle: options.title,
+            providerParts: this.getAnimeParts(details),
+            existingParts: options.existingParts,
+            activePartId: options.activePartId,
+            status: options.status,
+            markNewParts: options.markNewParts,
+        });
+        return modal.openAndGetValue();
+    }
+
+    private detailsFromAnime(anime: AnimeItem): AnimeDetails {
+        return {
+            name: anime.displayName,
+            description: anime.summary ?? anime.description ?? '',
+            image: anime.imageUrl,
+            imageHorizontal: anime.horizontalImageUrl ?? anime.imageUrl,
+            tags: anime.tags,
+            studios: [],
+            year: anime.year ? String(anime.year) : '',
+            imdbRating: '',
+            url: anime.sourceUrl ?? '',
+            format: anime.format,
+            parts: [],
+        };
+    }
+
+    private getAnimeParts(details: AnimeDetails): IntegrationAnimePart[] {
+        if (details.parts?.length) return details.parts;
+        return [{
+            id: 'main',
+            kind: this.normalizeAnimePartKind(details.format),
+            title: details.format || details.name || 'Main',
+            seasonNumber: this.normalizeAnimePartKind(details.format) === 'tv' ? 1 : null,
+            episodeCurrent: 0,
+            episodeTotal: null,
+            status: 'planned',
+        }];
+    }
+
+    private normalizeAnimePartKind(format: string | undefined): IntegrationAnimePart['kind'] {
+        const value = (format ?? '').trim().toLowerCase();
+        if (value === 'movie' || value === 'фильм') return 'movie';
+        if (value === 'ova') return 'ova';
+        if (value === 'ona') return 'ona';
+        if (value === 'special' || value === 'спешл') return 'special';
+        return 'tv';
+    }
+
+    private renderAnimePartsYaml(parts: IntegrationAnimePart[]): string {
+        if (!parts.length) return '  []';
+        return parts.map((part) => [
+            `  - id: "${this.escapeYaml(part.id)}"`,
+            `    kind: "${part.kind}"`,
+            `    title: "${this.escapeYaml(part.title)}"`,
+            `    season: ${part.seasonNumber ?? 'null'}`,
+            `    episode_current: ${part.episodeCurrent ?? 0}`,
+            `    episode_total: ${part.episodeTotal ?? 'null'}`,
+            `    status: "${part.status}"`,
+        ].join('\n')).join('\n');
+    }
+
+    private escapeYaml(value: unknown): string {
+        return this.toStringSafe(value).replace(/"/g, '\\"');
     }
 
     private toStringSafe(value: unknown): string {

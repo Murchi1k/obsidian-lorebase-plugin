@@ -20,7 +20,30 @@ function getTemplateFieldOrder(
     };
 
     (savedOrder ?? []).forEach(pushUnique);
-    fields.forEach((field) => pushUnique(field.key));
+    fields.forEach((field, index) => {
+        if (ordered.includes(field.key)) return;
+
+        const previousDefaultKey = fields
+            .slice(0, index)
+            .map((candidate) => candidate.key)
+            .reverse()
+            .find((key) => ordered.includes(key));
+        if (previousDefaultKey) {
+            ordered.splice(ordered.indexOf(previousDefaultKey) + 1, 0, field.key);
+            return;
+        }
+
+        const nextDefaultKey = fields
+            .slice(index + 1)
+            .map((candidate) => candidate.key)
+            .find((key) => ordered.includes(key));
+        if (nextDefaultKey) {
+            ordered.splice(ordered.indexOf(nextDefaultKey), 0, field.key);
+            return;
+        }
+
+        ordered.push(field.key);
+    });
 
     return ordered;
 }
@@ -131,6 +154,14 @@ function getGameTemplateFields(includeHowLongToBeat: boolean): TemplateFieldDef[
         : [...GAME_TEMPLATE_FIELDS];
 }
 
+function enableHowLongToBeatTemplateFields(media: IntegrationTemplateSettings): void {
+    const hltbFields = GAME_TEMPLATE_FIELDS_HLTB.map((field) => field.key);
+    const current = media.templateFields?.length
+        ? media.templateFields
+        : GAME_TEMPLATE_FIELDS.map((field) => field.key);
+    media.templateFields = Array.from(new Set([...current, ...hltbFields]));
+}
+
 export function renderIntegrationsSection(context: SettingsSectionContext, container: HTMLElement): void {
     const integrations = context.plugin.settings.integrations;
     if (!integrations) return;
@@ -164,9 +195,10 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
     );
 
     const renderProvider = (
-        id: 'rawg' | 'steam' | 'anilist' | 'shikimori',
+        id: 'rawg' | 'steam' | 'igdb' | 'anilist' | 'shikimori',
         label: string,
-        needsKey: boolean
+        needsKey: boolean,
+        needsClientSecret = false
     ): void => {
         const provider = integrations.providers[id];
 
@@ -182,6 +214,9 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                     });
             });
         setting.settingEl.addClass('lorebase-provider-setting');
+        if (needsClientSecret) {
+            setting.settingEl.addClass('is-igdb-provider');
+        }
 
         setting.addButton(button => {
             button
@@ -209,7 +244,12 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
             const keyRow = setting.settingEl.createDiv({ cls: 'lorebase-provider-key-row' });
             const keyInput = keyRow.createEl('input', {
                 cls: 'lorebase-provider-key-input',
-                attr: { type: 'text', placeholder: t('settingsIntegrationsProviderKeyPlaceholder') }
+                attr: {
+                    type: 'text',
+                    placeholder: needsClientSecret
+                        ? t('settingsIntegrationsProviderClientIdPlaceholder')
+                        : t('settingsIntegrationsProviderKeyPlaceholder')
+                }
             });
             keyInput.value = provider.apiKey ?? '';
             keyInput.addEventListener('input', async () => {
@@ -217,10 +257,52 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                 await context.plugin.saveSettings();
             });
 
+            let secretInput: HTMLInputElement | null = null;
+            if (needsClientSecret) {
+                secretInput = keyRow.createEl('input', {
+                    cls: 'lorebase-provider-key-input',
+                    attr: { type: 'password', placeholder: t('settingsIntegrationsProviderClientSecretPlaceholder') }
+                });
+                secretInput.value = provider.clientSecret ?? '';
+                secretInput.addEventListener('input', async () => {
+                    provider.clientSecret = secretInput?.value.trim() ?? '';
+                    await context.plugin.saveSettings();
+                });
+
+                const help = keyRow.createDiv({ cls: 'lorebase-provider-help' });
+                help.createDiv({
+                    cls: 'lorebase-provider-help-title',
+                    text: t('settingsIntegrationsProviderIgdbHelpTitle')
+                });
+                help.createDiv({
+                    cls: 'lorebase-provider-help-text',
+                    text: t('settingsIntegrationsProviderIgdbHelpText')
+                });
+                const links = help.createDiv({ cls: 'lorebase-provider-help-links' });
+                links.createEl('a', {
+                    text: t('settingsIntegrationsProviderIgdbTwitchLink'),
+                    attr: {
+                        href: 'https://dev.twitch.tv/console/apps',
+                        target: '_blank',
+                        rel: 'noopener'
+                    }
+                });
+                links.createEl('a', {
+                    text: t('settingsIntegrationsProviderIgdbDocsLink'),
+                    attr: {
+                        href: 'https://api-docs.igdb.com/',
+                        target: '_blank',
+                        rel: 'noopener'
+                    }
+                });
+            }
+
             setting.addExtraButton(button => {
                 button
                     .setIcon('chevron-down')
-                    .setTooltip(t('settingsIntegrationsProviderKeyPlaceholder'))
+                    .setTooltip(needsClientSecret
+                        ? t('settingsIntegrationsProviderClientIdPlaceholder')
+                        : t('settingsIntegrationsProviderKeyPlaceholder'))
                     .onClick(() => {
                         const isOpen = setting.settingEl.hasClass('is-key-open');
                         if (isOpen) {
@@ -237,47 +319,9 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
 
     renderProvider('rawg', t('settingsIntegrationsProviderRawg'), true);
     renderProvider('steam', t('settingsIntegrationsProviderSteam'), false);
+    renderProvider('igdb', t('settingsIntegrationsProviderIgdb'), true, true);
     renderProvider('anilist', t('settingsIntegrationsProviderAnilist'), false);
     renderProvider('shikimori', t('settingsIntegrationsProviderShikimori'), false);
-
-    const mediaProvidersGroup = context.createCollapsibleGroup(
-        container,
-        t('settingsIntegrationsMediaProviders'),
-        undefined,
-        true
-    );
-
-    const gamesProviderSetting = new Setting(mediaProvidersGroup.body)
-        .setName(t('settingsIntegrationsGamesProvider'))
-        .setDesc(t('settingsIntegrationsGamesProviderDesc'));
-    addLorebaseDropdown<'rawg' | 'steam'>(
-        gamesProviderSetting,
-        [
-            { value: 'rawg', label: 'RAWG' },
-            { value: 'steam', label: 'Steam' },
-        ],
-        integrations.media.games.provider as 'rawg' | 'steam',
-        async (value) => {
-            integrations.media.games.provider = value;
-            await context.plugin.saveSettings();
-        }
-    );
-
-    const animeProviderSetting = new Setting(mediaProvidersGroup.body)
-        .setName(t('settingsIntegrationsAnimeProvider'))
-        .setDesc(t('settingsIntegrationsAnimeProviderDesc'));
-    addLorebaseDropdown<'anilist' | 'shikimori'>(
-        animeProviderSetting,
-        [
-            { value: 'anilist', label: 'AniList' },
-            { value: 'shikimori', label: 'Shikimori' },
-        ],
-        integrations.media.anime.provider as 'anilist' | 'shikimori',
-        async (value) => {
-            integrations.media.anime.provider = value;
-            await context.plugin.saveSettings();
-        }
-    );
 
     const templatesGroup = context.createCollapsibleGroup(
         container,
@@ -343,6 +387,9 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                         .setValue(media.howLongToBeatEnabled ?? false)
                         .onChange(async (value) => {
                             media.howLongToBeatEnabled = value;
+                            if (value) {
+                                enableHowLongToBeatTemplateFields(media);
+                            }
                             await context.plugin.saveSettings();
                             context.display();
                         });

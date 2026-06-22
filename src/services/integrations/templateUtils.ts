@@ -4,6 +4,7 @@ export function getDefaultTemplateFields(kind: MediaKind): string[] {
     if (kind === 'games') {
         return [
             'poster',
+            'posterHorizontal',
             'plot',
             'gameSeries',
             'genres',
@@ -21,17 +22,19 @@ export function getDefaultTemplateFields(kind: MediaKind): string[] {
     }
 
     return [
-        'name',
         'image',
+        'imageHorizontal',
         'plot',
         'scoreImdb',
         'tags',
         'year',
         'studios',
         'format',
+        'animeParts',
         'rating',
         'status',
         'favorite',
+        'integrationSource',
         'url',
     ];
 }
@@ -42,6 +45,7 @@ export function buildSimpleTemplate(kind: MediaKind, fields: string[]): string {
 
     if (kind === 'games') {
         if (set.has('poster')) lines.push('poster: "{{VALUE:Poster}}"');
+        if (set.has('posterHorizontal')) lines.push('poster_b: "{{VALUE:PosterHorizontal}}"');
         if (set.has('plot')) lines.push('plot: "{{VALUE:Plot}}"');
         if (set.has('gameSeries')) lines.push('gameSeries:');
         if (set.has('genres')) lines.push('genres: "{{VALUE:genres}}"');
@@ -61,17 +65,29 @@ export function buildSimpleTemplate(kind: MediaKind, fields: string[]): string {
             lines.push('perfectionist: "{{VALUE:perfectionist}}"');
         }
     } else {
-        if (set.has('name')) lines.push('name: "{{VALUE:name}}"');
         if (set.has('image')) lines.push('image: "{{VALUE:image}}"');
+        if (set.has('imageHorizontal')) lines.push('image_b: "{{VALUE:ImageHorizontal}}"');
         if (set.has('plot')) lines.push('plot: "{{VALUE:Plot}}"');
         if (set.has('scoreImdb')) lines.push('scoreImdb: "{{VALUE:imdbRating}}"');
         if (set.has('tags')) lines.push('tags: "{{VALUE:tags}}"');
         if (set.has('year')) lines.push('year: "{{VALUE:Year}}"');
         if (set.has('studios')) lines.push('studios: "{{VALUE:studios}}"');
         if (set.has('format')) lines.push('format: "{{VALUE:format}}"');
+        if (set.has('animeParts')) {
+            lines.push('season_current: "{{VALUE:seasonCurrent}}"');
+            lines.push('episode_current: "{{VALUE:episodeCurrent}}"');
+            lines.push('episode_total: "{{VALUE:episodeTotal}}"');
+            lines.push('active_part_id: "{{VALUE:activePartId}}"');
+            lines.push('anime_parts:');
+            lines.push('{{VALUE:animePartsYaml}}');
+        }
         if (set.has('rating')) lines.push('rating:');
-        if (set.has('status')) lines.push('status: planned');
+        if (set.has('status')) lines.push('status: "{{VALUE:status}}"');
         if (set.has('favorite')) lines.push('favorite: false');
+        if (set.has('integrationSource')) {
+            lines.push('integration_provider: "{{VALUE:integrationProvider}}"');
+            lines.push('integration_id: "{{VALUE:integrationId}}"');
+        }
         if (set.has('url')) lines.push('url: "{{VALUE:url}}"');
     }
 
@@ -93,6 +109,10 @@ export function renderTemplate(template: string, values: Record<string, unknown>
 
         const key = match[1];
         const value = values[key];
+        if (typeof value === 'string' && value.includes('\n') && line.trim() === `{{VALUE:${key}}}`) {
+            output.push(value);
+            continue;
+        }
 
         if (Array.isArray(value)) {
             const listItemMatch = line.match(/^(\s*)-\s*"?\{\{VALUE:[A-Za-z0-9_]+\}\}"?\s*$/);
