@@ -170,6 +170,10 @@ export class GameCard {
                     img.remove();
                     return;
                 }
+                if (this.game.horizontalImageUrl && img.src !== this.game.horizontalImageUrl) {
+                    img.src = this.game.horizontalImageUrl;
+                    return;
+                }
                 if (img.src !== DEFAULT_COVER) {
                     img.src = DEFAULT_COVER;
                 }

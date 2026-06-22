@@ -9,7 +9,7 @@ import { GameService } from '../services/GameService';
 import { AnimeService } from '../services/AnimeService';
 import { Toolbar, ToolbarCallbacks } from '../components/Toolbar';
 import { GameCard } from '../components/GameCard';
-import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS } from '../constants';
+import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, STATUS_CONFIG, RATING_EMOJI } from '../constants';
 import { t, i18n } from '../localization';
 import { VirtualGrid } from './library/VirtualGrid';
 import { showMediaContextMenu } from './library/contextMenu';
@@ -48,6 +48,7 @@ const VISUAL_REFRESH_IDLE_TIMEOUT_MS = 50;
 const VISUAL_REFRESH_FALLBACK_MS = 120;
 const CARD_RENDER_BATCH_SIZE = 24;
 const LAYOUT_RESIZE_SETTLE_MS = 180;
+const OPTIMISTIC_METADATA_SUPPRESS_MS = 1200;
 
 // =============================================================================
 // LIBRARY VIEW
@@ -97,6 +98,7 @@ export class LibraryView extends ItemView {
     private resizeSettleTimerId: number | null = null;
     private renderVersion = 0;
     private pendingFilterScrollMode: RenderScrollMode = 'none';
+    private optimisticMutations = new Map<string, number>();
 
     private getCardHeight(): number {
         return this.layoutCalculator.getCardHeight(this.getEffectiveLayout());
@@ -178,6 +180,12 @@ export class LibraryView extends ItemView {
                     this.handleFileDelete(file);
                 })
             );
+
+            this.registerEvent(
+                this.app.vault.on('rename', (file, oldPath) => {
+                    this.handleFileRename(file, oldPath);
+                })
+            );
         } catch (e) {
             console.error('Error opening library view:', e);
             this.showError(t('errorInitView'));
@@ -236,6 +244,37 @@ export class LibraryView extends ItemView {
         }
     }
 
+    private handleFileRename(file: TAbstractFile, oldPath: string): void {
+        if (this.isDestroyed) return;
+        if (!(file instanceof TFile)) return;
+
+        const existingIndex = this.gameIndex.get(oldPath);
+        const activeSettings = this.getActiveSettings();
+        const isInLibraryFolder = file.path.startsWith(activeSettings.folderPath) && file.extension === 'md';
+        const parsedItem = this.mediaType === 'anime'
+            ? this.animeService.parseAnimeFromCache(file)
+            : this.gameService.parseGameFromCache(file);
+
+        if (existingIndex !== undefined) {
+            if (isInLibraryFolder && parsedItem) {
+                this.games[existingIndex] = parsedItem;
+            } else {
+                this.games.splice(existingIndex, 1);
+            }
+            this.rebuildGameIndex();
+            this.tagsDirty = true;
+            this.applyFiltersAndSort({ scrollMode: 'preserve' });
+            return;
+        }
+
+        if (isInLibraryFolder && parsedItem) {
+            this.gameIndex.set(parsedItem.filePath, this.games.length);
+            this.games.push(parsedItem);
+            this.tagsDirty = true;
+            this.applyFiltersAndSort({ scrollMode: 'preserve' });
+        }
+    }
+
     /**
      * Handle metadata changes for auto-update
      */
@@ -252,6 +291,9 @@ export class LibraryView extends ItemView {
             : this.gameService.parseGameFromCache(file);
 
         if (existingIndex !== undefined) {
+            if (this.shouldSuppressOptimisticMetadataRender(file.path)) {
+                return;
+            }
             // Existing item - update or remove if it no longer matches the active media type
             if (parsedItem) {
                 const previousItem = this.games[existingIndex];
@@ -275,6 +317,12 @@ export class LibraryView extends ItemView {
                 this.applyFiltersAndSort({ scrollMode: 'preserve' });
             }
         }
+    }
+
+    private refreshFileFromCache(filePath: string): void {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!(file instanceof TFile)) return;
+        this.handleMetadataChange(file);
     }
 
     /**
@@ -782,9 +830,11 @@ export class LibraryView extends ItemView {
             isDestroyed: () => this.isDestroyed,
             getStatusOptions: () => this.getStatusOptions(),
             onApplyFiltersAndSort: () => this.applyFiltersAndSort({ scrollMode: 'preserve' }),
+            onItemMutated: (item, changedFields) => this.handleContextItemMutation(item, changedFields),
             onEdit: (item) => {
                 this.plugin.showEditModal(item, () => {
-                    // Manual refresh removed - relying on metadataCache event.
+                    this.refreshFileFromCache(item.filePath);
+                    window.setTimeout(() => this.refreshFileFromCache(item.filePath), 100);
                 });
             },
             onDelete: (item) => {
@@ -806,6 +856,155 @@ export class LibraryView extends ItemView {
                 void this.gameService.updateGame(gameItem, updates);
             },
         });
+    }
+
+    private handleContextItemMutation(item: MediaItem, changedFields: string[]): void {
+        this.optimisticMutations.set(item.filePath, Date.now() + OPTIMISTIC_METADATA_SUPPRESS_MS);
+        if (this.shouldFullRefreshAfterMutation(changedFields)) {
+            this.applyFiltersAndSort({ scrollMode: 'preserve' });
+            return;
+        }
+        this.refreshRenderedCard(item);
+    }
+
+    private shouldSuppressOptimisticMetadataRender(filePath: string): boolean {
+        const until = this.optimisticMutations.get(filePath);
+        if (!until) return false;
+        if (Date.now() > until) {
+            this.optimisticMutations.delete(filePath);
+            return false;
+        }
+        return true;
+    }
+
+    private shouldFullRefreshAfterMutation(changedFields: string[]): boolean {
+        const settings = this.getActiveSettings();
+        if (changedFields.includes('userRating') && settings.sortField === 'rating') return true;
+        if (changedFields.includes('status') && this.filter.statuses.length > 0) return true;
+        if (changedFields.includes('favorite') && this.filter.favoriteOnly) return true;
+        return false;
+    }
+
+    private refreshRenderedCard(item: MediaItem): void {
+        const current = this.libraryContentEl?.querySelector<HTMLElement>(`[data-lorebase-file-path="${CSS.escape(item.filePath)}"]`);
+        if (!current) {
+            this.applyFiltersAndSort({ scrollMode: 'preserve' });
+            return;
+        }
+        this.updateRenderedCardBadges(current, item);
+    }
+
+    private updateRenderedCardBadges(cardEl: HTMLElement, item: MediaItem): void {
+        const badgeProfile = this.getBadgeProfile(item.type);
+        cardEl.toggleClass(
+            'lorebase-card-favorite-pulse',
+            badgeProfile.favorite.enabled && badgeProfile.favorite.subtlePulse && item.favorite
+        );
+
+        const imageEl = cardEl.querySelector<HTMLElement>('.lorebase-card-image');
+        if (!imageEl) return;
+
+        this.updateStatusBadge(imageEl, item, badgeProfile);
+        this.updateRatingBadge(imageEl, item, badgeProfile);
+        this.updateFavoriteBadge(imageEl, item, badgeProfile);
+    }
+
+    private updateStatusBadge(
+        imageEl: HTMLElement,
+        item: MediaItem,
+        badgeProfile: LorebaseSettings['badges']
+    ): void {
+        imageEl.querySelector('.lorebase-card-status')?.remove();
+        if (!badgeProfile.status.enabled) return;
+
+        const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.status.position);
+        const config = STATUS_CONFIG[item.status];
+        const statusBadge = group.createDiv({ cls: `lorebase-card-status lorebase-status-${item.status}` });
+
+        if (badgeProfile.status.iconOnly) {
+            statusBadge.addClass('is-icon-only');
+            statusBadge.appendChild(this.createBadgeSvg(config.pathD));
+            return;
+        }
+
+        statusBadge.appendChild(this.createBadgeSvg(config.pathD));
+        statusBadge.createSpan({ text: this.getRenderedStatusLabel(item) });
+    }
+
+    private updateRatingBadge(
+        imageEl: HTMLElement,
+        item: MediaItem,
+        badgeProfile: LorebaseSettings['badges']
+    ): void {
+        imageEl.querySelector('.lorebase-card-rating')?.remove();
+        if (!badgeProfile.rating.enabled || !item.userRating) return;
+
+        const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.rating.position);
+        const ratingBadge = group.createDiv({ cls: 'lorebase-card-rating' });
+
+        if (badgeProfile.rating.mode === 'emoji') {
+            ratingBadge.addClass('is-emoji');
+            ratingBadge.textContent = RATING_EMOJI[item.userRating] ?? '';
+            return;
+        }
+
+        ratingBadge.textContent = `★${item.userRating}`;
+    }
+
+    private updateFavoriteBadge(
+        imageEl: HTMLElement,
+        item: MediaItem,
+        badgeProfile: LorebaseSettings['badges']
+    ): void {
+        imageEl.querySelector('.lorebase-card-favorite-badge')?.remove();
+        if (!badgeProfile.favorite.enabled || !item.favorite || badgeProfile.favorite.subtlePulse) return;
+
+        const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.favorite.position);
+        const favoriteBadge = group.createDiv({ cls: 'lorebase-card-favorite-badge' });
+        favoriteBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="#ffffff" stroke="none" width="12" height="12"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>';
+    }
+
+    private getOrCreateBadgeGroup(
+        imageEl: HTMLElement,
+        position: LorebaseSettings['badges']['status']['position']
+    ): HTMLElement {
+        const positionClass = `is-${position}`;
+        const existing = Array.from(imageEl.querySelectorAll<HTMLElement>('.lorebase-card-badge-group'))
+            .find((group) => group.hasClass(positionClass));
+        if (existing) return existing;
+
+        const group = imageEl.createDiv({ cls: `lorebase-card-badge-group ${positionClass}` });
+        if (position.startsWith('top')) group.addClass('is-top-badge');
+        return group;
+    }
+
+    private getRenderedStatusLabel(item: MediaItem): string {
+        const overrides = this.getStatusLabelOverrides(item.type);
+        const fallback: Record<string, string> = {
+            completed: item.type === 'anime' ? t('statusCompleted') : t('statusPlayed'),
+            playing: t('statusPlaying'),
+            dropped: t('statusDropped'),
+            sandbox: t('statusSandbox'),
+            not_started: t('statusNotStarted'),
+            planned: t('statusPlanned'),
+            watching: t('statusWatching'),
+            paused: t('statusPaused'),
+        };
+        return overrides[item.status]?.trim() || fallback[item.status] || String(item.status);
+    }
+
+    private createBadgeSvg(pathD: string): SVGElement {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathD);
+        svg.appendChild(path);
+        return svg;
     }
 
     /**

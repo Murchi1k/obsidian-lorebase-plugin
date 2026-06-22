@@ -39,6 +39,7 @@ export function createLorebaseDropdown<T extends string>(
     const close = (): void => {
         panel.removeClass('is-open');
         button.removeClass('is-open');
+        container.removeClass('is-open');
         button.setAttribute('aria-expanded', 'false');
     };
 
@@ -100,8 +101,12 @@ export function createLorebaseDropdown<T extends string>(
                 node.setAttribute('aria-expanded', 'false');
             }
         });
+        document.querySelectorAll('.lorebase-settings-dropdown.is-open').forEach((node) => {
+            if (node !== container) node.removeClass('is-open');
+        });
         panel.toggleClass('is-open', !isOpen);
         button.toggleClass('is-open', !isOpen);
+        container.toggleClass('is-open', !isOpen);
         button.setAttribute('aria-expanded', String(!isOpen));
     });
 

@@ -21,6 +21,7 @@ export class EditModal extends Modal {
     private selectedRating: UserRating;
     private selectedStatus: GameStatus;
     private favorite: boolean;
+    private title: string;
     private year: number | null;
     private description: string;
     private gameSeries: string;
@@ -68,6 +69,7 @@ export class EditModal extends Modal {
         this.selectedRating = game.userRating;
         this.selectedStatus = game.status;
         this.favorite = game.favorite;
+        this.title = game.displayName;
         this.year = game.year;
         this.description = game.description;
         this.gameSeries = game.gameSeries;
@@ -442,6 +444,7 @@ export class EditModal extends Modal {
 
         const title = this.qs<HTMLInputElement>(root, '[data-field="title"]');
         title?.addEventListener('input', () => {
+            this.title = title.value.trim();
             const breadcrumb = this.qs<HTMLElement>(root, '[data-role="breadcrumb"]');
             if (breadcrumb) breadcrumb.textContent = `${t('editBreadcrumbGames')} / ${title.value.trim() || this.game.displayName}`;
         });
@@ -889,6 +892,7 @@ export class EditModal extends Modal {
             userRating: this.selectedRating,
             status: this.selectedStatus,
             favorite: this.favorite,
+            displayName: this.title || this.game.displayName,
             year: this.year,
             description: this.description,
             gameSeries: this.gameSeries,

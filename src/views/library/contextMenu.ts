@@ -11,6 +11,7 @@ export interface MediaContextMenuDeps {
     onApplyFiltersAndSort: () => void;
     onEdit: (item: MediaItem) => void;
     onDelete: (item: MediaItem) => void;
+    onItemMutated: (item: MediaItem, changedFields: string[]) => void;
     updateAnime: (anime: AnimeItem, updates: Partial<AnimeItem>) => void;
     updateGame: (game: GameItem, updates: Partial<GameItem>) => void;
 }
@@ -40,11 +41,11 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                         if (deps.isDestroyed()) return;
                         if (item.type === 'anime') {
                             item.userRating = rating.value;
-                            deps.onApplyFiltersAndSort();
+                            deps.onItemMutated(item, ['userRating']);
                             deps.updateAnime(item, { userRating: rating.value });
                         } else {
                             item.userRating = rating.value;
-                            deps.onApplyFiltersAndSort();
+                            deps.onItemMutated(item, ['userRating']);
                             deps.updateGame(item, { userRating: rating.value });
                         }
                     });
@@ -56,7 +57,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                 .onClick(() => {
                     if (deps.isDestroyed()) return;
                     item.userRating = null;
-                    deps.onApplyFiltersAndSort();
+                    deps.onItemMutated(item, ['userRating']);
                     if (item.type === 'anime') {
                         deps.updateAnime(item, { userRating: null });
                     } else {
@@ -80,12 +81,12 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                         if (item.type === 'anime') {
                             const nextStatus = status as AnimeItem['status'];
                             item.status = nextStatus;
-                            deps.onApplyFiltersAndSort();
+                            deps.onItemMutated(item, ['status']);
                             deps.updateAnime(item, { status: nextStatus });
                         } else {
                             const nextStatus = status as GameItem['status'];
                             item.status = nextStatus;
-                            deps.onApplyFiltersAndSort();
+                            deps.onItemMutated(item, ['status']);
                             deps.updateGame(item, { status: nextStatus });
                         }
                     });
@@ -147,7 +148,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                         }
                     }
 
-                    deps.onApplyFiltersAndSort();
+                    deps.onItemMutated(item, ['episodeCurrent', 'episodeTotal', 'seasonCurrent', 'status', 'parts']);
                     deps.updateAnime(item, updates);
                 });
         });
@@ -161,7 +162,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
             .onClick(() => {
                 if (deps.isDestroyed()) return;
                 item.favorite = !item.favorite;
-                deps.onApplyFiltersAndSort();
+                deps.onItemMutated(item, ['favorite']);
                 if (item.type === 'anime') {
                     deps.updateAnime(item, { favorite: item.favorite });
                 } else {

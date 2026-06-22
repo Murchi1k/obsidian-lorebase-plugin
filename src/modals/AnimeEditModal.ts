@@ -15,6 +15,7 @@ export class AnimeEditModal extends Modal {
     private anime: AnimeItem;
     private onSave: (updates: Partial<AnimeItem>) => Promise<void>;
     private onDelete?: () => void;
+    private onRefreshParts?: () => Promise<boolean | void>;
 
     private selectedRating: UserRating;
     private selectedStatus: AnimeStatus;
@@ -51,12 +52,14 @@ export class AnimeEditModal extends Modal {
         app: App,
         anime: AnimeItem,
         onSave: (updates: Partial<AnimeItem>) => Promise<void>,
-        onDelete?: () => void
+        onDelete?: () => void,
+        onRefreshParts?: () => Promise<boolean | void>
     ) {
         super(app);
         this.anime = anime;
         this.onSave = onSave;
         this.onDelete = onDelete;
+        this.onRefreshParts = onRefreshParts;
 
         this.selectedRating = anime.userRating;
         this.selectedStatus = anime.status;
@@ -190,6 +193,7 @@ export class AnimeEditModal extends Modal {
                             <div class="lorebase-editmode-panel-title-row">
                                 <h3 class="lorebase-editmode-panel-title">${t('editAnimeParts')}</h3>
                                 <div class="lorebase-editmode-part-actions">
+                                    <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-tight" data-action="refresh-parts">${t('animePartsCheck')}</button>
                                     <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-tight" data-action="remove-part">${t('editRemovePart')}</button>
                                     <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-tight" data-action="add-part">${t('editAddPart')}</button>
                                 </div>
@@ -356,6 +360,12 @@ export class AnimeEditModal extends Modal {
     }
 
     private bindParts(root: HTMLElement): void {
+        this.qs<HTMLButtonElement>(root, '[data-action="refresh-parts"]')?.addEventListener('click', async () => {
+            if (!this.onRefreshParts) return;
+            const shouldClose = await this.onRefreshParts();
+            if (shouldClose) this.close();
+        });
+
         this.qs<HTMLButtonElement>(root, '[data-action="add-part"]')?.addEventListener('click', () => {
             const nextIndex = this.parts.length + 1;
             const part: PartDraft = {
@@ -795,6 +805,8 @@ export class AnimeEditModal extends Modal {
             summary: this.summary,
             format: this.format,
             sourceUrl: this.sourceUrl || null,
+            integrationProvider: this.anime.integrationProvider ?? null,
+            integrationId: this.anime.integrationId ?? null,
             tags: this.tags,
             parts: this.parts,
             activePartId: activePart?.id ?? this.activePartId,
