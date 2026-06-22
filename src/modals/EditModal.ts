@@ -653,24 +653,26 @@ export class EditModal extends Modal {
         });
 
         const onDocumentClick = (event: MouseEvent): void => {
+            const ownerDocument = host.ownerDocument;
             if (!host.isConnected) {
-                document.removeEventListener('click', onDocumentClick);
-                document.removeEventListener('keydown', onKeydown);
+                ownerDocument.removeEventListener('click', onDocumentClick);
+                ownerDocument.removeEventListener('keydown', onKeydown);
                 return;
             }
             if (!host.contains(event.target as Node)) close();
         };
         const onKeydown = (event: KeyboardEvent): void => {
+            const ownerDocument = host.ownerDocument;
             if (!host.isConnected) {
-                document.removeEventListener('click', onDocumentClick);
-                document.removeEventListener('keydown', onKeydown);
+                ownerDocument.removeEventListener('click', onDocumentClick);
+                ownerDocument.removeEventListener('keydown', onKeydown);
                 return;
             }
             if (event.key === 'Escape') close();
         };
 
-        document.addEventListener('click', onDocumentClick);
-        document.addEventListener('keydown', onKeydown);
+        host.ownerDocument.addEventListener('click', onDocumentClick);
+        host.ownerDocument.addEventListener('keydown', onKeydown);
         renderOptions();
     }
 
@@ -922,4 +924,3 @@ export class EditModal extends Modal {
         return file instanceof TFile ? file : null;
     }
 }
-

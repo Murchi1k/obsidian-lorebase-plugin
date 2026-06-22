@@ -9,7 +9,7 @@ import { t } from '../localization';
 import { SEARCH_DEBOUNCE_MS, STATUS_ICON_MAP, FILTER_ICON_MAP } from '../constants';
 import { DropdownManager } from './toolbar/DropdownManager';
 import { hasActiveFilters, hasActiveTagFilters } from './toolbar/stateUtils';
-import { TagGroups, ToolbarCallbacks } from './toolbar/types';
+import { TagGroups, TagSummary, ToolbarCallbacks } from './toolbar/types';
 
 export type { ToolbarCallbacks } from './toolbar/types';
 
@@ -265,10 +265,10 @@ export class Toolbar {
         panel.addClass('lorebase-tags-dropdown');
         button.toggleClass('is-active', this.hasActiveTagFilters());
 
-        const sections = [
-            { key: 'tags' as const, title: t('plans'), items: this.availableTags.planTags ?? [], prefix: '' },
-            { key: 'tags' as const, title: t('tags'), items: this.availableTags.tags, prefix: '#' },
-            { key: 'genres' as const, title: t('genres'), items: this.availableTags.genres, prefix: '#' },
+        const sections: Array<{ key: 'tags' | 'genres'; title: string; items: TagSummary[]; prefix: string }> = [
+            { key: 'tags', title: t('plans'), items: this.availableTags.planTags ?? [], prefix: '' },
+            { key: 'tags', title: t('tags'), items: this.availableTags.tags, prefix: '#' },
+            { key: 'genres', title: t('genres'), items: this.availableTags.genres, prefix: '#' },
         ];
 
         const hasAnyTags = sections.some(section => section.items.length > 0);
@@ -306,7 +306,11 @@ export class Toolbar {
 
                     const updated = Array.from(next);
                     this.currentFilter[section.key] = updated;
-                    this.callbacks.onFilterChange({ [section.key]: updated } as Partial<FilterState>);
+                    if (section.key === 'tags') {
+                        this.callbacks.onFilterChange({ tags: updated });
+                    } else {
+                        this.callbacks.onFilterChange({ genres: updated });
+                    }
 
                     const nowActive = updated.includes(tag.id);
                     chip.toggleClass('is-active', nowActive);
@@ -334,11 +338,11 @@ export class Toolbar {
 
         searchInput.value = this.currentFilter.searchTerm;
 
-        searchInput.addEventListener('input', (e) => {
-            const value = (e.target as HTMLInputElement).value;
+        searchInput.addEventListener('input', () => {
+            const value = searchInput.value;
 
             if (this.searchTimeout) {
-                clearTimeout(this.searchTimeout);
+                window.clearTimeout(this.searchTimeout);
             }
 
             this.searchTimeout = window.setTimeout(() => {
@@ -484,7 +488,7 @@ export class Toolbar {
                 type: 'checkbox',
                 'aria-label': label,
             },
-        }) as HTMLInputElement;
+        });
         input.checked = checked;
         input.disabled = Boolean(options?.disabled);
 
@@ -573,7 +577,7 @@ export class Toolbar {
      */
     destroy(): void {
         if (this.searchTimeout) {
-            clearTimeout(this.searchTimeout);
+            window.clearTimeout(this.searchTimeout);
             this.searchTimeout = null;
         }
 

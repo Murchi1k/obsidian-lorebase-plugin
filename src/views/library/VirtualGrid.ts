@@ -37,7 +37,7 @@ export class VirtualGrid<T> {
         }
 
         if (this.rafId !== null) {
-            cancelAnimationFrame(this.rafId);
+            window.cancelAnimationFrame(this.rafId);
             this.rafId = null;
         }
 
@@ -89,7 +89,7 @@ export class VirtualGrid<T> {
     private scheduleUpdate(): void {
         if (this.rafId !== null) return;
 
-        this.rafId = requestAnimationFrame(() => {
+        this.rafId = window.requestAnimationFrame(() => {
             this.rafId = null;
             this.updateVisibleCards();
         });

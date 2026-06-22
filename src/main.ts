@@ -76,15 +76,15 @@ export default class LorebasePlugin extends Plugin {
 
         // Add command to open library
         this.addCommand({
-            id: 'open-lorebase-library',
+            id: 'open-library',
             name: t('commandOpenLibrary'),
             callback: () => {
-                this.activateView();
+                void this.activateView();
             }
         });
 
         this.addCommand({
-            id: 'lorebase-add-game',
+            id: 'add-game',
             name: t('commandAddGame'),
             callback: () => {
                 void this.integrationService?.addGame();
@@ -92,7 +92,7 @@ export default class LorebasePlugin extends Plugin {
         });
 
         this.addCommand({
-            id: 'lorebase-add-anime',
+            id: 'add-anime',
             name: t('commandAddAnime'),
             callback: () => {
                 void this.integrationService?.addAnime();
@@ -100,7 +100,7 @@ export default class LorebasePlugin extends Plugin {
         });
 
         this.addCommand({
-            id: 'lorebase-steam-sync',
+            id: 'steam-sync',
             name: t('commandSteamSync'),
             callback: () => {
                 void this.runSteamSync();
@@ -146,8 +146,8 @@ export default class LorebasePlugin extends Plugin {
      * Load plugin settings
      */
     async loadSettings(): Promise<void> {
-        const loaded = (await this.loadData()) as Partial<LorebaseSettings> | null;
-        const sanitized = loaded ? { ...loaded } : {};
+        const loaded = await this.loadData();
+        const sanitized = this.isSettingsRecord(loaded) ? { ...loaded } : {};
         this.settings = Object.assign({}, DEFAULT_SETTINGS, sanitized);
 
         // Ensure nested objects are merged properly
@@ -285,36 +285,42 @@ export default class LorebasePlugin extends Plugin {
         }
         if (sanitized?.integrations) {
             this.settings.integrations = Object.assign({}, DEFAULT_SETTINGS.integrations, sanitized.integrations);
-            if (sanitized.integrations.providers) {
-                this.settings.integrations!.providers = Object.assign(
+            const integrations = this.settings.integrations;
+            const defaultIntegrations = DEFAULT_SETTINGS.integrations;
+            if (defaultIntegrations && sanitized.integrations.providers) {
+                integrations.providers = Object.assign(
                     {},
-                    DEFAULT_SETTINGS.integrations!.providers,
+                    defaultIntegrations.providers,
                     sanitized.integrations.providers
                 );
             }
-            this.settings.integrations!.imageStorage = Object.assign(
+            if (defaultIntegrations) integrations.imageStorage = Object.assign(
                 {},
-                DEFAULT_SETTINGS.integrations!.imageStorage,
+                defaultIntegrations.imageStorage,
                 sanitized.integrations.imageStorage ?? {}
             );
-            if (sanitized.integrations.media) {
-                this.settings.integrations!.media = Object.assign(
+            if (defaultIntegrations && sanitized.integrations.media) {
+                integrations.media = Object.assign(
                     {},
-                    DEFAULT_SETTINGS.integrations!.media,
+                    defaultIntegrations.media,
                     sanitized.integrations.media
                 );
             }
 
             // Backward compatibility: map removed anime provider "omdb" to "anilist".
-            const animeProvider = this.settings.integrations?.media?.anime?.provider as string | undefined;
+            const animeProvider = String(integrations.media?.anime?.provider ?? '');
             if (animeProvider === 'omdb') {
-                this.settings.integrations!.media.anime.provider = 'anilist';
+                integrations.media.anime.provider = 'anilist';
             }
         }
 
         if (this.migrateIntegrationTemplates()) {
             await this.saveData(this.settings);
         }
+    }
+
+    private isSettingsRecord(value: unknown): value is Partial<LorebaseSettings> {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
     private migrateIntegrationTemplates(): boolean {
@@ -499,25 +505,26 @@ export default class LorebasePlugin extends Plugin {
      */
     showEditModal(item: MediaItem, onSave: () => void): void {
         if (item.type === 'anime') {
+            const animeItem = item;
             const modal = new AnimeEditModal(
                 this.app,
-                item as AnimeItem,
+                animeItem,
                 async (updates) => {
                     if (this.animeService) {
-                        await this.animeService.updateAnime(item as AnimeItem, updates);
+                        await this.animeService.updateAnime(animeItem, updates);
                         onSave();
                     }
                 },
                 () => {
-                    this.showDeleteModal(item, async () => {
+                    this.showDeleteModal(animeItem, async () => {
                         if (!this.animeService) return;
-                        await this.animeService.deleteAnime(item as AnimeItem);
+                        await this.animeService.deleteAnime(animeItem);
                         onSave();
                     });
                 },
                 async () => {
                     if (!this.integrationService || !this.animeService) return;
-                    const anime = item as AnimeItem;
+                    const anime = animeItem;
                     if (!anime.integrationProvider || !anime.integrationId) {
                         new Notice(t('animePartsSourceMissing'));
                         return false;
@@ -528,7 +535,7 @@ export default class LorebasePlugin extends Plugin {
                         new Notice(t('noticeNoResults'));
                         return false;
                     }
-                    const review = await this.integrationService.reviewAnimePartsForItem(anime, providerParts as IntegrationAnimePart[]);
+                    const review = await this.integrationService.reviewAnimePartsForItem(anime, providerParts);
                     if (!review) return false;
                     const activePart = review.parts.find((part) => part.id === review.activePartId) ?? review.parts[0] ?? null;
                     await this.animeService.updateAnime(anime, {
@@ -547,21 +554,22 @@ export default class LorebasePlugin extends Plugin {
             return;
         }
 
+        const gameItem = item;
         const seriesOptions = this.gameService?.getSeriesList() ?? [];
         const modal = new EditModal(
             this.app,
-            item as GameItem,
+            gameItem,
             async (updates) => {
                 if (this.gameService) {
-                    await this.gameService.updateGame(item as GameItem, updates);
+                    await this.gameService.updateGame(gameItem, updates);
                     onSave();
                 }
             },
             seriesOptions,
             () => {
-                this.showDeleteModal(item, async () => {
+                this.showDeleteModal(gameItem, async () => {
                     if (!this.gameService) return;
-                    await this.gameService.deleteGame(item as GameItem);
+                    await this.gameService.deleteGame(gameItem);
                     onSave();
                 });
             },
@@ -618,7 +626,7 @@ export default class LorebasePlugin extends Plugin {
      * Apply accent color to CSS variables
      */
     private applyAccentColor(): void {
-        document.documentElement.style.setProperty('--lorebase-accent', this.settings.accentColor);
+        activeDocument.documentElement.style.setProperty('--lorebase-accent', this.settings.accentColor);
     }
 
     private applyParticles(): void {
@@ -729,7 +737,7 @@ export default class LorebasePlugin extends Plugin {
             const nextType = enabled[0] ?? 'game';
             const changed = this.mediaType !== nextType;
             this.mediaType = nextType;
-            this.activateView();
+            void this.activateView();
             if (changed) {
                 this.refreshViews();
             }
@@ -745,7 +753,7 @@ export default class LorebasePlugin extends Plugin {
 
             // Set title with custom styling if selected
             if (isSelected) {
-                const titleEl = document.createDocumentFragment();
+                const titleEl = activeDocument.createDocumentFragment();
                 const span = titleEl.createEl('span');
                 span.setText(t('contextGames'));
                 span.addClass('lorebase-menu-selected-title');
@@ -758,7 +766,7 @@ export default class LorebasePlugin extends Plugin {
                 .onClick(() => {
                     const changed = this.mediaType !== 'game';
                     this.mediaType = 'game';
-                    this.activateView();
+                    void this.activateView();
                     if (changed) {
                         this.refreshViews();
                     }
@@ -772,7 +780,7 @@ export default class LorebasePlugin extends Plugin {
             const isSelected = this.mediaType === 'anime';
 
             if (isSelected) {
-                const titleEl = document.createDocumentFragment();
+                const titleEl = activeDocument.createDocumentFragment();
                 const span = titleEl.createEl('span');
                 span.setText(t('contextAnime'));
                 span.addClass('lorebase-menu-selected-title');
@@ -785,7 +793,7 @@ export default class LorebasePlugin extends Plugin {
                 .onClick(() => {
                     const changed = this.mediaType !== 'anime';
                     this.mediaType = 'anime';
-                    this.activateView();
+                    void this.activateView();
                     if (changed) {
                         this.refreshViews();
                     }
@@ -793,7 +801,8 @@ export default class LorebasePlugin extends Plugin {
             });
         }
 
-        const element = evt.currentTarget as HTMLElement;
+        const element = evt.currentTarget;
+        if (!(element instanceof HTMLElement)) return;
         const rect = element.getBoundingClientRect();
         menu.showAtPosition({ x: rect.right, y: rect.top });
     }

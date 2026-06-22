@@ -1044,7 +1044,7 @@
     box-shadow: none;
 }
 
-/* Fallback for older Obsidian versions if :has isn't supported, 
+/* Fallback for older Obsidian versions without relational selectors,
    target the content div directly if possible, but .modal class is on parent.
    We can try targeting the specific modal by adding a class to the modal object in TS 
    but for now we'll assume basic width expansion on inputs works, and try to force modal width via generic selector if specific one fails 
@@ -2143,7 +2143,7 @@
     overflow: visible;
 }
 
-.lorebase-editmode-anime-parts:has(.lorebase-settings-dropdown.is-open) {
+.lorebase-editmode-anime-parts.is-dropdown-open {
     z-index: 500;
 }
 
@@ -2275,7 +2275,7 @@
     padding: 10px;
 }
 
-.lorebase-editmode-anime-part-editor:has(.lorebase-settings-dropdown.is-open) {
+.lorebase-editmode-anime-part-editor.is-dropdown-open {
     z-index: 300;
 }
 
@@ -3881,7 +3881,7 @@
 .lorebase-provider-setting.is-igdb-provider {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 14px;
+    gap: 0 14px;
     row-gap: 10px;
     align-items: flex-start;
 }
@@ -5679,8 +5679,7 @@
     width: 100%;
     box-sizing: border-box;
     min-height: 38px;
-    padding: 8px 10px 8px 40px !important;
-    text-indent: 0;
+    padding: 8px 10px 8px 40px;
     border-radius: 8px;
     border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
     background: color-mix(in srgb, var(--background-primary) 80%, transparent);
@@ -5736,9 +5735,9 @@
 .lorebase-select-card-image {
     position: relative;
     width: 100%;
-    height: auto !important;
-    min-height: 0 !important;
-    aspect-ratio: 2 / 3 !important;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 2 / 3;
     flex: 0 0 auto;
     display: block;
     background-size: cover;
@@ -5751,9 +5750,9 @@
 }
 
 .lorebase-select-card.is-wide-art .lorebase-select-card-image {
-    height: auto !important;
-    min-height: 0 !important;
-    aspect-ratio: 2 / 3 !important;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 2 / 3;
     background-size: cover;
 }
 
@@ -5829,7 +5828,7 @@
 }
 
 .lorebase-select-search-grid {
-    display: flex !important;
+    display: flex;
     flex-wrap: wrap;
     gap: 14px;
     align-items: flex-start;
@@ -5849,9 +5848,9 @@
 .lorebase-select-search-grid .lorebase-select-card-image,
 .lorebase-select-search-grid .lorebase-select-card.is-wide-art .lorebase-select-card-image {
     width: 100%;
-    height: auto !important;
-    min-height: 0 !important;
-    aspect-ratio: 2 / 3 !important;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 2 / 3;
     flex: 0 0 auto;
     background-size: cover;
     background-position: center;
@@ -6117,7 +6116,7 @@
     background: rgba(255, 255, 255, 0.025);
 }
 
-.lorebase-anime-parts-row:has(.lorebase-settings-dropdown.is-open) {
+.lorebase-anime-parts-row.is-dropdown-open {
     z-index: 80;
 }
 
@@ -6350,7 +6349,7 @@
     }
 
     .lorebase-select-search-grid {
-        display: flex !important;
+        display: flex;
     }
 
     .lorebase-select-card {
@@ -6361,9 +6360,9 @@
 
     .lorebase-select-card-image,
     .lorebase-select-card.is-wide-art .lorebase-select-card-image {
-        height: auto !important;
-        min-height: 0 !important;
-        aspect-ratio: 2 / 3 !important;
+        height: auto;
+        min-height: 0;
+        aspect-ratio: 2 / 3;
     }
 
     .lorebase-select-review-gallery {
@@ -6393,7 +6392,7 @@
     }
 
     .lorebase-select-search-grid {
-        display: flex !important;
+        display: flex;
         flex-wrap: wrap;
     }
 
@@ -6410,6 +6409,6 @@
     }
 
     .lorebase-select-search-grid {
-        display: flex !important;
+        display: flex;
     }
 }

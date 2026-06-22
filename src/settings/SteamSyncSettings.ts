@@ -187,7 +187,8 @@ function renderSetupTab(context: SettingsSectionContext, body: HTMLElement, save
         .addButton(button => {
             button
                 .setButtonText(`${label(context, 'test')} ↗`)
-                .onClick(async () => {
+                .onClick(() => {
+                    void (async (): Promise<void> => {
                     try {
                         const service = context.plugin.getSteamSyncService();
                         const count = await service?.testConnection(settings);
@@ -201,6 +202,7 @@ function renderSetupTab(context: SettingsSectionContext, body: HTMLElement, save
                         const message = error instanceof Error ? `: ${error.message}` : '';
                         new Notice(`${label(context, 'testFail')}${message}`);
                     }
+                    })();
                 });
         });
     testSetting.settingEl.addClass('lorebase-steam-sync-action-row');

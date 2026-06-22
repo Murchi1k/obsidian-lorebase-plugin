@@ -6,6 +6,7 @@ import type { GameDetails } from './integrations/types';
 import { getSteamDetails } from './integrations/providers/steam';
 import { buildSimpleTemplate, getDefaultTemplateFields, renderTemplate, sanitizeFileName } from './integrations/templateUtils';
 import { extractYear } from './integrations/providers/common';
+import type { JsonFetcher } from './integrations/providers/common';
 import { getHowLongToBeatTimes } from './integrations/providers/howlongtobeat';
 import { localizeTemplateImages } from './integrations/imageStorage';
 
@@ -153,7 +154,7 @@ export class SteamSyncService {
         if (this.detailsCache.has(appId)) {
             return this.detailsCache.get(appId) ?? null;
         }
-        const details = await getSteamDetails(this.fetchJson.bind(this), String(appId));
+        const details = await getSteamDetails(this.getJsonFetcher(), String(appId));
         this.detailsCache.set(appId, details);
         return details;
     }
@@ -257,7 +258,7 @@ export class SteamSyncService {
                 continue;
             }
             try {
-                await this.app.fileManager.processFrontMatter(duplicate, (frontmatter) => {
+                await this.app.fileManager.processFrontMatter(duplicate, (frontmatter: Record<string, unknown>) => {
                     frontmatter.steamAppId = game.appId;
                     frontmatter.playtime = game.playtimeForever;
                 });
@@ -543,7 +544,7 @@ export class SteamSyncService {
             updates.year = game.details.year || null;
         }
 
-        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
             for (const [key, value] of Object.entries(updates)) {
                 if (value === null || value === undefined || value === '') {
                     delete frontmatter[key];
@@ -649,11 +650,15 @@ export class SteamSyncService {
         perfectionist: string;
     } | null> {
         try {
-            return await getHowLongToBeatTimes(this.fetchJson.bind(this), name, year);
+            return await getHowLongToBeatTimes(this.getJsonFetcher(), name, year);
         } catch (error) {
             console.warn('[Steam Sync] howlongtobeat failed', error);
             return null;
         }
+    }
+
+    private getJsonFetcher(): JsonFetcher {
+        return this.fetchJson.bind(this);
     }
 
     private injectFrontmatterFields(content: string, fields: Record<string, unknown>): string {

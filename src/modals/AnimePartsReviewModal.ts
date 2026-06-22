@@ -70,7 +70,7 @@ export class AnimePartsReviewModal extends Modal {
 
         this.activePartId = options.activePartId && this.selected.has(options.activePartId)
             ? options.activePartId
-            : this.selected.values().next().value ?? null;
+            : this.getFirstSelectedId();
         this.status = options.status ?? 'planned';
     }
 
@@ -146,7 +146,7 @@ export class AnimePartsReviewModal extends Modal {
                 if (check.checked) this.selected.add(part.id);
                 else this.selected.delete(part.id);
                 if (this.activePartId === part.id && !this.selected.has(part.id)) {
-                    this.activePartId = this.selected.values().next().value ?? null;
+                    this.activePartId = this.getFirstSelectedId();
                 }
                 if (!this.activePartId && this.selected.has(part.id)) this.activePartId = part.id;
                 row.toggleClass('is-selected', this.selected.has(part.id));
@@ -245,6 +245,11 @@ export class AnimePartsReviewModal extends Modal {
         const label = this.contentEl.querySelector<HTMLElement>('[data-role="selected-count"]');
         if (label) label.textContent = this.getSelectedLabel();
         if (this.confirmBtn) this.confirmBtn.disabled = count === 0;
+    }
+
+    private getFirstSelectedId(): string | null {
+        for (const id of this.selected) return id;
+        return null;
     }
 
     private updateActiveButtons(): void {

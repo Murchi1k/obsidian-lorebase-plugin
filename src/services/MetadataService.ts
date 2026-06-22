@@ -14,7 +14,7 @@ export class MetadataService {
 
     async updateMetadata(file: TFile, updates: Record<string, unknown>): Promise<void> {
         // Use Obsidian's processFrontMatter API for reliable updates
-        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
             for (const [key, value] of Object.entries(updates)) {
                 if (value === null || value === undefined || value === '') {
                     delete frontmatter[key];

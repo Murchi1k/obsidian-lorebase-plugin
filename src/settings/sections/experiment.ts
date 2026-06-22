@@ -52,7 +52,8 @@ export function renderExperimentSettings(context: SettingsSectionContext, contai
         .addButton(button => {
             button
                 .setButtonText(t('settingsIntegrationsImageStorageDownloadExisting'))
-                .onClick(async () => {
+                .onClick(() => {
+                    void (async (): Promise<void> => {
                     button.setDisabled(true);
                     new Notice(t('settingsIntegrationsImageStorageDownloadStarted'));
                     try {
@@ -65,6 +66,7 @@ export function renderExperimentSettings(context: SettingsSectionContext, contai
                     } finally {
                         button.setDisabled(false);
                     }
+                    })();
                 });
         });
 }

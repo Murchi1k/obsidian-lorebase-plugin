@@ -375,7 +375,7 @@ export class AnimeService {
         if (!file || !(file instanceof TFile)) return false;
 
         try {
-            await this.app.vault.delete(file);
+            await this.app.fileManager.trashFile(file);
             this.cache = this.cache.filter(g => g.filePath !== anime.filePath);
             return true;
         } catch (e) {

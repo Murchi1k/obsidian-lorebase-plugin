@@ -2,8 +2,8 @@ import { DEFAULT_SETTINGS } from '../constants';
 import { LorebaseSettings, TagPreset } from '../types';
 
 export function normalizeDescriptionLines(value: unknown, fallback: number): number {
-    if (!Number.isFinite(value as number)) return fallback;
-    return Math.max(1, Math.min(70, Math.round(value as number)));
+    if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+    return Math.max(1, Math.min(70, Math.round(value)));
 }
 
 export function normalizeTagPresets(raw: unknown): TagPreset[] {
@@ -12,12 +12,18 @@ export function normalizeTagPresets(raw: unknown): TagPreset[] {
     }
 
     return raw
-        .map((preset) => ({
-            id: String(preset.id || preset.tag || preset.label || '').trim(),
-            label: String(preset.label || preset.tag || preset.id || '').trim(),
-            tag: String(preset.tag || preset.label || preset.id || '').trim().replace(/^#+/, '').toLowerCase(),
-            icon: typeof preset.icon === 'string' ? preset.icon : undefined,
-        }))
+        .filter((preset): preset is Record<string, unknown> => typeof preset === 'object' && preset !== null)
+        .map((preset) => {
+            const id = preset.id;
+            const tag = preset.tag;
+            const label = preset.label;
+            return {
+                id: String(id || tag || label || '').trim(),
+                label: String(label || tag || id || '').trim(),
+                tag: String(tag || label || id || '').trim().replace(/^#+/, '').toLowerCase(),
+                icon: typeof preset.icon === 'string' ? preset.icon : undefined,
+            };
+        })
         .filter((preset) => preset.id && preset.label && preset.tag);
 }
 
@@ -53,34 +59,36 @@ export function parseBadges(
         return cloneBadges(defaults);
     }
 
-    const rawBadges = rawValue as Record<string, unknown>;
+    const rawBadges = readRecord(rawValue);
+    if (!rawBadges) return cloneBadges(defaults);
+
     const isLegacyFlat =
         typeof rawBadges.status === 'boolean'
         || typeof rawBadges.rating === 'boolean'
         || typeof rawBadges.favorite === 'boolean';
 
     if (isLegacyFlat) {
-        const sharedPosition = (rawBadges.position as LorebaseSettings['badges']['status']['position']) ?? 'bottom-right';
+        const sharedPosition = readBadgePosition(rawBadges.position) ?? 'bottom-right';
         const statusCoords = getLegacyCoordinates(sharedPosition, 'status');
         const ratingCoords = getLegacyCoordinates(sharedPosition, 'rating');
         const favoriteCoords = getLegacyCoordinates(sharedPosition, 'favorite');
         return {
             status: {
-                enabled: (rawBadges.status as boolean | undefined) ?? defaults.status.enabled,
+                enabled: readBoolean(rawBadges.status) ?? defaults.status.enabled,
                 position: sharedPosition,
                 iconOnly: defaults.status.iconOnly,
                 x: statusCoords.x,
                 y: statusCoords.y,
             },
             rating: {
-                enabled: (rawBadges.rating as boolean | undefined) ?? defaults.rating.enabled,
+                enabled: readBoolean(rawBadges.rating) ?? defaults.rating.enabled,
                 position: sharedPosition,
                 mode: defaults.rating.mode,
                 x: ratingCoords.x,
                 y: ratingCoords.y,
             },
             favorite: {
-                enabled: (rawBadges.favorite as boolean | undefined) ?? defaults.favorite.enabled,
+                enabled: readBoolean(rawBadges.favorite) ?? defaults.favorite.enabled,
                 position: 'top-right',
                 subtlePulse: defaults.favorite.subtlePulse,
                 x: favoriteCoords.x,
@@ -89,25 +97,48 @@ export function parseBadges(
         };
     }
 
-    const nested = rawBadges as Partial<LorebaseSettings['badges']>;
-    const rawRatingMode = (nested.rating as unknown as { mode?: string } | undefined)?.mode;
+    const rawStatus = readRecord(rawBadges.status);
+    const rawRating = readRecord(rawBadges.rating);
+    const rawFavorite = readRecord(rawBadges.favorite);
+    const rawRatingMode = typeof rawRating?.mode === 'string' ? rawRating.mode : undefined;
     const normalizedRatingMode = rawRatingMode === 'both' ? 'star' : rawRatingMode;
     return {
         status: Object.assign(
             {},
             defaults.status,
-            nested.status ?? {},
+            rawStatus ?? {},
             {
-                iconOnly: (nested.status as unknown as { completedIconOnly?: boolean })?.completedIconOnly
-                    ?? nested.status?.iconOnly
+                iconOnly: readBoolean(rawStatus?.completedIconOnly)
+                    ?? readBoolean(rawStatus?.iconOnly)
                     ?? defaults.status.iconOnly,
             }
         ),
-        rating: Object.assign({}, defaults.rating, nested.rating ?? {}, {
+        rating: Object.assign({}, defaults.rating, rawRating ?? {}, {
             mode: normalizedRatingMode ?? defaults.rating.mode,
         }),
-        favorite: Object.assign({}, defaults.favorite, nested.favorite ?? {}),
+        favorite: Object.assign({}, defaults.favorite, rawFavorite ?? {}),
     };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+    return Object.fromEntries(Object.entries(value));
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+    return typeof value === 'boolean' ? value : undefined;
+}
+
+function readBadgePosition(value: unknown): LorebaseSettings['badges']['status']['position'] | undefined {
+    if (
+        value === 'top-left'
+        || value === 'top-right'
+        || value === 'bottom-left'
+        || value === 'bottom-right'
+    ) {
+        return value;
+    }
+    return undefined;
 }
 
 function cloneBadges(badges: LorebaseSettings['badges']): LorebaseSettings['badges'] {

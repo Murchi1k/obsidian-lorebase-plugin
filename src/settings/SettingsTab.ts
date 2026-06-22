@@ -77,7 +77,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
     }
 
     private applyAccentColor(color: string): void {
-        document.documentElement.style.setProperty('--lorebase-accent', color);
+        activeDocument.documentElement.style.setProperty('--lorebase-accent', color);
     }
 
     private renderSupportBlock(container: HTMLElement): void {

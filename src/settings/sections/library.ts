@@ -80,7 +80,7 @@ export function renderLibrarySettings(
             slider
                 .setLimits(3, 8, 1)
                 .setValue(settings.columns)
-                .setDynamicTooltip()
+
                 .onChange(async (value) => {
                     context.plugin.settings[key].columns = value;
                     await context.plugin.saveSettings();
@@ -127,7 +127,7 @@ export function renderLibrarySettings(
                 slider
                     .setLimits(140, 480, 5)
                     .setValue(settings.customCardMinWidth)
-                    .setDynamicTooltip()
+
                     .onChange(async (value) => {
                         context.plugin.settings[key].customCardMinWidth = value;
                         await context.plugin.saveSettings();
@@ -142,7 +142,7 @@ export function renderLibrarySettings(
                 slider
                     .setLimits(180, 900, 5)
                     .setValue(settings.customCardMinHeight)
-                    .setDynamicTooltip()
+
                     .onChange(async (value) => {
                         context.plugin.settings[key].customCardMinHeight = value;
                         await context.plugin.saveSettings();
@@ -157,7 +157,7 @@ export function renderLibrarySettings(
                 slider
                     .setLimits(0.4, 2.2, 0.01)
                     .setValue(settings.customCardImageRatio)
-                    .setDynamicTooltip()
+
                     .onChange(async (value) => {
                         context.plugin.settings[key].customCardImageRatio = value;
                         await context.plugin.saveSettings();
@@ -172,7 +172,7 @@ export function renderLibrarySettings(
                 slider
                     .setLimits(240, 700, 5)
                     .setValue(settings.customHorizontalCardMinWidth)
-                    .setDynamicTooltip()
+
                     .onChange(async (value) => {
                         context.plugin.settings[key].customHorizontalCardMinWidth = value;
                         await context.plugin.saveSettings();
@@ -187,7 +187,7 @@ export function renderLibrarySettings(
                 slider
                     .setLimits(120, 520, 5)
                     .setValue(settings.customHorizontalCardHeight)
-                    .setDynamicTooltip()
+
                     .onChange(async (value) => {
                         context.plugin.settings[key].customHorizontalCardHeight = value;
                         await context.plugin.saveSettings();
@@ -200,7 +200,8 @@ export function renderLibrarySettings(
             .addButton(button => {
                 button
                     .setButtonText(t('resetConfirm'))
-                    .onClick(async () => {
+                    .onClick(() => {
+                        void (async (): Promise<void> => {
                         const defaults = DEFAULT_SETTINGS[key];
                         context.plugin.settings[key].customCardSize = false;
                         context.plugin.settings[key].customCardMinWidth = defaults.customCardMinWidth;
@@ -211,6 +212,7 @@ export function renderLibrarySettings(
                         await context.plugin.saveSettings();
                         context.plugin.refreshViews();
                         context.display();
+                        })();
                     });
             });
     }

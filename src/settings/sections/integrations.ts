@@ -221,7 +221,8 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
         setting.addButton(button => {
             button
                 .setButtonText(t('settingsIntegrationsProviderTest'))
-                .onClick(async () => {
+                .onClick(() => {
+                    void (async (): Promise<void> => {
                     const result = await integrationService.testProvider(id);
                     if (result.ok) {
                         new Notice(t('noticeProviderTestSuccess'));
@@ -236,6 +237,7 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                         return;
                     }
                     new Notice(t('noticeProviderTestFail'));
+                    })();
                 });
         });
 
@@ -252,9 +254,9 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                 }
             });
             keyInput.value = provider.apiKey ?? '';
-            keyInput.addEventListener('input', async () => {
+            keyInput.addEventListener('input', () => {
                 provider.apiKey = keyInput.value.trim();
-                await context.plugin.saveSettings();
+                void context.plugin.saveSettings();
             });
 
             let secretInput: HTMLInputElement | null = null;
@@ -264,9 +266,9 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                     attr: { type: 'password', placeholder: t('settingsIntegrationsProviderClientSecretPlaceholder') }
                 });
                 secretInput.value = provider.clientSecret ?? '';
-                secretInput.addEventListener('input', async () => {
+                secretInput.addEventListener('input', () => {
                     provider.clientSecret = secretInput?.value.trim() ?? '';
-                    await context.plugin.saveSettings();
+                    void context.plugin.saveSettings();
                 });
 
                 const help = keyRow.createDiv({ cls: 'lorebase-provider-help' });

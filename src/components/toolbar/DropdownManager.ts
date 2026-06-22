@@ -33,7 +33,7 @@ export class DropdownManager {
                 'aria-haspopup': 'true',
                 'aria-expanded': 'false',
             },
-        }) as HTMLButtonElement;
+        });
         setIcon(button, options.icon);
 
         const panel = wrapper.createDiv({ cls: 'lorebase-dropdown' });
@@ -59,12 +59,12 @@ export class DropdownManager {
 
     destroy(): void {
         if (this.documentClickHandler) {
-            document.removeEventListener('click', this.documentClickHandler);
+            activeDocument.removeEventListener('click', this.documentClickHandler);
             this.documentClickHandler = null;
         }
 
         if (this.keyHandler) {
-            document.removeEventListener('keydown', this.keyHandler);
+            activeDocument.removeEventListener('keydown', this.keyHandler);
             this.keyHandler = null;
         }
     }
@@ -82,7 +82,8 @@ export class DropdownManager {
 
     private registerGlobalHandlers(): void {
         this.documentClickHandler = (event: MouseEvent) => {
-            if (!this.root.contains(event.target as Node)) {
+            const target = event.target;
+            if (target instanceof Node && !this.root.contains(target)) {
                 this.closeDropdowns();
             }
         };
@@ -93,8 +94,7 @@ export class DropdownManager {
             }
         };
 
-        document.addEventListener('click', this.documentClickHandler);
-        document.addEventListener('keydown', this.keyHandler);
+        activeDocument.addEventListener('click', this.documentClickHandler);
+        activeDocument.addEventListener('keydown', this.keyHandler);
     }
 }
-

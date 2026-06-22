@@ -151,7 +151,7 @@ export function renderTemplate(template: string, values: Record<string, unknown>
 }
 
 export function sanitizeFileName(name: string): string {
-    return name.replace(/[*\\\/<>:\|\?"]/g, '').replace(/\s+/g, ' ').trim();
+    return name.replace(/[*\\/<>:|?"]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function escapeYaml(value: unknown): string {

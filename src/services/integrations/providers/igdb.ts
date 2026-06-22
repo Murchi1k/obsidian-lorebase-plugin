@@ -53,7 +53,7 @@ async function fetchIgdbGames(
     const token = await getAccessToken(fetchJson, clientId, clientSecret);
     if (!token) return [];
 
-    const result = await fetchJson(
+    const result: unknown = await fetchJson(
         IGDB_GAMES_URL,
         {
             'Accept': 'application/json',

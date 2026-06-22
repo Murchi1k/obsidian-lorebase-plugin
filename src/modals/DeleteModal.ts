@@ -45,7 +45,7 @@ export class DeleteModal extends Modal {
         // Game info
         const gameInfo = contentEl.createDiv({ cls: 'lorebase-delete-game-info' });
 
-        const poster = gameInfo.createEl('img', {
+        gameInfo.createEl('img', {
             cls: 'lorebase-delete-poster',
             attr: { src: this.item.imageUrl, alt: this.item.displayName }
         });
@@ -108,18 +108,17 @@ export class DeleteModal extends Modal {
         confirmCheckbox.addEventListener('change', syncConfirmState);
         syncConfirmState();
 
-        confirmBtn.addEventListener('click', async () => {
+        confirmBtn.addEventListener('click', () => {
             confirmBtn.disabled = true;
             confirmBtn.textContent = '...';
 
-            try {
-                await this.onConfirm();
-                this.close();
-            } catch (e) {
-                console.error('Error deleting game:', e);
-                syncConfirmState();
-                confirmBtn.textContent = t('deleteConfirm');
-            }
+            void this.onConfirm()
+                .then(() => this.close())
+                .catch((error: unknown) => {
+                    console.error('Error deleting game:', error);
+                    syncConfirmState();
+                    confirmBtn.textContent = t('deleteConfirm');
+                });
         });
     }
 

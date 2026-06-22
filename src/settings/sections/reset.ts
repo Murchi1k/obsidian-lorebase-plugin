@@ -13,15 +13,16 @@ export function renderResetSection(context: SettingsSectionContext, container: H
         .addButton(button => {
             button
                 .setButtonText(t('settingsResetAllButton'))
-                .setWarning()
-                .onClick(async () => {
+                .onClick(() => {
+                    void (async (): Promise<void> => {
                     const { ResetModal } = await import('../../modals/ResetModal');
                     new ResetModal(context.app, async () => {
-                        context.plugin.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+                        context.plugin.settings = structuredClone(DEFAULT_SETTINGS);
                         await context.plugin.saveSettings();
                         context.plugin.refreshViews();
                         context.display();
                     }).open();
+                    })();
                 });
         });
 }

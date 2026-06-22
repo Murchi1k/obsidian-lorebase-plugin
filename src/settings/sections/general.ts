@@ -16,7 +16,7 @@ const MAX_PREVIEW_CARD_WIDTH = 340;
 const FAVORITE_BADGE_PATH = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
 
 function createSvgPathIcon(pathD: string, options: { fill?: string; stroke?: string; width?: string; height?: string } = {}): SVGElement {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('fill', options.fill ?? 'none');
     svg.setAttribute('stroke', options.stroke ?? 'currentColor');
@@ -25,7 +25,7 @@ function createSvgPathIcon(pathD: string, options: { fill?: string; stroke?: str
     svg.setAttribute('stroke-linejoin', 'round');
     if (options.width) svg.setAttribute('width', options.width);
     if (options.height) svg.setAttribute('height', options.height);
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', pathD);
     svg.appendChild(path);
     return svg;
@@ -82,7 +82,7 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
             slider
                 .setLimits(20, 150, 1)
                 .setValue(context.plugin.settings.particleIntensity)
-                .setDynamicTooltip()
+
                 .setDisabled(context.plugin.settings.particleEffect === 'none')
                 .onChange(async (value) => {
                     context.plugin.settings.particleIntensity = value;
@@ -114,9 +114,9 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
         if (context.plugin.settings.accentColor === color) {
             swatch.addClass('selected');
         }
-        swatch.addEventListener('click', async () => {
+        swatch.addEventListener('click', () => {
             context.plugin.settings.accentColor = color;
-            await context.plugin.saveSettings();
+            void context.plugin.saveSettings();
             context.applyAccentColor(color);
             presetsContainer.querySelectorAll('.lorebase-color-swatch').forEach(el => el.removeClass('selected'));
             swatch.addClass('selected');
@@ -793,15 +793,15 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
                     };
 
                     const onResizeUp = (): void => {
-                        document.removeEventListener('mousemove', onResizeMove);
-                        document.removeEventListener('mouseup', onResizeUp);
+                        activeDocument.removeEventListener('mousemove', onResizeMove);
+                        activeDocument.removeEventListener('mouseup', onResizeUp);
                         element.removeClass('is-resize-corner');
                         flushOverlayLayoutNow();
                         persistPreviewChanges();
                     };
 
-                    document.addEventListener('mousemove', onResizeMove);
-                    document.addEventListener('mouseup', onResizeUp);
+                    activeDocument.addEventListener('mousemove', onResizeMove);
+                    activeDocument.addEventListener('mouseup', onResizeUp);
                     return;
                 }
             }
@@ -834,14 +834,14 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
             };
 
             const onMouseUp = (): void => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
+                activeDocument.removeEventListener('mousemove', onMouseMove);
+                activeDocument.removeEventListener('mouseup', onMouseUp);
                 flushOverlayLayoutNow();
                 persistPreviewChanges();
             };
 
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
+            activeDocument.addEventListener('mousemove', onMouseMove);
+            activeDocument.addEventListener('mouseup', onMouseUp);
         });
     };
 
@@ -902,7 +902,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
 
         if (badgeKey === 'status') {
             const previewStatus = previewMode === 'anime' ? 'watching' : 'playing';
-            const statusBadge = document.createElement('div');
+            const statusBadge = activeDocument.createElement('div');
             statusBadge.className = `lorebase-card-status lorebase-status-${previewStatus}`;
             const iconPath = STATUS_CONFIG[previewStatus].pathD;
             statusBadge.appendChild(createSvgPathIcon(iconPath));
@@ -917,7 +917,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         }
 
         if (badgeKey === 'rating') {
-            const ratingBadge = document.createElement('div');
+            const ratingBadge = activeDocument.createElement('div');
             ratingBadge.className = 'lorebase-card-rating';
             if (activeBadges.rating.mode === 'emoji') {
                 ratingBadge.classList.add('is-emoji');
@@ -929,7 +929,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
             return;
         }
 
-        const favoriteBadge = document.createElement('div');
+        const favoriteBadge = activeDocument.createElement('div');
         favoriteBadge.className = 'lorebase-card-favorite-badge';
         if (activeBadges.favorite.subtlePulse) {
             favoriteBadge.classList.add('is-subtle-pulse');
@@ -942,7 +942,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         const existing = badgeElements.get(badgeKey);
         if (existing) return existing;
 
-        const badge = document.createElement('button');
+        const badge = activeDocument.createElement('button');
         badge.type = 'button';
         badge.draggable = true;
         badge.className = 'lorebase-badges-editor-chip';

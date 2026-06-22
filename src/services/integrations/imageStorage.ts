@@ -124,7 +124,7 @@ export async function localizeExistingNoteImages(
 
             if (Object.keys(updates).length === 0) continue;
 
-            await app.fileManager.processFrontMatter(entry.file, (frontmatter) => {
+            await app.fileManager.processFrontMatter(entry.file, (frontmatter: Record<string, unknown>) => {
                 for (const [key, value] of Object.entries(updates)) {
                     frontmatter[key] = value;
                 }

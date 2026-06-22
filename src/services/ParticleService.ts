@@ -28,7 +28,7 @@ export class ParticleService {
 
     destroy(): void {
         if (this.rafId !== null) {
-            cancelAnimationFrame(this.rafId);
+            window.cancelAnimationFrame(this.rafId);
             this.rafId = null;
         }
 
@@ -45,13 +45,13 @@ export class ParticleService {
 
     private ensureContainer(): void {
         if (this.container) return;
-        const container = document.createElement('div');
+        const container = activeDocument.createElement('div');
         container.className = 'lorebase-particle-container';
         container.setAttribute('aria-hidden', 'true');
         container.setAttribute('role', 'presentation');
-        const host = (document.querySelector('.app-container') as HTMLElement | null)
-            ?? document.body
-            ?? document.documentElement;
+        const host = activeDocument.querySelector<HTMLElement>('.app-container')
+            ?? activeDocument.body
+            ?? activeDocument.documentElement;
         if (!host) {
             return;
         }
@@ -61,10 +61,10 @@ export class ParticleService {
 
     private scheduleRender(): void {
         if (this.rafId !== null) {
-            cancelAnimationFrame(this.rafId);
+            window.cancelAnimationFrame(this.rafId);
         }
 
-        this.rafId = requestAnimationFrame(() => {
+        this.rafId = window.requestAnimationFrame(() => {
             this.rafId = null;
             this.render();
         });
@@ -72,9 +72,9 @@ export class ParticleService {
 
     private render(): void {
         if (!this.container) return;
-        this.container.innerHTML = '';
+        this.container.replaceChildren();
 
-        const fragment = document.createDocumentFragment();
+        const fragment = this.container.ownerDocument.createDocumentFragment();
 
         for (let i = 0; i < this.intensity; i++) {
             fragment.appendChild(this.createParticle());
@@ -84,7 +84,7 @@ export class ParticleService {
     }
 
     private createParticle(): HTMLElement {
-        const particle = document.createElement('div');
+        const particle = activeDocument.createElement('div');
         particle.className = `lorebase-particle lorebase-particle-${this.effect}`;
 
         const isSnow = this.effect === 'snow';

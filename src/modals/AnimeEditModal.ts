@@ -365,10 +365,11 @@ export class AnimeEditModal extends Modal {
     }
 
     private bindParts(root: HTMLElement): void {
-        this.qs<HTMLButtonElement>(root, '[data-action="refresh-parts"]')?.addEventListener('click', async () => {
+        this.qs<HTMLButtonElement>(root, '[data-action="refresh-parts"]')?.addEventListener('click', () => {
             if (!this.onRefreshParts) return;
-            const shouldClose = await this.onRefreshParts();
-            if (shouldClose) this.close();
+            void this.onRefreshParts().then((shouldClose) => {
+                if (shouldClose) this.close();
+            });
         });
 
         this.qs<HTMLButtonElement>(root, '[data-action="add-part"]')?.addEventListener('click', () => {
@@ -588,7 +589,7 @@ export class AnimeEditModal extends Modal {
     }
 
     private createStatusSegment(status: AnimeStatus, label: string): HTMLButtonElement {
-        const button = document.createElement('button');
+        const button = this.contentEl.ownerDocument.createElement('button');
         button.type = 'button';
         button.className = 'lorebase-editmode-segment';
         button.dataset.status = status;

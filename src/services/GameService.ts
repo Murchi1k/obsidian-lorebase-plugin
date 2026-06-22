@@ -121,7 +121,7 @@ export class GameService {
 
     private hasFrontmatterKey(frontmatter: Record<string, unknown> | null | undefined, key: string): boolean {
         if (!frontmatter) return false;
-        return Object.prototype.hasOwnProperty.call(frontmatter, key);
+        return Boolean(Object.prototype.hasOwnProperty.call(frontmatter, key));
     }
 
     private readFrontmatterText(frontmatter: Record<string, unknown>, keys: string[]): string | null {
@@ -540,7 +540,7 @@ export class GameService {
         if (!file || !(file instanceof TFile)) return false;
 
         try {
-            await this.app.vault.delete(file);
+            await this.app.fileManager.trashFile(file);
             this.cache = this.cache.filter(g => g.filePath !== game.filePath);
             return true;
         } catch (e) {

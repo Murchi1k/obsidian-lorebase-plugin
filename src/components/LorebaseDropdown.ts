@@ -40,7 +40,13 @@ export function createLorebaseDropdown<T extends string>(
         panel.removeClass('is-open');
         button.removeClass('is-open');
         container.removeClass('is-open');
+        updateAncestorOpenState(false);
         button.setAttribute('aria-expanded', 'false');
+    };
+    const updateAncestorOpenState = (isOpen: boolean): void => {
+        container
+            .closest('.lorebase-editmode-anime-parts, .lorebase-editmode-anime-part-editor, .lorebase-anime-parts-row')
+            ?.toggleClass('is-dropdown-open', isOpen);
     };
 
     const renderLabel = (): void => {
@@ -92,43 +98,47 @@ export function createLorebaseDropdown<T extends string>(
         event.preventDefault();
         event.stopPropagation();
         const isOpen = panel.hasClass('is-open');
-        document.querySelectorAll('.lorebase-settings-dropdown-panel.is-open').forEach((node) => {
+        activeDocument.querySelectorAll('.is-dropdown-open').forEach((node) => {
+            if (!container.contains(node)) node.removeClass('is-dropdown-open');
+        });
+        activeDocument.querySelectorAll('.lorebase-settings-dropdown-panel.is-open').forEach((node) => {
             if (node !== panel) node.removeClass('is-open');
         });
-        document.querySelectorAll('.lorebase-settings-dropdown-btn.is-open').forEach((node) => {
+        activeDocument.querySelectorAll('.lorebase-settings-dropdown-btn.is-open').forEach((node) => {
             if (node !== button) {
                 node.removeClass('is-open');
                 node.setAttribute('aria-expanded', 'false');
             }
         });
-        document.querySelectorAll('.lorebase-settings-dropdown.is-open').forEach((node) => {
+        activeDocument.querySelectorAll('.lorebase-settings-dropdown.is-open').forEach((node) => {
             if (node !== container) node.removeClass('is-open');
         });
         panel.toggleClass('is-open', !isOpen);
         button.toggleClass('is-open', !isOpen);
         container.toggleClass('is-open', !isOpen);
+        updateAncestorOpenState(!isOpen);
         button.setAttribute('aria-expanded', String(!isOpen));
     });
 
     const onDocumentClick = (event: MouseEvent): void => {
         if (!container.isConnected) {
-            document.removeEventListener('click', onDocumentClick);
-            document.removeEventListener('keydown', onKeydown);
+            activeDocument.removeEventListener('click', onDocumentClick);
+            activeDocument.removeEventListener('keydown', onKeydown);
             return;
         }
         if (!container.contains(event.target as Node)) close();
     };
     const onKeydown = (event: KeyboardEvent): void => {
         if (!container.isConnected) {
-            document.removeEventListener('click', onDocumentClick);
-            document.removeEventListener('keydown', onKeydown);
+            activeDocument.removeEventListener('click', onDocumentClick);
+            activeDocument.removeEventListener('keydown', onKeydown);
             return;
         }
         if (event.key === 'Escape') close();
     };
 
-    document.addEventListener('click', onDocumentClick);
-    document.addEventListener('keydown', onKeydown);
+    activeDocument.addEventListener('click', onDocumentClick);
+    activeDocument.addEventListener('keydown', onKeydown);
 
     renderLabel();
     renderOptions();

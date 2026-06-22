@@ -334,7 +334,7 @@ export class LibraryView extends ItemView {
                 const activeSettings = this.getActiveSettings();
                 activeSettings.sortField = field;
                 activeSettings.sortOrder = order;
-                this.plugin.saveSettings();
+                void this.plugin.saveSettings();
                 this.applyFiltersAndSort({ scrollMode: 'top' });
             },
             onFilterChange: (filter) => {
@@ -353,7 +353,7 @@ export class LibraryView extends ItemView {
                 this.viewMode = mode;
                 const activeSettings = this.getActiveSettings();
                 activeSettings.orientation = mode === 'horizontal' ? 'horizontal' : 'vertical';
-                this.plugin.saveSettings();
+                void this.plugin.saveSettings();
                 this.applyViewMode();
                 this.render({ scrollMode: 'top' });
             },
@@ -734,7 +734,9 @@ export class LibraryView extends ItemView {
             parent,
             game,
             {
-                onClick: (g) => this.openGame(g),
+                onClick: (g) => {
+                    void this.openGame(g);
+                },
                 onContextMenu: (g, x, y) => this.showContextMenu(g, x, y),
             },
             layout.cardSize,
@@ -961,7 +963,10 @@ export class LibraryView extends ItemView {
 
         const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.favorite.position);
         const favoriteBadge = group.createDiv({ cls: 'lorebase-card-favorite-badge' });
-        favoriteBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="#ffffff" stroke="none" width="12" height="12"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>';
+        favoriteBadge.appendChild(this.createBadgeSvg(
+            'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
+            { fill: '#ffffff', stroke: 'none', width: '12', height: '12' }
+        ));
     }
 
     private getOrCreateBadgeGroup(
@@ -993,15 +998,20 @@ export class LibraryView extends ItemView {
         return overrides[item.status]?.trim() || fallback[item.status] || String(item.status);
     }
 
-    private createBadgeSvg(pathD: string): SVGElement {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    private createBadgeSvg(
+        pathD: string,
+        options: { fill?: string; stroke?: string; width?: string; height?: string } = {}
+    ): SVGElement {
+        const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('fill', 'none');
-        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('fill', options.fill ?? 'none');
+        svg.setAttribute('stroke', options.stroke ?? 'currentColor');
         svg.setAttribute('stroke-width', '2');
         svg.setAttribute('stroke-linecap', 'round');
         svg.setAttribute('stroke-linejoin', 'round');
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        if (options.width) svg.setAttribute('width', options.width);
+        if (options.height) svg.setAttribute('height', options.height);
+        const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', pathD);
         svg.appendChild(path);
         return svg;

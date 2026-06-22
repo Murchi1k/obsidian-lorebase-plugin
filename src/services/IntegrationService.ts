@@ -17,6 +17,7 @@ import { getRawgDetails, searchRawg } from './integrations/providers/rawg';
 import { getShikimoriDetails, searchShikimori } from './integrations/providers/shikimori';
 import { getSteamDetails, searchSteam } from './integrations/providers/steam';
 import { localizeTemplateImages } from './integrations/imageStorage';
+import type { JsonFetcher } from './integrations/providers/common';
 
 export class IntegrationService {
     private app: App;
@@ -82,7 +83,12 @@ export class IntegrationService {
                 return;
             }
 
-            const selected = await this.chooseResults(kind, mediaSettings.provider as ProviderId, providerOptions);
+            if (!this.isProviderId(mediaSettings.provider)) {
+                new Notice(t('noticeProviderDisabled'));
+                return;
+            }
+
+            const selected = await this.chooseResults(kind, mediaSettings.provider, providerOptions);
             if (!selected.length) return;
 
             const template = this.getTemplate(
@@ -97,7 +103,7 @@ export class IntegrationService {
 
             for (const item of selected) {
                 new Notice(t('notifyLoading'), 1500);
-                const itemProviderId = item.provider as ProviderId;
+                const itemProviderId = item.provider;
                 const providerSettings = integrations.providers[itemProviderId];
                 if (!providerSettings?.enabled) {
                     new Notice(t('noticeProviderDisabled'));
@@ -121,10 +127,18 @@ export class IntegrationService {
 
                 let values: Record<string, unknown>;
                 if (kind === 'games') {
-                    values = await this.buildGameValues(details as GameDetails, shouldLoadHltb, item.image);
+                    if (!this.isGameDetails(details)) {
+                        new Notice(t('noticeNoResults'));
+                        continue;
+                    }
+                    values = await this.buildGameValues(details, shouldLoadHltb, item.image);
                 } else {
-                    const itemProviderId = item.provider as ProviderId;
-                    values = this.buildAnimeValues(details as AnimeDetails, {
+                    if (!this.isAnimeDetails(details)) {
+                        new Notice(t('noticeNoResults'));
+                        continue;
+                    }
+                    const itemProviderId = item.provider;
+                    values = this.buildAnimeValues(details, {
                         provider: itemProviderId,
                         id: item.id,
                         parts: [],
@@ -185,8 +199,8 @@ export class IntegrationService {
         const modal = new MultiSelectSearchModal<SearchResult>(
             this.app,
             async (query, providerId) => {
-                const selectedProviderId = providerId as ProviderId | undefined;
-                if (!selectedProviderId) return [];
+                if (!providerId || !this.isProviderId(providerId)) return [];
+                const selectedProviderId = providerId;
                 const providerSettings = this.getSettings().integrations?.providers[selectedProviderId];
                 if (!providerSettings?.enabled) return [];
                 if (!this.hasRequiredCredentials(selectedProviderId, providerSettings)) return [];
@@ -233,15 +247,15 @@ export class IntegrationService {
     }
 
     private getProviderOptions(kind: MediaKind): SearchProviderOption[] {
-        const providers = kind === 'games'
+        const providers: Array<{ id: ProviderId; label: string }> = kind === 'games'
             ? [
-                { id: 'rawg' as ProviderId, label: 'RAWG' },
-                { id: 'steam' as ProviderId, label: 'Steam' },
-                { id: 'igdb' as ProviderId, label: 'IGDB' },
+                { id: 'rawg', label: 'RAWG' },
+                { id: 'steam', label: 'Steam' },
+                { id: 'igdb', label: 'IGDB' },
             ]
             : [
-                { id: 'anilist' as ProviderId, label: 'AniList' },
-                { id: 'shikimori' as ProviderId, label: 'Shikimori' },
+                { id: 'anilist', label: 'AniList' },
+                { id: 'shikimori', label: 'Shikimori' },
             ];
         const integrations = this.getSettings().integrations;
 
@@ -262,6 +276,22 @@ export class IntegrationService {
                 disabledReason,
             };
         });
+    }
+
+    private isProviderId(value: string | undefined): value is ProviderId {
+        return value === 'rawg'
+            || value === 'steam'
+            || value === 'igdb'
+            || value === 'anilist'
+            || value === 'shikimori';
+    }
+
+    private isGameDetails(value: GameDetails | AnimeDetails): value is GameDetails {
+        return 'poster' in value;
+    }
+
+    private isAnimeDetails(value: GameDetails | AnimeDetails): value is AnimeDetails {
+        return 'image' in value;
     }
 
     private getTemplate(
@@ -286,34 +316,36 @@ export class IntegrationService {
     }
 
     private async search(provider: ProviderId, query: string, apiKey: string, clientSecret = ''): Promise<SearchResult[]> {
+        const fetchJson = this.getJsonFetcher();
         switch (provider) {
             case 'rawg':
-                return searchRawg(this.fetchJson.bind(this), query, apiKey);
+                return searchRawg(fetchJson, query, apiKey);
             case 'steam':
-                return searchSteam(this.fetchJson.bind(this), query);
+                return searchSteam(fetchJson, query);
             case 'igdb':
-                return searchIgdb(this.fetchJson.bind(this), query, apiKey, clientSecret);
+                return searchIgdb(fetchJson, query, apiKey, clientSecret);
             case 'anilist':
-                return searchAniList(this.fetchJson.bind(this), query);
+                return searchAniList(fetchJson, query);
             case 'shikimori':
-                return searchShikimori(this.fetchJson.bind(this), query);
+                return searchShikimori(fetchJson, query);
             default:
                 return [];
         }
     }
 
     private async fetchDetails(provider: ProviderId, id: string, apiKey: string, clientSecret = ''): Promise<GameDetails | AnimeDetails | null> {
+        const fetchJson = this.getJsonFetcher();
         switch (provider) {
             case 'rawg':
-                return getRawgDetails(this.fetchJson.bind(this), id, apiKey);
+                return getRawgDetails(fetchJson, id, apiKey);
             case 'steam':
-                return getSteamDetails(this.fetchJson.bind(this), id);
+                return getSteamDetails(fetchJson, id);
             case 'igdb':
-                return getIgdbDetails(this.fetchJson.bind(this), id, apiKey, clientSecret);
+                return getIgdbDetails(fetchJson, id, apiKey, clientSecret);
             case 'anilist':
-                return getAniListDetails(this.fetchJson.bind(this), id);
+                return getAniListDetails(fetchJson, id);
             case 'shikimori':
-                return getShikimoriDetails(this.fetchJson.bind(this), id);
+                return getShikimoriDetails(fetchJson, id);
             default:
                 return null;
         }
@@ -332,8 +364,8 @@ export class IntegrationService {
             id,
             providerSettings.apiKey || '',
             providerSettings.clientSecret || ''
-        ) as AnimeDetails | null;
-        if (!details) return null;
+        );
+        if (!details || !this.isAnimeDetails(details)) return null;
         return this.getAnimeParts(details);
     }
 
@@ -402,11 +434,15 @@ export class IntegrationService {
         perfectionist: string;
     } | null> {
         try {
-            return await getHowLongToBeatTimes(this.fetchJson.bind(this), name, year);
+            return await getHowLongToBeatTimes(this.getJsonFetcher(), name, year);
         } catch (error) {
             console.warn('[Integrations] howlongtobeat failed', error);
             return null;
         }
+    }
+
+    private getJsonFetcher(): JsonFetcher {
+        return this.fetchJson.bind(this);
     }
 
     private buildAnimeValues(details: AnimeDetails, source?: {
