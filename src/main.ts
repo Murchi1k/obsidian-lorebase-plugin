@@ -4,8 +4,7 @@
  */
 
 import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon } from 'obsidian';
-import type { IntegrationAnimePart } from './services/integrations/types';
-import { LorebaseSettings, GameItem, AnimeItem, MediaItem, GameStats, AnimeStats, MediaType } from './types';
+import { LorebaseSettings, MediaItem, GameStats, AnimeStats, MediaType } from './types';
 import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG } from './constants';
 import { i18n, t } from './localization';
 import { LibraryView } from './views/LibraryView';
@@ -146,7 +145,7 @@ export default class LorebasePlugin extends Plugin {
      * Load plugin settings
      */
     async loadSettings(): Promise<void> {
-        const loaded = await this.loadData();
+        const loaded: unknown = await this.loadData();
         const sanitized = this.isSettingsRecord(loaded) ? { ...loaded } : {};
         this.settings = Object.assign({}, DEFAULT_SETTINGS, sanitized);
 
@@ -661,7 +660,7 @@ export default class LorebasePlugin extends Plugin {
     refreshViews(): void {
         this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY).forEach(leaf => {
             if (leaf.view instanceof LibraryView) {
-                leaf.view.refresh();
+                void leaf.view.refresh();
             }
         });
     }

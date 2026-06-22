@@ -442,7 +442,7 @@ export class IntegrationService {
     }
 
     private getJsonFetcher(): JsonFetcher {
-        return this.fetchJson.bind(this);
+        return this.fetchJson.bind(this) as JsonFetcher;
     }
 
     private buildAnimeValues(details: AnimeDetails, source?: {

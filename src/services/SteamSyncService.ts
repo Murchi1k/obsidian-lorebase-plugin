@@ -658,7 +658,7 @@ export class SteamSyncService {
     }
 
     private getJsonFetcher(): JsonFetcher {
-        return this.fetchJson.bind(this);
+        return this.fetchJson.bind(this) as JsonFetcher;
     }
 
     private injectFrontmatterFields(content: string, fields: Record<string, unknown>): string {

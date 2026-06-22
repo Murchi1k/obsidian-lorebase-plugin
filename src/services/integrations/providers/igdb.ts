@@ -65,7 +65,7 @@ async function fetchIgdbGames(
         body
     );
 
-    return Array.isArray(result) ? result : [];
+    return Array.isArray(result) ? (result as unknown[]) : [];
 }
 
 export async function searchIgdb(
