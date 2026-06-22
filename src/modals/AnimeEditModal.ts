@@ -105,7 +105,12 @@ export class AnimeEditModal extends Modal {
     }
 
     private createTemplateFragment(template: string): DocumentFragment {
-        return document.createRange().createContextualFragment(template);
+        const parsed = new DOMParser().parseFromString(template, 'text/html');
+        const fragment = this.contentEl.ownerDocument.createDocumentFragment();
+        for (const child of Array.from(parsed.body.childNodes)) {
+            fragment.appendChild(this.contentEl.ownerDocument.importNode(child, true));
+        }
+        return fragment;
     }
 
     private buildTemplate(): string {
@@ -588,13 +593,19 @@ export class AnimeEditModal extends Modal {
         button.className = 'lorebase-editmode-segment';
         button.dataset.status = status;
         button.setAttribute('aria-pressed', 'false');
-        button.innerHTML = `
-            <span class="lorebase-editmode-segment-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${STATUS_CONFIG[status].pathD}" /></svg></span>
-            <span class="lorebase-editmode-segment-label"></span>
-        `;
-        const labelEl = button.querySelector<HTMLElement>('.lorebase-editmode-segment-label');
-        if (labelEl) labelEl.textContent = label;
+        const icon = button.createSpan({ cls: 'lorebase-editmode-segment-icon', attr: { 'aria-hidden': 'true' } });
+        icon.appendChild(this.createSvgIcon(STATUS_CONFIG[status].pathD));
+        button.createSpan({ cls: 'lorebase-editmode-segment-label', text: label });
         return button;
+    }
+
+    private createSvgIcon(pathD: string): SVGElement {
+        const svg = this.contentEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        const path = this.contentEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathD);
+        svg.appendChild(path);
+        return svg;
     }
 
     private updateQuickSettingSwitches(root: HTMLElement): void {

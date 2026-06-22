@@ -114,7 +114,12 @@ export class EditModal extends Modal {
     }
 
     private createTemplateFragment(template: string): DocumentFragment {
-        return document.createRange().createContextualFragment(template);
+        const parsed = new DOMParser().parseFromString(template, 'text/html');
+        const fragment = this.contentEl.ownerDocument.createDocumentFragment();
+        for (const child of Array.from(parsed.body.childNodes)) {
+            fragment.appendChild(this.contentEl.ownerDocument.importNode(child, true));
+        }
+        return fragment;
     }
 
     private buildTemplate(): string {
@@ -917,5 +922,4 @@ export class EditModal extends Modal {
         return file instanceof TFile ? file : null;
     }
 }
-
 

@@ -44,11 +44,12 @@ export function shouldGroupBySeries(
 export function createGrid(params: RenderFlatGridParams): HTMLElement {
     const { container, layout, className = 'lorebase-grid' } = params;
     const gridEl = container.createDiv({ cls: className });
-    gridEl.style.position = 'relative';
-
-    gridEl.style.gridTemplateColumns = `repeat(${Math.max(1, layout.columns)}, minmax(0, 1fr))`;
-    gridEl.style.gap = '16px';
-    gridEl.style.padding = '16px';
+    gridEl.setCssStyles({
+        position: 'relative',
+        gridTemplateColumns: `repeat(${Math.max(1, layout.columns)}, minmax(0, 1fr))`,
+        gap: '16px',
+        padding: '16px',
+    });
 
     return gridEl;
 }

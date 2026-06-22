@@ -61,7 +61,7 @@ export class VirtualGrid<T> {
 
     private setup(): void {
         this.spacer = this.options.gridEl.createDiv({ cls: 'lorebase-spacer' });
-        this.spacer.style.gridColumn = '1 / -1';
+        this.spacer.setCssStyles({ gridColumn: '1 / -1' });
         this.rebuildCardWidthCalc();
         this.updateSpacerHeight();
         this.updateVisibleCards();
@@ -83,7 +83,7 @@ export class VirtualGrid<T> {
             (totalRows > 0 ? (totalRows - 1) * gap : 0) +
             (padding * 2);
 
-        this.spacer.style.height = `${totalHeight}px`;
+        this.spacer.setCssStyles({ height: `${totalHeight}px` });
     }
 
     private scheduleUpdate(): void {
@@ -146,10 +146,12 @@ export class VirtualGrid<T> {
         const col = index % this.cardsPerRow;
         const cardEl = card.getElement();
 
-        cardEl.style.position = 'absolute';
-        cardEl.style.width = cardWidthCalc;
-        cardEl.style.top = `${padding + (row * (this.options.cardHeight + gap))}px`;
-        cardEl.style.left = `calc(${padding}px + ${col} * (${cardWidthCalc} + ${gap}px))`;
+        cardEl.setCssStyles({
+            position: 'absolute',
+            width: cardWidthCalc,
+            top: `${padding + (row * (this.options.cardHeight + gap))}px`,
+            left: `calc(${padding}px + ${col} * (${cardWidthCalc} + ${gap}px))`,
+        });
     }
 
     private getGap(): number {

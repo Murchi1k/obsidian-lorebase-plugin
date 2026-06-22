@@ -748,8 +748,7 @@ export default class LorebasePlugin extends Plugin {
                 const titleEl = document.createDocumentFragment();
                 const span = titleEl.createEl('span');
                 span.setText(t('contextGames'));
-                span.style.color = 'var(--lorebase-accent)';
-                span.style.fontWeight = '600';
+                span.addClass('lorebase-menu-selected-title');
                 item.setTitle(titleEl);
             } else {
                 item.setTitle(t('contextGames'));
@@ -776,8 +775,7 @@ export default class LorebasePlugin extends Plugin {
                 const titleEl = document.createDocumentFragment();
                 const span = titleEl.createEl('span');
                 span.setText(t('contextAnime'));
-                span.style.color = 'var(--lorebase-accent)';
-                span.style.fontWeight = '600';
+                span.addClass('lorebase-menu-selected-title');
                 item.setTitle(titleEl);
             } else {
                 item.setTitle(t('contextAnime'));

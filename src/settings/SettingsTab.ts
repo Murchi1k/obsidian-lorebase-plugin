@@ -3,7 +3,7 @@
  * Plugin settings interface integrated with Obsidian Settings
  */
 
-import { App, PluginSettingTab } from 'obsidian';
+import { App, PluginSettingTab, Setting } from 'obsidian';
 import { t } from '../localization';
 import type LorebasePlugin from '../main';
 import { ICON_ANIME, ICON_GAMES } from './sections/constants';
@@ -36,7 +36,10 @@ export class LorebaseSettingTab extends PluginSettingTab {
         containerEl.empty();
         containerEl.addClass('lorebase-settings');
 
-        containerEl.createEl('h1', { text: t('settingsTitle') });
+        new Setting(containerEl)
+            .setName(t('settingsTitle'))
+            .setHeading()
+            .settingEl.addClass('lorebase-settings-main-heading');
         this.renderSupportBlock(containerEl);
 
         const layoutEl = containerEl.createDiv({ cls: 'lorebase-settings-layout' });
@@ -85,19 +88,16 @@ export class LorebaseSettingTab extends PluginSettingTab {
                 label: 'Ko-fi',
                 brand: 'kofi',
                 url: 'https://ko-fi.com/murch1k',
-                icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="cup" d="M4.5 7.5h11.8v6.1a4.9 4.9 0 0 1-4.9 4.9H9.4a4.9 4.9 0 0 1-4.9-4.9V7.5Z"/><path class="handle" d="M16.3 10h1.5a2.55 2.55 0 0 1 0 5.1h-1.5"/><path class="heart" d="M10.4 14.9 7.9 12.5a1.55 1.55 0 0 1 2.19-2.19l.31.31.31-.31a1.55 1.55 0 0 1 2.19 2.19l-2.5 2.4Z"/></svg>',
             },
             {
                 label: 'Discord',
                 brand: 'discord',
                 url: 'https://discord.gg/eTcw8v8c4',
-                icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.25 7.75A12.2 12.2 0 0 1 10 6.9l.35.7a10.7 10.7 0 0 1 3.3 0l.35-.7a12.2 12.2 0 0 1 2.75.85c1.7 2.5 2.2 4.9 2 7.35a10.5 10.5 0 0 1-3.42 1.76l-.82-1.08c.45-.16.88-.36 1.3-.6a7.9 7.9 0 0 1-7.62 0c.42.24.85.44 1.3.6l-.82 1.08a10.5 10.5 0 0 1-3.42-1.76c-.3-2.74.47-5.16 2-7.35Z"/><circle cx="10" cy="12.55" r="1"/><circle cx="14" cy="12.55" r="1"/></svg>',
             },
             {
                 label: 'Patreon',
                 brand: 'patreon',
                 url: 'https://www.patreon.com/c/Murch1k',
-                icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.7" cy="8.9" r="5.1"/><path d="M5.4 4.2h3.4v15.6H5.4z"/></svg>',
             },
         ];
 
@@ -111,7 +111,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
                 },
             });
             const icon = button.createSpan({ cls: 'lorebase-settings-support-icon' });
-            icon.innerHTML = link.icon;
+            icon.appendChild(this.createSupportIcon(link.brand));
             button.createSpan({ text: link.label });
             button.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -125,9 +125,50 @@ export class LorebaseSettingTab extends PluginSettingTab {
     }
 
     private createSectionHeader(container: HTMLElement, icon: string, text: string): void {
-        const header = container.createEl('h2', { cls: 'lorebase-settings-section-title' });
-        header.createSpan({ cls: 'lorebase-settings-section-icon', text: icon });
-        header.createSpan({ text });
+        const heading = new Setting(container)
+            .setHeading();
+        heading.settingEl.addClass('lorebase-settings-section-title');
+        heading.nameEl.empty();
+        heading.nameEl.createSpan({ cls: 'lorebase-settings-section-icon', text: icon });
+        heading.nameEl.createSpan({ text });
+    }
+
+    private createSupportIcon(brand: string): SVGElement {
+        const svg = this.containerEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+
+        const addPath = (d: string, className?: string): void => {
+            const path = this.containerEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', d);
+            if (className) path.setAttribute('class', className);
+            svg.appendChild(path);
+        };
+        const addCircle = (cx: string, cy: string, r: string): void => {
+            const circle = this.containerEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', cx);
+            circle.setAttribute('cy', cy);
+            circle.setAttribute('r', r);
+            svg.appendChild(circle);
+        };
+
+        if (brand === 'kofi') {
+            addPath('M4.5 7.5h11.8v6.1a4.9 4.9 0 0 1-4.9 4.9H9.4a4.9 4.9 0 0 1-4.9-4.9V7.5Z', 'cup');
+            addPath('M16.3 10h1.5a2.55 2.55 0 0 1 0 5.1h-1.5', 'handle');
+            addPath('M10.4 14.9 7.9 12.5a1.55 1.55 0 0 1 2.19-2.19l.31.31.31-.31a1.55 1.55 0 0 1 2.19 2.19l-2.5 2.4Z', 'heart');
+            return svg;
+        }
+
+        if (brand === 'discord') {
+            addPath('M7.25 7.75A12.2 12.2 0 0 1 10 6.9l.35.7a10.7 10.7 0 0 1 3.3 0l.35-.7a12.2 12.2 0 0 1 2.75.85c1.7 2.5 2.2 4.9 2 7.35a10.5 10.5 0 0 1-3.42 1.76l-.82-1.08c.45-.16.88-.36 1.3-.6a7.9 7.9 0 0 1-7.62 0c.42.24.85.44 1.3.6l-.82 1.08a10.5 10.5 0 0 1-3.42-1.76c-.3-2.74.47-5.16 2-7.35Z');
+            addCircle('10', '12.55', '1');
+            addCircle('14', '12.55', '1');
+            return svg;
+        }
+
+        addCircle('14.7', '8.9', '5.1');
+        addPath('M5.4 4.2h3.4v15.6H5.4z');
+        return svg;
     }
 
     private createCollapsibleGroup(

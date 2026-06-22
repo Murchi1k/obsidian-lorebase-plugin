@@ -48,6 +48,11 @@
     text-align: center;
 }
 
+.lorebase-menu-selected-title {
+    color: var(--lorebase-accent);
+    font-weight: 600;
+}
+
 /* =============================================================================
    TOOLBAR - Minimal zones
    ============================================================================= */
@@ -4667,6 +4672,10 @@
     display: block;
 }
 
+.lorebase-sr-thumb img.is-hidden {
+    display: none;
+}
+
 .lorebase-sr-thumb.is-fallback {
     color: var(--lorebase-text-faint);
 }
@@ -5545,6 +5554,10 @@
     background: var(--background-secondary);
 }
 
+.lorebase-select-providers.is-hidden {
+    display: none;
+}
+
 .lorebase-select-provider-chip {
     appearance: none;
     min-height: 28px;
@@ -6400,4 +6413,3 @@
         display: flex !important;
     }
 }
-

@@ -13,6 +13,23 @@ const BADGE_KEYS: BadgeKey[] = ['status', 'rating', 'favorite'];
 const BADGES_PERSIST_DEBOUNCE_MS = 120;
 const VISUAL_REFRESH_DEBOUNCE_MS = 40;
 const MAX_PREVIEW_CARD_WIDTH = 340;
+const FAVORITE_BADGE_PATH = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
+
+function createSvgPathIcon(pathD: string, options: { fill?: string; stroke?: string; width?: string; height?: string } = {}): SVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', options.fill ?? 'none');
+    svg.setAttribute('stroke', options.stroke ?? 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    if (options.width) svg.setAttribute('width', options.width);
+    if (options.height) svg.setAttribute('height', options.height);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathD);
+    svg.appendChild(path);
+    return svg;
+}
 
 export function renderGeneralSettings(context: SettingsSectionContext, container: HTMLElement): void {
     context.createSectionHeader(container, ICON_GENERAL, t('settingsGeneral'));
@@ -93,7 +110,7 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
     const presetsContainer = container.createDiv({ cls: 'lorebase-color-presets' });
     for (const color of COLOR_PRESETS) {
         const swatch = presetsContainer.createDiv({ cls: 'lorebase-color-swatch' });
-        swatch.style.backgroundColor = color;
+        swatch.setCssStyles({ backgroundColor: color });
         if (context.plugin.settings.accentColor === color) {
             swatch.addClass('selected');
         }
@@ -564,11 +581,13 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         const profile = getActiveOverlayProfile();
         const lines = normalizeDescriptionLines(getDescriptionLines(profile));
         setDescriptionLines(profile, lines);
-        previewDescription.style.display = '-webkit-box';
-        previewDescription.style.overflow = 'hidden';
-        previewDescription.style.textOverflow = 'ellipsis';
-        previewDescription.style.whiteSpace = 'pre-line';
-        previewDescription.style.webkitBoxOrient = 'vertical';
+        previewDescription.setCssStyles({
+            display: '-webkit-box',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'pre-line',
+            webkitBoxOrient: 'vertical',
+        });
         previewDescription.style.setProperty('-webkit-line-clamp', String(lines));
         previewDescription.style.setProperty('line-clamp', String(lines));
     };
@@ -581,7 +600,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
             const hiddenByMode = field === 'format' && !isAnimePreview;
             const visible = !hiddenByMode && visibility[field];
             const el = overlayElements[field];
-            el.style.display = hiddenByMode ? 'none' : '';
+            el.setCssStyles({ display: hiddenByMode ? 'none' : '' });
             el.toggleClass('is-disabled-preview', !visible);
         });
     };
@@ -667,12 +686,14 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         const isHorizontal = previewOrientation === 'horizontal';
         const dimensions = getPreviewDimensions(settings, previewOrientation);
         card.toggleClass('lorebase-card-horizontal', isHorizontal);
-        card.style.width = `${dimensions.width}px`;
-        card.style.height = `${dimensions.height}px`;
-        card.style.maxWidth = isHorizontal ? '100%' : `${dimensions.width}px`;
-        card.style.minWidth = isHorizontal ? `${dimensions.width}px` : '';
-        card.style.minHeight = isHorizontal ? `${dimensions.height}px` : '0';
-        imageContainer.style.height = '100%';
+        card.setCssStyles({
+            width: `${dimensions.width}px`,
+            height: `${dimensions.height}px`,
+            maxWidth: isHorizontal ? '100%' : `${dimensions.width}px`,
+            minWidth: isHorizontal ? `${dimensions.width}px` : '',
+            minHeight: isHorizontal ? `${dimensions.height}px` : '0',
+        });
+        imageContainer.setCssStyles({ height: '100%' });
     };
 
     const getOverlayDragReferenceHeight = (): number => {
@@ -884,12 +905,12 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
             const statusBadge = document.createElement('div');
             statusBadge.className = `lorebase-card-status lorebase-status-${previewStatus}`;
             const iconPath = STATUS_CONFIG[previewStatus].pathD;
+            statusBadge.appendChild(createSvgPathIcon(iconPath));
             if (activeBadges.status.iconOnly) {
                 statusBadge.classList.add('is-icon-only');
-                statusBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${iconPath}"/></svg>`;
             } else {
                 const statusLabel = previewMode === 'anime' ? t('statusWatching') : t('statusPlaying');
-                statusBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${iconPath}"/></svg><span>${statusLabel}</span>`;
+                statusBadge.createSpan({ text: statusLabel });
             }
             badge.appendChild(statusBadge);
             return;
@@ -913,7 +934,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         if (activeBadges.favorite.subtlePulse) {
             favoriteBadge.classList.add('is-subtle-pulse');
         }
-        favoriteBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ffffff" stroke="none" width="12" height="12"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+        favoriteBadge.appendChild(createSvgPathIcon(FAVORITE_BADGE_PATH, { fill: '#ffffff', stroke: 'none', width: '12', height: '12' }));
         badge.appendChild(favoriteBadge);
     };
 
@@ -991,7 +1012,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         previewTitle.textContent = isAnime ? 'LOREBASE Anime Preview' : 'LOREBASE Preview Card';
         previewYear.textContent = '2026';
         previewFormat.textContent = 'TV';
-        previewFormat.style.display = isAnime ? '' : 'none';
+        previewFormat.setCssStyles({ display: isAnime ? '' : 'none' });
         if (!isAnime && activeOverlayField === 'format') {
             setActiveOverlayField(null);
         }
@@ -1001,8 +1022,8 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         const showProgress = isAnime && (showSeason || showEpisode);
         previewAnimeProgress.toggleClass('is-hidden', !showProgress);
         const hasEpisodeBadge = showProgress && showEpisode;
-        previewSeasonBadge.style.display = showProgress && showSeason ? '' : 'none';
-        previewEpisodeBadge.style.display = showProgress && showEpisode ? 'inline' : 'none';
+        previewSeasonBadge.setCssStyles({ display: showProgress && showSeason ? '' : 'none' });
+        previewEpisodeBadge.setCssStyles({ display: showProgress && showEpisode ? 'inline' : 'none' });
         previewSeasonBadge.toggleClass('is-hover-only', showProgress && showSeason && hasEpisodeBadge);
         previewSeasonBadge.toggleClass('is-only', showProgress && showSeason && !hasEpisodeBadge);
     };
@@ -1300,8 +1321,8 @@ function renderBadgeOptions(
 
     const syncAnimeProgressSettingsVisibility = (): void => {
         const isAnimePreview = container.dataset.previewMode === 'anime';
-        seasonProgressSetting.settingEl.style.display = isAnimePreview ? '' : 'none';
-        episodeProgressSetting.settingEl.style.display = isAnimePreview ? '' : 'none';
+        seasonProgressSetting.settingEl.setCssStyles({ display: isAnimePreview ? '' : 'none' });
+        episodeProgressSetting.settingEl.setCssStyles({ display: isAnimePreview ? '' : 'none' });
     };
 
     const syncPreviewLinkedControls = (): void => {

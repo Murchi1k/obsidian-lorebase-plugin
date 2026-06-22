@@ -231,7 +231,7 @@ export class SteamSyncReviewModal extends Modal {
                 },
             });
             img.addEventListener('error', () => {
-                img.style.display = 'none';
+                img.addClass('is-hidden');
                 thumb.addClass('is-fallback');
                 const fallbackIcon = thumb.createSpan({ cls: 'lorebase-sr-thumb-fallback' });
                 setIcon(fallbackIcon, 'gamepad-2');

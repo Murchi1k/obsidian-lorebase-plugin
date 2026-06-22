@@ -115,18 +115,22 @@ export class GameCard {
             const horizontalMinWidth = this.dimensionOverrides?.horizontalMinWidth ?? 340;
             const horizontalHeight = this.dimensionOverrides?.horizontalHeight
                 ?? this.parseCssPixels(sizes.height, 220);
-            this.container.style.width = sizes.width;
-            this.container.style.height = `${horizontalHeight}px`;
-            this.container.style.minHeight = `${horizontalHeight}px`;
-            this.container.style.minWidth = `${horizontalMinWidth}px`;
+            this.container.setCssStyles({
+                width: sizes.width,
+                height: `${horizontalHeight}px`,
+                minHeight: `${horizontalHeight}px`,
+                minWidth: `${horizontalMinWidth}px`,
+            });
         } else {
             const sizes = CARD_SIZES[this.cardSize];
             const verticalMaxWidth = this.dimensionOverrides?.verticalMinWidth
                 ?? this.parseCssPixels(sizes.maxWidth, 280);
-            this.container.style.width = '100%';
-            this.container.style.maxWidth = `${verticalMaxWidth}px`;
-            this.container.style.minWidth = '';
-            this.container.style.minHeight = '0';
+            this.container.setCssStyles({
+                width: '100%',
+                maxWidth: `${verticalMaxWidth}px`,
+                minWidth: '',
+                minHeight: '0',
+            });
         }
 
         const imageContainer = this.container.createDiv({ cls: 'lorebase-card-image' });
@@ -134,21 +138,21 @@ export class GameCard {
             const sizes = CARD_SIZES[this.cardSize];
             const verticalMinHeight = this.dimensionOverrides?.verticalMinHeight
                 ?? this.parseCssPixels(sizes.minHeight, 380);
-            imageContainer.style.minHeight = `${verticalMinHeight}px`;
+            imageContainer.setCssStyles({ minHeight: `${verticalMinHeight}px` });
             // verticalImageRatio = width/height from user's custom setting.
             // For CSS aspect-ratio we need width/height; portrait = ratio < 1.
             const verticalImageRatio = this.dimensionOverrides?.verticalImageRatio;
             if (verticalImageRatio && Number.isFinite(verticalImageRatio) && verticalImageRatio > 0) {
                 // Custom ratio: use as-is (user controls portrait/landscape)
-                imageContainer.style.aspectRatio = `${verticalImageRatio}`;
+                imageContainer.setCssStyles({ aspectRatio: `${verticalImageRatio}` });
             } else {
                 // Default portrait ratio: 2/3 (standard game cover format, height = 1.5 x width).
                 // This ensures cards look like portrait covers at any column count.
-                imageContainer.style.aspectRatio = '2/3';
+                imageContainer.setCssStyles({ aspectRatio: '2/3' });
             }
-            imageContainer.style.height = '';
+            imageContainer.setCssStyles({ height: '' });
         } else {
-            imageContainer.style.height = '100%';
+            imageContainer.setCssStyles({ height: '100%' });
         }
 
         const imageWrapper = imageContainer.createDiv({ cls: 'lorebase-card-image-wrapper' });
@@ -442,10 +446,12 @@ export class GameCard {
     }
 
     private applyDescriptionClamp(element: HTMLElement): void {
-        element.style.display = '-webkit-box';
-        element.style.overflow = 'hidden';
-        element.style.textOverflow = 'ellipsis';
-        element.style.webkitBoxOrient = 'vertical';
+        element.setCssStyles({
+            display: '-webkit-box',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            webkitBoxOrient: 'vertical',
+        });
         element.style.setProperty('-webkit-line-clamp', String(this.descriptionLines));
         element.style.setProperty('line-clamp', String(this.descriptionLines));
     }
@@ -552,13 +558,24 @@ export class GameCard {
 
     /**
      * Create an SVG icon element using cached templates for performance.
-     * Uses cloneNode instead of innerHTML to avoid HTML parsing overhead.
+     * Uses cloneNode to avoid repeated SVG construction.
      */
     private createSvgIcon(pathD: string): SVGElement {
         let template = GameCard.svgTemplateCache.get(pathD);
         if (!template) {
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${pathD}"/></svg>`;
+            const ownerDocument = this.container.ownerDocument;
+            const wrapper = ownerDocument.createElement('div');
+            const svg = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '2');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            const path = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathD);
+            svg.appendChild(path);
+            wrapper.appendChild(svg);
             template = wrapper;
             GameCard.svgTemplateCache.set(pathD, template);
         }

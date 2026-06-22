@@ -89,7 +89,6 @@ export interface SearchProviderOption {
 type SearchHandler<T extends SearchItem> = (query: string, providerId?: string) => Promise<T[]>;
 
 const AUTO_SEARCH_DEBOUNCE_MS = 350;
-const SEARCH_CARD_WIDTH = 'calc((100% - 42px) / 4)';
 
 export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     private searchHandler: SearchHandler<T>;
@@ -213,12 +212,6 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         });
 
         this.gridEl = contentEl.createDiv({ cls: 'lorebase-select-grid lorebase-select-search-grid' });
-        this.gridEl.style.display = 'flex';
-        this.gridEl.style.flexWrap = 'wrap';
-        this.gridEl.style.gap = '14px';
-        this.gridEl.style.alignItems = 'start';
-        this.gridEl.style.alignContent = 'flex-start';
-        this.gridEl.style.justifyContent = 'flex-start';
         this.renderGrid();
 
         const footer = contentEl.createDiv({ cls: 'lorebase-modal-actions lorebase-select-footer' });
@@ -265,7 +258,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             const card = list.createDiv({ cls: 'lorebase-select-review-card' });
             const image = card.createDiv({ cls: 'lorebase-select-review-poster' });
             if (item.image) {
-                image.style.backgroundImage = `url(\"${item.image}\")`;
+                image.setCssStyles({ backgroundImage: `url("${item.image}")` });
             } else {
                 image.addClass('is-empty');
                 const emptyIcon = image.createSpan({ cls: 'lorebase-select-review-empty-icon' });
@@ -436,11 +429,11 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.providerListEl.empty();
 
         if (!this.providerOptions.length) {
-            this.providerListEl.style.display = 'none';
+            this.providerListEl.addClass('is-hidden');
             return;
         }
 
-        this.providerListEl.style.display = '';
+        this.providerListEl.removeClass('is-hidden');
         for (const provider of this.providerOptions) {
             const chip = this.providerListEl.createEl('button', {
                 cls: 'lorebase-select-provider-chip',
@@ -499,11 +492,6 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.items.forEach((item, index) => {
             const card = this.gridEl!.createDiv({ cls: 'lorebase-select-card' });
             card.setAttr('data-index', String(index));
-            card.style.width = SEARCH_CARD_WIDTH;
-            card.style.flex = `0 0 ${SEARCH_CARD_WIDTH}`;
-            card.style.height = 'auto';
-            card.style.minHeight = '0';
-            card.style.alignSelf = 'start';
             const key = this.getItemKey(item);
             if (this.selected.has(key)) {
                 card.addClass('is-picked');
@@ -513,13 +501,6 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             }
 
             const image = card.createDiv({ cls: 'lorebase-select-card-image' });
-            image.style.width = '100%';
-            image.style.height = 'auto';
-            image.style.minHeight = '0';
-            image.style.aspectRatio = '2 / 3';
-            image.style.flex = '0 0 auto';
-            image.style.backgroundSize = 'cover';
-            image.style.backgroundPosition = 'center';
             if (item.image) {
                 this.setPreviewBackground(image, item.image);
             } else {
@@ -529,9 +510,6 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             card.createDiv({ cls: 'lorebase-select-card-check' });
 
             const body = card.createDiv({ cls: 'lorebase-select-card-body' });
-            body.style.flex = '0 0 auto';
-            body.style.minHeight = '66px';
-            body.style.boxSizing = 'border-box';
             body.createDiv({ cls: 'lorebase-select-card-title', text: item.title });
 
             const metaParts = [item.year, item.format, item.status].filter(Boolean);
@@ -576,7 +554,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         const apply = (): void => {
             const next = candidates[index];
             if (!next) {
-                target.style.backgroundImage = '';
+                target.setCssStyles({ backgroundImage: '' });
                 target.addClass('is-empty');
                 return;
             }
@@ -584,7 +562,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             const probe = new Image();
             probe.onload = () => {
                 target.removeClass('is-empty');
-                target.style.backgroundImage = `url(\"${next}\")`;
+                target.setCssStyles({ backgroundImage: `url("${next}")` });
             };
             probe.onerror = () => {
                 index++;
