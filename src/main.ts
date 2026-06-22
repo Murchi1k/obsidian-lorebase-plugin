@@ -490,7 +490,7 @@ export default class LorebasePlugin extends Plugin {
         }
 
         if (leaf) {
-            workspace.revealLeaf(leaf);
+            workspace.setActiveLeaf(leaf, { focus: true });
         }
     }
 
