@@ -20,7 +20,7 @@ export type TranslationKey =
     | 'sort' | 'sortName' | 'sortRating' | 'sortYear' | 'sortDateCompleted' | 'sortOrder' | 'sortAsc' | 'sortDesc'
     | 'sortDateWatched'
     | 'status' | 'filter' | 'filterAdult' | 'filterFlags' | 'tags' | 'genres' | 'plans' | 'tagsEmpty' | 'view'
-    | 'random' | 'randomAnime' | 'stats' | 'settings'
+    | 'random' | 'randomAnime' | 'stats' | 'settings' | 'commandSteamSync'
     // View modes
     | 'viewGrid' | 'viewHorizontal'
     // Display modes
@@ -39,7 +39,7 @@ export type TranslationKey =
     | 'settingsColor' | 'settingsLanguage' | 'settingsReset'
     | 'settingsMediaGames' | 'settingsMediaAnime'
     | 'settingsParticle' | 'settingsParticleNone' | 'settingsParticleSakura' | 'settingsParticleSnow' | 'settingsParticleIntensity'
-    | 'settingsFolder' | 'settingsGames' | 'settingsComingSoon'
+    | 'settingsFolder' | 'settingsGames' | 'settingsComingSoon' | 'settingsExperiment'
     | 'settingsTitle' | 'settingsSupportTitle' | 'settingsSupportDesc' | 'settingsSupportUnavailable'
     | 'settingsDangerZone' | 'settingsResetAllButton'
     | 'settingsComingSoonMoviesText' | 'settingsComingSoonBooksText'
@@ -62,11 +62,19 @@ export type TranslationKey =
     | 'settingsDescColumns' | 'settingsDescOrientation' | 'settingsDescShowAdult' | 'settingsDescReset'
     | 'settingsIntegrations' | 'settingsIntegrationsEnable' | 'settingsIntegrationsEnableDesc'
     | 'settingsIntegrationsProviders' | 'settingsIntegrationsMediaProviders' | 'settingsIntegrationsTemplates'
-    | 'settingsIntegrationsProviderRawg' | 'settingsIntegrationsProviderSteam'
+    | 'settingsIntegrationsProviderRawg' | 'settingsIntegrationsProviderSteam' | 'settingsIntegrationsProviderIgdb'
     | 'settingsIntegrationsProviderAnilist' | 'settingsIntegrationsProviderShikimori'
     | 'settingsIntegrationsProviderKeyRequired' | 'settingsIntegrationsProviderKeyOptional'
     | 'settingsIntegrationsProviderKeyPlaceholder'
+    | 'settingsIntegrationsProviderClientIdPlaceholder' | 'settingsIntegrationsProviderClientSecretPlaceholder'
+    | 'settingsIntegrationsProviderIgdbHelpTitle' | 'settingsIntegrationsProviderIgdbHelpText'
+    | 'settingsIntegrationsProviderIgdbTwitchLink' | 'settingsIntegrationsProviderIgdbDocsLink'
     | 'settingsIntegrationsProviderTest'
+    | 'settingsIntegrationsImageStorage' | 'settingsIntegrationsImageStorageDesc'
+    | 'settingsIntegrationsImageStorageEnable' | 'settingsIntegrationsImageStorageEnableDesc'
+    | 'settingsIntegrationsImageStorageFolder' | 'settingsIntegrationsImageStorageFolderDesc'
+    | 'settingsIntegrationsImageStorageDownloadExisting' | 'settingsIntegrationsImageStorageDownloadExistingDesc'
+    | 'settingsIntegrationsImageStorageDownloadStarted' | 'settingsIntegrationsImageStorageDownloadDone'
     | 'settingsIntegrationsGamesProvider' | 'settingsIntegrationsAnimeProvider'
     | 'settingsIntegrationsGamesTemplate' | 'settingsIntegrationsAnimeTemplate'
     | 'settingsIntegrationsTemplateContent' | 'settingsIntegrationsTemplateDesc'
@@ -75,12 +83,14 @@ export type TranslationKey =
     | 'settingsIntegrationsTemplateMode' | 'settingsIntegrationsTemplateModeDesc'
     | 'settingsIntegrationsTemplateModeSimple' | 'settingsIntegrationsTemplateModeAdvanced'
     | 'settingsIntegrationsTemplateFields' | 'settingsIntegrationsHowLongToBeat' | 'settingsIntegrationsHowLongToBeatDesc'
-    | 'templateFieldName' | 'templateFieldImage' | 'templateFieldPoster' | 'templateFieldPlot'
+    | 'templateFieldName' | 'templateFieldImage' | 'templateFieldImageHorizontal'
+    | 'templateFieldPoster' | 'templateFieldPosterHorizontal' | 'templateFieldPlot'
     | 'templateFieldScoreImdb' | 'templateFieldTags' | 'templateFieldYear' | 'templateFieldStudios'
     | 'templateFieldFormat' | 'templateFieldRating' | 'templateFieldStatus' | 'templateFieldDropped'
     | 'templateFieldFavorite' | 'templateFieldUrl' | 'templateFieldGameSeries' | 'templateFieldGenres'
     | 'templateFieldPlatforms' | 'templateFieldReleased' | 'templateFieldDevelopers' | 'templateFieldPublishers'
     | 'templateFieldMetacritic' | 'templateFieldUserRating' | 'templateFieldPlayed' | 'templateFieldPlaying'
+    | 'templateFieldAnimeParts' | 'templateFieldIntegrationSource'
     | 'templateFieldMain' | 'templateFieldMainPlusSides' | 'templateFieldCompletionist'
     | 'editProgressMain' | 'editProgressMainPlusSides' | 'editProgressPerfectionist' | 'commonNoData'
     | 'resetTitle' | 'resetSubtitle' | 'resetWarning' | 'resetConfirm' | 'resetConfirmAck'
@@ -115,6 +125,8 @@ export type TranslationKey =
     | 'editOverflow' | 'editRemoveHint' | 'editBreadcrumbGames' | 'editBreadcrumbAnime'
     | 'editAnimeParts' | 'editAddPart' | 'editRemovePart' | 'editCannotRemoveLastPart'
     | 'editTotalEpisodes' | 'editActivePart'
+    | 'animePartsCheck' | 'animePartsProviderTitle' | 'animePartsNew' | 'animePartsSelected'
+    | 'animePartsNoNew' | 'animePartsSourceMissing' | 'animePartsApply'
     | 'planCheckLater' | 'planPlaySoon' | 'planWaitEarlyAccess' | 'planNextInQueue'
     | 'settingsStatusPlans' | 'settingsStatusPlansDesc' | 'settingsGameStatusLabels'
     | 'settingsAnimeStatusLabels' | 'settingsGamePlanTags' | 'settingsGamePlanTagsDesc'
@@ -130,7 +142,7 @@ export type TranslationKey =
     | 'promptSearchGame' | 'promptSearchAnime' | 'promptSearchPlaceholder'
     | 'promptSelectResult'
     | 'promptSearchAction' | 'promptAddSelected' | 'promptSelectedLabel'
-    | 'promptReviewSelected' | 'promptConfirmSelected' | 'promptRemoveSelected'
+    | 'promptReviewSelected' | 'promptReviewSelectedSubtitle' | 'promptConfirmSelected' | 'promptRemoveSelected'
     | 'promptAddAnotherTitle' | 'promptAddAnotherBodyGame' | 'promptAddAnotherBodyAnime'
     | 'promptAddAnotherYes' | 'promptAddAnotherNo'
     | 'noticeNoResults' | 'noticeMissingApiKey' | 'noticeProviderDisabled' | 'noticeIntegrationsDisabled'
@@ -229,9 +241,10 @@ const EN: Record<TranslationKey, string> = {
     settingsGames: 'Games',
     settingsAnime: 'Anime',
     settingsComingSoon: 'Coming Soon',
+    settingsExperiment: 'Experiment',
     settingsTitle: 'LOREBASE Settings',
     settingsSupportTitle: 'Support LOREBASE',
-    settingsSupportDesc: 'Discord, Patreon and Ko-fi links will be available soon.',
+    settingsSupportDesc: 'Join Discord or support LOREBASE on Ko-fi and Patreon.',
     settingsSupportUnavailable: 'Link is not configured yet',
     settingsDangerZone: 'Danger Zone',
     settingsResetAllButton: 'Reset All Settings',
@@ -281,12 +294,29 @@ const EN: Record<TranslationKey, string> = {
     settingsIntegrationsTemplates: 'Templates',
     settingsIntegrationsProviderRawg: 'RAWG (Games)',
     settingsIntegrationsProviderSteam: 'Steam (Games)',
+    settingsIntegrationsProviderIgdb: 'IGDB (Games)',
     settingsIntegrationsProviderAnilist: 'AniList (Anime)',
     settingsIntegrationsProviderShikimori: 'Shikimori (Anime)',
     settingsIntegrationsProviderKeyRequired: 'API key required',
     settingsIntegrationsProviderKeyOptional: 'API key not required',
     settingsIntegrationsProviderKeyPlaceholder: 'API key',
+    settingsIntegrationsProviderClientIdPlaceholder: 'Client ID',
+    settingsIntegrationsProviderClientSecretPlaceholder: 'Client Secret',
+    settingsIntegrationsProviderIgdbHelpTitle: 'How to get IGDB credentials',
+    settingsIntegrationsProviderIgdbHelpText: 'Create an app in Twitch Developer Console, then copy its Client ID and generate a Client Secret. IGDB uses those Twitch credentials for API access.',
+    settingsIntegrationsProviderIgdbTwitchLink: 'Open Twitch Developer Console',
+    settingsIntegrationsProviderIgdbDocsLink: 'Open IGDB API docs',
     settingsIntegrationsProviderTest: 'Test',
+    settingsIntegrationsImageStorage: 'Local images',
+    settingsIntegrationsImageStorageDesc: 'Experimental: save provider images into the vault',
+    settingsIntegrationsImageStorageEnable: 'Save imported images locally',
+    settingsIntegrationsImageStorageEnableDesc: 'Download poster/image fields and write local vault paths into new notes',
+    settingsIntegrationsImageStorageFolder: 'Images folder',
+    settingsIntegrationsImageStorageFolderDesc: 'Vault folder for downloaded game and anime images',
+    settingsIntegrationsImageStorageDownloadExisting: 'Download existing images',
+    settingsIntegrationsImageStorageDownloadExistingDesc: 'Scan existing game and anime notes, save remote image URLs locally, and update frontmatter',
+    settingsIntegrationsImageStorageDownloadStarted: 'Downloading existing LOREBASE images...',
+    settingsIntegrationsImageStorageDownloadDone: 'Existing image download complete',
     settingsIntegrationsGamesProvider: 'Games provider',
     settingsIntegrationsAnimeProvider: 'Anime provider',
     settingsIntegrationsGamesProviderDesc: 'Choose a provider for games',
@@ -306,7 +336,9 @@ const EN: Record<TranslationKey, string> = {
     settingsIntegrationsHowLongToBeatDesc: 'Fill Main/Main + Sides/Perfectionist from HowLongToBeat',
     templateFieldName: 'Name',
     templateFieldImage: 'Image',
+    templateFieldImageHorizontal: 'Horizontal image',
     templateFieldPoster: 'Poster',
+    templateFieldPosterHorizontal: 'Horizontal poster',
     templateFieldPlot: 'Description',
     templateFieldScoreImdb: 'IMDb score',
     templateFieldTags: 'Tags',
@@ -328,6 +360,8 @@ const EN: Record<TranslationKey, string> = {
     templateFieldMain: 'Main',
     templateFieldMainPlusSides: 'Main + Sides',
     templateFieldCompletionist: 'Perfectionist',
+    templateFieldAnimeParts: 'Anime parts',
+    templateFieldIntegrationSource: 'Integration source',
     editProgressMain: 'Main',
     editProgressMainPlusSides: 'Main + Side Quests',
     editProgressPerfectionist: 'Perfectionist',
@@ -438,6 +472,13 @@ const EN: Record<TranslationKey, string> = {
     editCannotRemoveLastPart: 'At least one part is required',
     editTotalEpisodes: 'Total episodes',
     editActivePart: 'Active part',
+    animePartsCheck: 'Check parts',
+    animePartsProviderTitle: 'Provider title parts',
+    animePartsNew: 'New',
+    animePartsSelected: 'Selected',
+    animePartsNoNew: 'No new parts',
+    animePartsSourceMissing: 'Could not determine anime source.',
+    animePartsApply: 'Apply parts',
     planCheckLater: 'Check later',
     planPlaySoon: 'Play soon',
     planWaitEarlyAccess: 'Wait for early access to end',
@@ -470,6 +511,7 @@ const EN: Record<TranslationKey, string> = {
     commandOpenLibrary: 'Open Library',
     commandAddGame: 'Add game',
     commandAddAnime: 'Add anime',
+    commandSteamSync: 'Steam Sync',
     ribbonLibrary: 'LOREBASE Library',
     errorInitView: 'Error initializing view',
     errorLoadingItems: 'Error loading items',
@@ -482,6 +524,7 @@ const EN: Record<TranslationKey, string> = {
     promptAddSelected: 'Add',
     promptSelectedLabel: 'Selected',
     promptReviewSelected: 'Review selected',
+    promptReviewSelectedSubtitle: 'Review selected items before creating notes.',
     promptConfirmSelected: 'Confirm',
     promptRemoveSelected: 'Remove',
     promptAddAnotherTitle: 'Add another?',
@@ -504,7 +547,7 @@ const EN: Record<TranslationKey, string> = {
     promptFileExistsSkip: 'Skip',
     commonOk: 'OK',
     commonCancel: 'Cancel',
-    commonBack: '\u2190 Back',
+    commonBack: 'Back',
     commonNoData: 'No data',
 };
 
@@ -593,9 +636,10 @@ const RU: Record<TranslationKey, string> = {
     settingsGames: 'Игры',
     settingsAnime: 'Аниме',
     settingsComingSoon: 'Скоро',
+    settingsExperiment: 'Эксперимент',
     settingsTitle: 'Настройки LOREBASE',
     settingsSupportTitle: 'Поддержать LOREBASE',
-    settingsSupportDesc: 'Ссылки Discord, Patreon и Ko-fi появятся позже.',
+    settingsSupportDesc: 'Присоединяйтесь к Discord или поддержите LOREBASE на Ko-fi и Patreon.',
     settingsSupportUnavailable: 'Ссылка пока не настроена',
     settingsDangerZone: 'Опасная зона',
     settingsResetAllButton: 'Сбросить все настройки',
@@ -645,12 +689,29 @@ const RU: Record<TranslationKey, string> = {
     settingsIntegrationsTemplates: 'Шаблоны',
     settingsIntegrationsProviderRawg: 'RAWG (Игры)',
     settingsIntegrationsProviderSteam: 'Steam (Игры)',
+    settingsIntegrationsProviderIgdb: 'IGDB (Игры)',
     settingsIntegrationsProviderAnilist: 'AniList (Аниме)',
     settingsIntegrationsProviderShikimori: 'Shikimori (Аниме)',
     settingsIntegrationsProviderKeyRequired: 'Нужен API ключ',
     settingsIntegrationsProviderKeyOptional: 'API ключ не нужен',
     settingsIntegrationsProviderKeyPlaceholder: 'API ключ',
+    settingsIntegrationsProviderClientIdPlaceholder: 'Client ID',
+    settingsIntegrationsProviderClientSecretPlaceholder: 'Client Secret',
+    settingsIntegrationsProviderIgdbHelpTitle: 'Как получить данные IGDB',
+    settingsIntegrationsProviderIgdbHelpText: 'Создайте приложение в Twitch Developer Console, затем скопируйте Client ID и сгенерируйте Client Secret. IGDB использует эти Twitch-данные для доступа к API.',
+    settingsIntegrationsProviderIgdbTwitchLink: 'Открыть Twitch Developer Console',
+    settingsIntegrationsProviderIgdbDocsLink: 'Открыть документацию IGDB API',
     settingsIntegrationsProviderTest: 'Тест',
+    settingsIntegrationsImageStorage: 'Локальные изображения',
+    settingsIntegrationsImageStorageDesc: 'Экспериментально: сохранять картинки провайдеров в vault',
+    settingsIntegrationsImageStorageEnable: 'Сохранять импортированные изображения локально',
+    settingsIntegrationsImageStorageEnableDesc: 'Скачивать poster/image поля и записывать локальные пути в новые заметки',
+    settingsIntegrationsImageStorageFolder: 'Папка изображений',
+    settingsIntegrationsImageStorageFolderDesc: 'Папка vault для скачанных изображений игр и аниме',
+    settingsIntegrationsImageStorageDownloadExisting: 'Скачать существующие изображения',
+    settingsIntegrationsImageStorageDownloadExistingDesc: 'Проверить уже созданные заметки игр и аниме, сохранить внешние URL локально и обновить frontmatter',
+    settingsIntegrationsImageStorageDownloadStarted: 'Скачиваю существующие изображения LOREBASE...',
+    settingsIntegrationsImageStorageDownloadDone: 'Скачивание существующих изображений завершено',
     settingsIntegrationsGamesProvider: 'Провайдер игр',
     settingsIntegrationsAnimeProvider: 'Провайдер аниме',
     settingsIntegrationsGamesProviderDesc: 'Выберите провайдера для игр',
@@ -670,7 +731,9 @@ const RU: Record<TranslationKey, string> = {
     settingsIntegrationsHowLongToBeatDesc: 'Заполнять поля времени прохождения из HowLongToBeat',
     templateFieldName: 'Название',
     templateFieldImage: 'Изображение',
+    templateFieldImageHorizontal: 'Горизонтальное изображение',
     templateFieldPoster: 'Постер',
+    templateFieldPosterHorizontal: 'Горизонтальный постер',
     templateFieldPlot: 'Описание',
     templateFieldScoreImdb: 'Оценка IMDb',
     templateFieldTags: 'Теги',
@@ -692,6 +755,8 @@ const RU: Record<TranslationKey, string> = {
     templateFieldMain: 'Основной сюжет',
     templateFieldMainPlusSides: 'Основной + сайд квесты',
     templateFieldCompletionist: 'Перфекционист',
+    templateFieldAnimeParts: 'Состав аниме',
+    templateFieldIntegrationSource: 'Источник интеграции',
     editProgressMain: 'Основной сюжет',
     editProgressMainPlusSides: 'Основной + сайд квесты',
     editProgressPerfectionist: 'Перфекционист',
@@ -802,6 +867,13 @@ const RU: Record<TranslationKey, string> = {
     editCannotRemoveLastPart: 'Нужна хотя бы одна часть',
     editTotalEpisodes: 'Всего эпизодов',
     editActivePart: 'Активная часть',
+    animePartsCheck: 'Проверить состав',
+    animePartsProviderTitle: 'Состав из провайдера',
+    animePartsNew: 'Новое',
+    animePartsSelected: 'Выбрано',
+    animePartsNoNew: 'Нет новых частей',
+    animePartsSourceMissing: 'Не удалось определить источник',
+    animePartsApply: 'Применить состав',
     planCheckLater: 'Проверить позже',
     planPlaySoon: 'Хочу сыграть скоро',
     planWaitEarlyAccess: 'Ждать окончания раннего доступа',
@@ -834,6 +906,7 @@ const RU: Record<TranslationKey, string> = {
     commandOpenLibrary: 'Открыть библиотеку',
     commandAddGame: 'Добавить игру',
     commandAddAnime: 'Добавить аниме',
+    commandSteamSync: 'Синхронизация Steam',
     ribbonLibrary: 'Библиотека LOREBASE',
     errorInitView: 'Ошибка инициализации представления',
     errorLoadingItems: 'Ошибка загрузки элементов',
@@ -846,6 +919,7 @@ const RU: Record<TranslationKey, string> = {
     promptAddSelected: 'Добавить',
     promptSelectedLabel: 'Выбрано',
     promptReviewSelected: 'Проверить выбранное',
+    promptReviewSelectedSubtitle: 'Проверьте выбранные элементы перед созданием заметок.',
     promptConfirmSelected: 'Подтвердить',
     promptRemoveSelected: 'Удалить',
     promptAddAnotherTitle: 'Добавить ещё?',
@@ -868,7 +942,7 @@ const RU: Record<TranslationKey, string> = {
     promptFileExistsSkip: 'Пропустить',
     commonOk: 'ОК',
     commonCancel: 'Отмена',
-    commonBack: '\u2190 Назад',
+    commonBack: 'Назад',
     commonNoData: 'Нет данных',
 };
 

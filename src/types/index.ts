@@ -82,6 +82,9 @@ export type ParticleEffect = 'none' | 'sakura' | 'snow';
 /** Template mode options */
 export type TemplateMode = 'simple' | 'advanced';
 
+/** Steam Sync duplicate handling mode */
+export type SteamSyncDuplicateMode = 'skip' | 'update' | 'ask';
+
 /** Badge container positions on card */
 export type BadgePosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
@@ -213,6 +216,10 @@ export interface AnimeItem extends BaseMediaItem {
     tags: string[];
     /** Optional source URL */
     sourceUrl?: string | null;
+    /** Metadata provider used to create/update anime composition */
+    integrationProvider?: 'anilist' | 'shikimori' | null;
+    /** Provider-specific anime id used to refresh anime composition */
+    integrationId?: string | null;
     /** Trackable seasons/OVA/specials for this title */
     parts?: AnimePart[];
     /** Currently active part for quick progress actions */
@@ -319,17 +326,20 @@ export interface LorebaseSettings {
     anime: LibrarySettings;
     /** Integrations settings */
     integrations?: IntegrationsSettings;
+    /** Steam library and wishlist import settings */
+    steamSync: SteamSyncSettings;
 }
 
 /** Provider settings */
 export interface IntegrationProviderSettings {
     enabled: boolean;
     apiKey?: string;
+    clientSecret?: string;
 }
 
 /** Media template settings */
 export interface IntegrationTemplateSettings {
-    provider: 'rawg' | 'steam' | 'anilist' | 'shikimori';
+    provider: 'rawg' | 'steam' | 'igdb' | 'anilist' | 'shikimori';
     templateEnabled: boolean;
     templateMode?: TemplateMode;
     templateFields?: string[];
@@ -337,12 +347,20 @@ export interface IntegrationTemplateSettings {
     template: string;
 }
 
+/** Local image storage settings for integration imports */
+export interface IntegrationImageStorageSettings {
+    enabled: boolean;
+    folderPath: string;
+}
+
 /** Integrations */
 export interface IntegrationsSettings {
     enabled: boolean;
+    imageStorage: IntegrationImageStorageSettings;
     providers: {
         rawg: IntegrationProviderSettings;
         steam: IntegrationProviderSettings;
+        igdb: IntegrationProviderSettings;
         anilist: IntegrationProviderSettings;
         shikimori: IntegrationProviderSettings;
     };
@@ -350,6 +368,24 @@ export interface IntegrationsSettings {
         games: IntegrationTemplateSettings;
         anime: IntegrationTemplateSettings;
     };
+}
+
+/** Steam Sync settings */
+export interface SteamSyncSettings {
+    steamId: string;
+    apiKey: string;
+    importOwnedGames: boolean;
+    importWishlist: boolean;
+    duplicateMode: SteamSyncDuplicateMode;
+    statusWithPlaytime: GameStatus;
+    statusWithoutPlaytime: GameStatus;
+    statusWishlist: GameStatus;
+    fields: {
+        playtime: boolean;
+        genres: boolean;
+        releaseDate: boolean;
+    };
+    autoSyncPlaytimeOnStartup: boolean;
 }
 
 /** Interface for the main plugin class (decourples circular dependency) */
@@ -361,6 +397,7 @@ export interface LorebasePluginInterface {
     showStatsModal(stats: GameStats | AnimeStats, mediaType: MediaType): void;
     showDeleteModal(game: MediaItem, onConfirm: () => Promise<void>): void;
     addMediaItem(mediaType: MediaType): void;
+    runSteamSync(): Promise<void>;
     refreshViews(): void;
     getGameService(): GameService | null;
     getAnimeService(): AnimeService | null;
@@ -421,4 +458,3 @@ export interface AnimeStats {
     ratingDistribution: Record<number, number>;
     statusPercentages: Record<string, number>;
 }
-

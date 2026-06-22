@@ -3,7 +3,8 @@
  * Games and anime tracker plugin for Obsidian
  */
 
-import { Plugin, WorkspaceLeaf, Menu, addIcon } from 'obsidian';
+import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon } from 'obsidian';
+import type { IntegrationAnimePart } from './services/integrations/types';
 import { LorebaseSettings, GameItem, AnimeItem, MediaItem, GameStats, AnimeStats, MediaType } from './types';
 import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG } from './constants';
 import { i18n, t } from './localization';
@@ -13,10 +14,12 @@ import { EditModal } from './modals/EditModal';
 import { AnimeEditModal } from './modals/AnimeEditModal';
 import { StatsModal } from './modals/StatsModal';
 import { DeleteModal } from './modals/DeleteModal';
+import { SteamSyncReviewModal } from './modals/SteamSyncReviewModal';
 import { GameService } from './services/GameService';
 import { AnimeService } from './services/AnimeService';
 import { ParticleService } from './services/ParticleService';
 import { IntegrationService } from './services/IntegrationService';
+import { SteamSyncService } from './services/SteamSyncService';
 import {
     mergeOverlayLayout,
     mergeOverlayVisibility,
@@ -39,6 +42,7 @@ export default class LorebasePlugin extends Plugin {
     private mediaType: MediaType = 'game';
     private particleService: ParticleService | null = null;
     private integrationService: IntegrationService | null = null;
+    private steamSyncService: SteamSyncService | null = null;
 
     async onload(): Promise<void> {
         // Load settings
@@ -53,7 +57,10 @@ export default class LorebasePlugin extends Plugin {
         this.gameService.setFolderPath(this.settings.games.folderPath);
         this.animeService = new AnimeService(this.app);
         this.animeService.setFolderPath(this.settings.anime.folderPath);
-        this.integrationService = new IntegrationService(this.app, () => this.settings);
+        this.integrationService = new IntegrationService(this.app, () => this.settings, () => {
+            void this.runSteamSync();
+        });
+        this.steamSyncService = new SteamSyncService(this.app);
         addIcon(LOREBASE_ICON_ID, LOREBASE_ICON_SVG);
 
         // Register the library view
@@ -92,12 +99,24 @@ export default class LorebasePlugin extends Plugin {
             }
         });
 
+        this.addCommand({
+            id: 'lorebase-steam-sync',
+            name: t('commandSteamSync'),
+            callback: () => {
+                void this.runSteamSync();
+            }
+        });
+
         // Register settings tab
         this.addSettingTab(new LorebaseSettingTab(this.app, this));
 
         // Apply accent color on load
         this.applyAccentColor();
         this.applyParticles();
+
+        if (this.settings.steamSync.autoSyncPlaytimeOnStartup && this.settings.steamSync.steamId) {
+            void this.runSteamPlaytimeSync();
+        }
     }
 
     onunload(): void {
@@ -116,6 +135,10 @@ export default class LorebasePlugin extends Plugin {
 
         if (this.integrationService) {
             this.integrationService = null;
+        }
+
+        if (this.steamSyncService) {
+            this.steamSyncService = null;
         }
     }
 
@@ -136,6 +159,15 @@ export default class LorebasePlugin extends Plugin {
         }
         if (sanitized?.enabledMedia) {
             this.settings.enabledMedia = Object.assign({}, DEFAULT_SETTINGS.enabledMedia, sanitized.enabledMedia);
+        }
+        this.settings.steamSync = Object.assign({}, DEFAULT_SETTINGS.steamSync, sanitized?.steamSync ?? {});
+        this.settings.steamSync.fields = Object.assign(
+            {},
+            DEFAULT_SETTINGS.steamSync.fields,
+            sanitized?.steamSync?.fields ?? {}
+        );
+        if (this.settings.steamSync.statusWithPlaytime === 'playing' || this.settings.steamSync.statusWithPlaytime === 'completed') {
+            this.settings.steamSync.statusWithPlaytime = DEFAULT_SETTINGS.steamSync.statusWithPlaytime;
         }
         this.settings.statusLabels = {
             games: Object.assign({}, DEFAULT_SETTINGS.statusLabels.games, sanitized?.statusLabels?.games ?? {}),
@@ -224,7 +256,6 @@ export default class LorebasePlugin extends Plugin {
         this.settings.overlayApplyToAllMedia = typeof sanitized?.overlayApplyToAllMedia === 'boolean'
             ? sanitized.overlayApplyToAllMedia
             : DEFAULT_SETTINGS.overlayApplyToAllMedia;
-
         this.settings.badges = parseBadges(sanitized?.badges, DEFAULT_SETTINGS.badges);
         this.settings.horizontalBadges = parseBadges(
             sanitized?.horizontalBadges,
@@ -261,6 +292,11 @@ export default class LorebasePlugin extends Plugin {
                     sanitized.integrations.providers
                 );
             }
+            this.settings.integrations!.imageStorage = Object.assign(
+                {},
+                DEFAULT_SETTINGS.integrations!.imageStorage,
+                sanitized.integrations.imageStorage ?? {}
+            );
             if (sanitized.integrations.media) {
                 this.settings.integrations!.media = Object.assign(
                     {},
@@ -275,6 +311,136 @@ export default class LorebasePlugin extends Plugin {
                 this.settings.integrations!.media.anime.provider = 'anilist';
             }
         }
+
+        if (this.migrateIntegrationTemplates()) {
+            await this.saveData(this.settings);
+        }
+    }
+
+    private migrateIntegrationTemplates(): boolean {
+        const media = this.settings.integrations?.media;
+        if (!media) return false;
+
+        let changed = false;
+
+        if (media.games?.template) {
+            const nextTemplate = this.insertTemplateFieldAfter(
+                media.games.template,
+                'poster',
+                'poster_b: "{{VALUE:PosterHorizontal}}"',
+                ['poster_b:', '{{VALUE:PosterHorizontal}}']
+            );
+
+            if (nextTemplate !== media.games.template) {
+                media.games.template = nextTemplate;
+                changed = true;
+            }
+        }
+
+        if (media.anime?.template) {
+            let nextTemplate = media.anime.template.replace(
+                /^(\s*)image:\s*$/m,
+                '$1image: "{{VALUE:image}}"'
+            );
+            nextTemplate = nextTemplate.replace(
+                /^(\s*)status:\s*planned\s*$/m,
+                '$1status: "{{VALUE:status}}"'
+            );
+            nextTemplate = nextTemplate
+                .split(/\r?\n/)
+                .filter((line) => !/^\s*name\s*:\s*["']?\{\{VALUE:name\}\}["']?\s*$/.test(line))
+                .join('\n');
+
+            nextTemplate = this.insertTemplateFieldAfter(
+                nextTemplate,
+                'image',
+                'image_b: "{{VALUE:ImageHorizontal}}"',
+                ['image_b:', '{{VALUE:ImageHorizontal}}']
+            );
+            nextTemplate = this.insertTemplateFieldAfter(
+                nextTemplate,
+                'format',
+                [
+                    'season_current: "{{VALUE:seasonCurrent}}"',
+                    'episode_current: "{{VALUE:episodeCurrent}}"',
+                    'episode_total: "{{VALUE:episodeTotal}}"',
+                    'active_part_id: "{{VALUE:activePartId}}"',
+                    'anime_parts:',
+                    '{{VALUE:animePartsYaml}}',
+                ].join('\n'),
+                ['anime_parts:', '{{VALUE:animePartsYaml}}']
+            );
+            nextTemplate = this.insertTemplateFieldAfter(
+                nextTemplate,
+                'favorite',
+                [
+                    'integration_provider: "{{VALUE:integrationProvider}}"',
+                    'integration_id: "{{VALUE:integrationId}}"',
+                ].join('\n'),
+                ['integration_provider:', '{{VALUE:integrationProvider}}', 'integration_id:', '{{VALUE:integrationId}}']
+            );
+            if (!nextTemplate.includes('integration_provider:')) {
+                nextTemplate = this.insertTemplateFieldAfter(
+                    nextTemplate,
+                    'url',
+                    [
+                        'integration_provider: "{{VALUE:integrationProvider}}"',
+                        'integration_id: "{{VALUE:integrationId}}"',
+                    ].join('\n'),
+                    ['integration_provider:', '{{VALUE:integrationProvider}}', 'integration_id:', '{{VALUE:integrationId}}']
+                );
+            }
+            if (!nextTemplate.includes('anime_parts:')) {
+                nextTemplate = this.insertTemplateFieldAfter(
+                    nextTemplate,
+                    'year',
+                    [
+                        'format: "{{VALUE:format}}"',
+                        'season_current: "{{VALUE:seasonCurrent}}"',
+                        'episode_current: "{{VALUE:episodeCurrent}}"',
+                        'episode_total: "{{VALUE:episodeTotal}}"',
+                        'active_part_id: "{{VALUE:activePartId}}"',
+                        'anime_parts:',
+                        '{{VALUE:animePartsYaml}}',
+                    ].join('\n'),
+                    ['anime_parts:', '{{VALUE:animePartsYaml}}']
+                );
+            }
+
+            if (nextTemplate !== media.anime.template) {
+                media.anime.template = nextTemplate;
+                changed = true;
+            }
+        }
+
+        if (media.anime?.templateFields?.includes('name')) {
+            media.anime.templateFields = media.anime.templateFields.filter((field) => field !== 'name');
+            changed = true;
+        }
+        if (media.anime?.templateFields && !media.anime.templateFields.includes('animeParts')) {
+            const formatIndex = media.anime.templateFields.indexOf('format');
+            const insertAt = formatIndex >= 0 ? formatIndex + 1 : media.anime.templateFields.length;
+            media.anime.templateFields.splice(insertAt, 0, 'animeParts');
+            changed = true;
+        }
+        if (media.anime?.templateFields && !media.anime.templateFields.includes('integrationSource')) {
+            const favoriteIndex = media.anime.templateFields.indexOf('favorite');
+            const insertAt = favoriteIndex >= 0 ? favoriteIndex + 1 : media.anime.templateFields.length;
+            media.anime.templateFields.splice(insertAt, 0, 'integrationSource');
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private insertTemplateFieldAfter(template: string, fieldName: string, insertedLine: string, duplicateMarkers: string[]): string {
+        if (duplicateMarkers.some((marker) => template.includes(marker))) {
+            return template;
+        }
+
+        const escapedField = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const fieldLine = new RegExp(`^(\\s*)${escapedField}\\s*:\\s*.*$`, 'm');
+        return template.replace(fieldLine, (line: string, indent: string) => `${line}\n${indent}${insertedLine}`);
     }
 
     /**
@@ -348,6 +514,33 @@ export default class LorebasePlugin extends Plugin {
                         await this.animeService.deleteAnime(item as AnimeItem);
                         onSave();
                     });
+                },
+                async () => {
+                    if (!this.integrationService || !this.animeService) return;
+                    const anime = item as AnimeItem;
+                    if (!anime.integrationProvider || !anime.integrationId) {
+                        new Notice(t('animePartsSourceMissing'));
+                        return false;
+                    }
+                    new Notice(t('notifyLoading'), 1200);
+                    const providerParts = await this.integrationService.fetchAnimePartsForItem(anime);
+                    if (!providerParts?.length) {
+                        new Notice(t('noticeNoResults'));
+                        return false;
+                    }
+                    const review = await this.integrationService.reviewAnimePartsForItem(anime, providerParts as IntegrationAnimePart[]);
+                    if (!review) return false;
+                    const activePart = review.parts.find((part) => part.id === review.activePartId) ?? review.parts[0] ?? null;
+                    await this.animeService.updateAnime(anime, {
+                        status: review.status,
+                        parts: review.parts,
+                        activePartId: review.activePartId,
+                        seasonCurrent: activePart?.seasonNumber ?? null,
+                        episodeCurrent: activePart?.episodeCurrent ?? null,
+                        episodeTotal: activePart?.episodeTotal ?? null,
+                    });
+                    onSave();
+                    return true;
                 }
             );
             modal.open();
@@ -412,6 +605,10 @@ export default class LorebasePlugin extends Plugin {
         return this.animeService;
     }
 
+    getSteamSyncService(): SteamSyncService | null {
+        return this.steamSyncService;
+    }
+
     getMediaType(): MediaType {
         this.normalizeMediaType();
         return this.mediaType;
@@ -471,6 +668,56 @@ export default class LorebasePlugin extends Plugin {
                 leaf.view.refreshCardVisuals();
             }
         });
+    }
+
+    async runSteamSync(): Promise<void> {
+        if (!this.steamSyncService) return;
+
+        try {
+            new Notice('Steam Sync: loading Steam games...');
+            const candidates = await this.steamSyncService.previewImport(this.settings.steamSync);
+            for (const warning of this.steamSyncService.consumeWarnings()) {
+                new Notice(`Steam Sync: ${warning}`, 6000);
+            }
+            if (!candidates.length) {
+                new Notice('Steam Sync: no games found.');
+                return;
+            }
+
+            const selectedAppIds = await new SteamSyncReviewModal(this.app, candidates, this.settings.language).openAndGetValue();
+            if (!selectedAppIds || selectedAppIds.size === 0) {
+                new Notice('Steam Sync: import cancelled.');
+                return;
+            }
+
+            new Notice(`Steam Sync: importing ${selectedAppIds.size} selected games...`);
+            const result = await this.steamSyncService.sync(this.settings, {
+                onProgress: (message) => new Notice(`Steam Sync: ${message}`, 1200),
+                selectedAppIds,
+            });
+            this.gameService?.invalidateCache();
+            this.refreshViews();
+            new Notice(`Steam Sync complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed.`);
+        } catch (error) {
+            console.error('[Steam Sync] Sync failed:', error);
+            const message = error instanceof Error ? `: ${error.message}` : '';
+            new Notice(`Steam Sync failed${message}`);
+        }
+    }
+
+    private async runSteamPlaytimeSync(): Promise<void> {
+        if (!this.steamSyncService) return;
+
+        try {
+            const result = await this.steamSyncService.syncPlaytimeForExisting(this.settings);
+            if (result.updated > 0) {
+                this.gameService?.invalidateCache();
+                this.refreshViews();
+                new Notice(`Steam playtime updated for ${result.updated} games.`, 2500);
+            }
+        } catch (error) {
+            console.warn('[Steam Sync] Playtime auto-sync failed:', error);
+        }
     }
 
     /**

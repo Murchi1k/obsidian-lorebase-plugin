@@ -56,11 +56,19 @@ export async function getSteamDetails(fetchJson: JsonFetcher, id: string): Promi
     const released = getString(releaseDate, 'date');
     const year = extractYear(released);
     const metacritic = getString(getObject(data, 'metacritic'), 'score');
+    const posterHorizontal = getString(data, 'header_image')
+        || getString(data, 'capsule_image')
+        || getString(data, 'capsule_imagev5');
+    const poster = getSteamLibraryPoster(id)
+        || getString(data, 'capsule_image')
+        || getString(data, 'header_image')
+        || getString(data, 'capsule_imagev5');
 
     return {
         name: getString(data, 'name') || 'Unknown',
         description: stripHtml(getString(data, 'short_description') || getString(data, 'detailed_description')),
-        poster: getSteamLibraryPoster(id) || getString(data, 'header_image'),
+        poster,
+        posterHorizontal,
         genres,
         platforms,
         developers,

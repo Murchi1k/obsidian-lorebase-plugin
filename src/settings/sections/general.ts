@@ -1135,6 +1135,7 @@ function renderStatusLabelAndPlanSettings(context: SettingsSectionContext, conta
                     context.plugin.refreshViews();
                 });
         });
+
 }
 
 function getPlanPresetLabel(id: string, fallback: string): string {

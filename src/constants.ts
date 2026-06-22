@@ -30,21 +30,31 @@ const DEFAULT_LIBRARY_SETTINGS = {
 };
 
 const DEFAULT_ANIME_TEMPLATE = `---
-name: "{{VALUE:name}}"
-image:
+image: "{{VALUE:image}}"
+image_b: "{{VALUE:ImageHorizontal}}"
 plot: "{{VALUE:Plot}}"
 scoreImdb: "{{VALUE:imdbRating}}"
 tags: "{{VALUE:tags}}"
 year: "{{VALUE:Year}}"
 studios: "{{VALUE:studios}}"
+format: "{{VALUE:format}}"
+season_current: "{{VALUE:seasonCurrent}}"
+episode_current: "{{VALUE:episodeCurrent}}"
+episode_total: "{{VALUE:episodeTotal}}"
+active_part_id: "{{VALUE:activePartId}}"
+anime_parts:
+{{VALUE:animePartsYaml}}
 rating:
-status: planned
+status: "{{VALUE:status}}"
 favorite: false
-url:
+integration_provider: "{{VALUE:integrationProvider}}"
+integration_id: "{{VALUE:integrationId}}"
+url: "{{VALUE:url}}"
 ---`;
 
 const DEFAULT_GAME_TEMPLATE = `---
 poster: "{{VALUE:Poster}}"
+poster_b: "{{VALUE:PosterHorizontal}}"
 gameSeries:
 genres:
   - "{{VALUE:genres}}"
@@ -67,6 +77,7 @@ perfectionist: "{{VALUE:perfectionist}}"
 ---`;
 const DEFAULT_GAME_TEMPLATE_FIELDS = [
     'poster',
+    'posterHorizontal',
     'plot',
     'gameSeries',
     'genres',
@@ -83,17 +94,19 @@ const DEFAULT_GAME_TEMPLATE_FIELDS = [
 ];
 
 const DEFAULT_ANIME_TEMPLATE_FIELDS = [
-    'name',
     'image',
+    'imageHorizontal',
     'plot',
     'scoreImdb',
     'tags',
     'year',
     'studios',
     'format',
+    'animeParts',
     'rating',
     'status',
     'favorite',
+    'integrationSource',
     'url',
 ];
 
@@ -268,9 +281,14 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
     anime: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Anime' },
     integrations: {
         enabled: true,
+        imageStorage: {
+            enabled: false,
+            folderPath: 'files/lorebase/images',
+        },
         providers: {
             rawg: { enabled: true, apiKey: '' },
             steam: { enabled: true },
+            igdb: { enabled: false, apiKey: '', clientSecret: '' },
             anilist: { enabled: true },
             shikimori: { enabled: true },
         },
@@ -291,6 +309,22 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
                 template: DEFAULT_ANIME_TEMPLATE,
             },
         },
+    },
+    steamSync: {
+        steamId: '',
+        apiKey: '',
+        importOwnedGames: true,
+        importWishlist: true,
+        duplicateMode: 'skip',
+        statusWithPlaytime: 'not_started',
+        statusWithoutPlaytime: 'not_started',
+        statusWishlist: 'not_started',
+        fields: {
+            playtime: true,
+            genres: true,
+            releaseDate: true,
+        },
+        autoSyncPlaytimeOnStartup: false,
     },
 };
 

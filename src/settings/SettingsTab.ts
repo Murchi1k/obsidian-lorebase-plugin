@@ -8,10 +8,12 @@ import { t } from '../localization';
 import type LorebasePlugin from '../main';
 import { ICON_ANIME, ICON_GAMES } from './sections/constants';
 import { renderComingSoonSection } from './sections/comingSoon';
+import { renderExperimentSettings } from './sections/experiment';
 import { renderGeneralSettings } from './sections/general';
 import { renderIntegrationsSection } from './sections/integrations';
 import { renderLibrarySettings } from './sections/library';
 import { renderResetSection } from './sections/reset';
+import { renderSteamSyncSettings } from './SteamSyncSettings';
 import type { CollapsibleGroupElements, SettingsSectionContext } from './sections/types';
 
 export class LorebaseSettingTab extends PluginSettingTab {
@@ -49,7 +51,9 @@ export class LorebaseSettingTab extends PluginSettingTab {
         renderLibrarySettings(context, contentEl, t('settingsGames'), 'games', ICON_GAMES);
         renderLibrarySettings(context, contentEl, t('settingsAnime'), 'anime', ICON_ANIME);
         renderIntegrationsSection(context, contentEl);
+        renderSteamSyncSettings(context, contentEl);
         renderComingSoonSection(contentEl);
+        renderExperimentSettings(context, contentEl);
         renderResetSection(context, contentEl);
 
         const scrollHost = this.findScrollHost();
@@ -80,16 +84,19 @@ export class LorebaseSettingTab extends PluginSettingTab {
             {
                 label: 'Ko-fi',
                 brand: 'kofi',
+                url: 'https://ko-fi.com/murch1k',
                 icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="cup" d="M4.5 7.5h11.8v6.1a4.9 4.9 0 0 1-4.9 4.9H9.4a4.9 4.9 0 0 1-4.9-4.9V7.5Z"/><path class="handle" d="M16.3 10h1.5a2.55 2.55 0 0 1 0 5.1h-1.5"/><path class="heart" d="M10.4 14.9 7.9 12.5a1.55 1.55 0 0 1 2.19-2.19l.31.31.31-.31a1.55 1.55 0 0 1 2.19 2.19l-2.5 2.4Z"/></svg>',
             },
             {
                 label: 'Discord',
                 brand: 'discord',
+                url: 'https://discord.gg/eTcw8v8c4',
                 icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.25 7.75A12.2 12.2 0 0 1 10 6.9l.35.7a10.7 10.7 0 0 1 3.3 0l.35-.7a12.2 12.2 0 0 1 2.75.85c1.7 2.5 2.2 4.9 2 7.35a10.5 10.5 0 0 1-3.42 1.76l-.82-1.08c.45-.16.88-.36 1.3-.6a7.9 7.9 0 0 1-7.62 0c.42.24.85.44 1.3.6l-.82 1.08a10.5 10.5 0 0 1-3.42-1.76c-.3-2.74.47-5.16 2-7.35Z"/><circle cx="10" cy="12.55" r="1"/><circle cx="14" cy="12.55" r="1"/></svg>',
             },
             {
                 label: 'Patreon',
                 brand: 'patreon',
+                url: 'https://www.patreon.com/c/Murch1k',
                 icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.7" cy="8.9" r="5.1"/><path d="M5.4 4.2h3.4v15.6H5.4z"/></svg>',
             },
         ];
@@ -99,8 +106,8 @@ export class LorebaseSettingTab extends PluginSettingTab {
                 cls: `lorebase-settings-support-button is-${link.brand}`,
                 attr: {
                     type: 'button',
-                    title: t('settingsSupportUnavailable'),
-                    'aria-label': `${link.label}: ${t('settingsSupportUnavailable')}`,
+                    title: link.url,
+                    'aria-label': link.label,
                 },
             });
             const icon = button.createSpan({ cls: 'lorebase-settings-support-icon' });
@@ -108,6 +115,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
             button.createSpan({ text: link.label });
             button.addEventListener('click', (event) => {
                 event.preventDefault();
+                window.open(link.url, '_blank', 'noopener');
             });
         }
 
@@ -192,14 +200,12 @@ export class LorebaseSettingTab extends PluginSettingTab {
             contentContainer.querySelectorAll<HTMLElement>('.lorebase-settings-group-title')
         );
         const providersGroup = groupTitles.find((title) => matchesLabel(title, t('settingsIntegrationsProviders')));
-        const mediaProvidersGroup = groupTitles.find((title) => matchesLabel(title, t('settingsIntegrationsMediaProviders')));
         const templatesGroup = groupTitles.find((title) => matchesLabel(title, t('settingsIntegrationsTemplates')));
 
         const integrationSubTargets: Array<{ label: string; element: HTMLElement }> = [];
         if (integrationIndex !== -1) {
             integrationSubTargets.push({ label: integrationLabel, element: sectionHeaders[integrationIndex] });
             if (providersGroup) integrationSubTargets.push({ label: t('settingsIntegrationsProviders'), element: providersGroup });
-            if (mediaProvidersGroup) integrationSubTargets.push({ label: t('settingsIntegrationsMediaProviders'), element: mediaProvidersGroup });
             if (templatesGroup) integrationSubTargets.push({ label: t('settingsIntegrationsTemplates'), element: templatesGroup });
         }
 
