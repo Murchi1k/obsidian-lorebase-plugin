@@ -212,9 +212,7 @@ export class AnimeService {
                 return null;
             }
 
-            const fileTitle = file.basename?.trim();
-            const metadataTitle = typeof metadata.title === 'string' ? metadata.title.trim() : '';
-            const title = fileTitle || metadataTitle;
+            const title = file.basename?.trim();
 
             const summaryText = typeof metadata.summary === 'string'
                 ? metadata.summary
@@ -222,6 +220,15 @@ export class AnimeService {
             const sourceUrl = typeof metadata.source_url === 'string'
                 ? metadata.source_url
                 : (typeof metadata.url === 'string' ? metadata.url : '');
+            const integrationProviderRaw = typeof metadata.integration_provider === 'string'
+                ? metadata.integration_provider.trim().toLowerCase()
+                : '';
+            const integrationProvider = integrationProviderRaw === 'anilist' || integrationProviderRaw === 'shikimori'
+                ? integrationProviderRaw
+                : null;
+            const integrationId = typeof metadata.integration_id === 'string' || typeof metadata.integration_id === 'number'
+                ? String(metadata.integration_id).trim() || null
+                : null;
 
             const format = this.getFormatFromString(metadata.format);
 
@@ -232,11 +239,11 @@ export class AnimeService {
             }
 
             const horizontalImageUrl = this.metadataService.getImageUrl(
-                metadata.image ?? metadata.poster,
+                metadata.image_b ?? metadata.poster_b,
                 metadata.cm_poster
             );
             const verticalImageUrl = this.metadataService.getImageUrl(
-                metadata.image_b ?? metadata.image ?? metadata.poster_b ?? metadata.poster,
+                metadata.image ?? metadata.poster,
                 metadata.cm_poster
             );
             const tags = collectTags(metadata, cache?.tags as Array<{ tag: string }> | undefined);
@@ -284,6 +291,8 @@ export class AnimeService {
                 dateWatched,
                 tags,
                 sourceUrl: sourceUrl || null,
+                integrationProvider,
+                integrationId,
                 parts,
                 activePartId,
             };
@@ -354,6 +363,8 @@ export class AnimeService {
         if ('episodeCurrent' in updates) frontmatterUpdates.episode_current = updates.episodeCurrent;
         if ('episodeTotal' in updates) frontmatterUpdates.episode_total = updates.episodeTotal;
         if ('sourceUrl' in updates) frontmatterUpdates.source_url = updates.sourceUrl;
+        if ('integrationProvider' in updates) frontmatterUpdates.integration_provider = updates.integrationProvider;
+        if ('integrationId' in updates) frontmatterUpdates.integration_id = updates.integrationId;
         if ('tags' in updates) frontmatterUpdates.tags = updates.tags?.length ? updates.tags : null;
 
         await this.metadataService.updateMetadata(file, frontmatterUpdates);
@@ -431,5 +442,5 @@ export class AnimeService {
 
         return stats;
     }
-}
 
+}

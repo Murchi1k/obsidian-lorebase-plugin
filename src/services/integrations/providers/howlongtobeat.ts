@@ -27,13 +27,15 @@ export async function getHowLongToBeatTimes(
     if (!terms.length) return null;
 
     const init = asObject(await fetchJson(
-        `https://howlongtobeat.com/api/finder/init?t=${Date.now()}`,
+        `https://howlongtobeat.com/api/bleed/init?t=${Date.now()}`,
         HLTB_BASE_HEADERS
     ));
     const token = getString(init, 'token');
+    const hpKey = getString(init, 'hpKey');
+    const hpVal = getString(init, 'hpVal');
     if (!token) return null;
 
-    const payload = {
+    const payload: Record<string, unknown> = {
         searchType: 'games',
         searchTerms: terms,
         searchPage: 1,
@@ -57,13 +59,18 @@ export async function getHowLongToBeatTimes(
         },
         useCache: true,
     };
+    if (hpKey && hpVal) {
+        payload[hpKey] = hpVal;
+    }
 
     const search = asObject(await fetchJson(
-        'https://howlongtobeat.com/api/finder',
+        'https://howlongtobeat.com/api/bleed',
         {
             ...HLTB_BASE_HEADERS,
             'Content-Type': 'application/json',
             'x-auth-token': token,
+            ...(hpKey ? { 'x-hp-key': hpKey } : {}),
+            ...(hpVal ? { 'x-hp-val': hpVal } : {}),
         },
         'POST',
         JSON.stringify(payload)

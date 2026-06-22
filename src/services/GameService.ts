@@ -291,6 +291,7 @@ export class GameService {
             const releaseDate = this.readFrontmatterText(metadata, ['releaseDate', 'release_date', 'released', 'release']);
             const publisher = this.readFrontmatterText(metadata, ['publisher', 'publishers']) ?? '';
             const developer = this.readFrontmatterText(metadata, ['developer', 'developers']) ?? '';
+            const title = this.readFrontmatterText(metadata, ['name', 'title']) ?? file.basename ?? 'Unknown';
 
             // Determine status (prefer status field, fallback to legacy booleans)
             let status: GameStatus = 'not_started';
@@ -333,8 +334,8 @@ export class GameService {
             const game: GameItem = {
                 type: 'game',
                 filePath: file.path,
-                displayName: file.basename || 'Unknown',
-                nameLower: (file.basename || 'unknown').toLowerCase(),
+                displayName: title,
+                nameLower: title.toLowerCase(),
                 year,
                 description: String(metadata.plot || ''),
                 userRating,
@@ -504,6 +505,14 @@ export class GameService {
             frontmatterUpdates.sandbox = null;
         }
         if ('year' in updates) frontmatterUpdates.year = updates.year;
+        if ('displayName' in updates) {
+            const title = updates.displayName?.trim() ?? '';
+            if (this.hasFrontmatterKey(frontmatter, 'title') && !this.hasFrontmatterKey(frontmatter, 'name')) {
+                frontmatterUpdates.title = title || null;
+            } else {
+                frontmatterUpdates.name = title || null;
+            }
+        }
         if ('description' in updates) frontmatterUpdates.plot = updates.description;
         if ('gameSeries' in updates) frontmatterUpdates.gameSeries = updates.gameSeries || '';
         if ('tags' in updates) this.updateFrontmatterListField(frontmatterUpdates, frontmatter, 'tag', 'tags', updates.tags, true);
@@ -545,4 +554,3 @@ export class GameService {
         return games[Math.floor(Math.random() * games.length)];
     }
 }
-

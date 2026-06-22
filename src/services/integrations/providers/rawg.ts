@@ -46,6 +46,7 @@ export async function getRawgDetails(fetchJson: JsonFetcher, id: string, apiKey:
         name: getString(item, 'name') || 'Unknown',
         description: stripHtml(getString(item, 'description_raw') || getString(item, 'description')),
         poster: getString(item, 'background_image'),
+        posterHorizontal: getString(item, 'background_image'),
         genres,
         platforms,
         developers,
