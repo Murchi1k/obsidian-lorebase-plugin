@@ -1,7 +1,7 @@
 {
     "id": "lorebase",
     "name": "Lorebase",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "minAppVersion": "1.0.0",
     "description": "Track games and anime with card views, status filters, ratings, and metadata integrations.",
     "author": "Murch1k",
