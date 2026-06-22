@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Obsidian-Plugin-7C3AED?style=for-the-badge&logo=obsidian&logoColor=white" alt="Obsidian Plugin" />
-  <img src="https://img.shields.io/badge/Version-1.0.1-e4a47e?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-1.1.0-e4a47e?style=for-the-badge" alt="Version" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/badge/TypeScript-5.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
 </p>
@@ -155,6 +155,7 @@
 - **Custom dimensions**: Fine-tune width, height, and image ratio
 - **Adaptive grid**: Automatically calculates column count based on viewport
 - **Virtualized rendering**: Smooth scrolling for 100+ items
+- **Horizontal cover support in templates** 🆕 *(v1.1.0)*: note templates can now define horizontal/banner posters out of the box
 
 ---
 
@@ -214,6 +215,8 @@ A three-column modal editor inspired by modern CMS design:
   </tr>
 </table>
 
+> 🆕 *v1.1.0*: Anime **Title Parts auto-fill** — main title, season title, and part numbers are parsed and filled in automatically when adding a new entry.
+
 **Keyboard shortcuts**: `Ctrl+Enter` to save · `Escape` to close
 
 ---
@@ -233,13 +236,17 @@ Adjustable intensity from 20 to 150 particles with realistic sway, rotation, and
 
 Lorebase can automatically fetch metadata when creating new entries:
 
+> 🧪 *Experimental (v1.1.0)*: download a poster from any URL straight to local storage instead of linking it remotely.
+
 ### Game Providers
 
 | Provider | Description | Requirements |
 |---|---|---|
 | <img src="https://img.shields.io/badge/Steam-000000?style=flat&logo=steam&logoColor=white" /> | Search Steam Store for games | None |
+| <img src="https://img.shields.io/badge/Steam_Sync-000000?style=flat&logo=steam&logoColor=white" /> 🆕 | Import your Steam library and wishlist directly | Steam profile URL |
 | <img src="https://img.shields.io/badge/RAWG-1a1a2e?style=flat" /> | Largest video game database | Free API key |
-| <img src="https://img.shields.io/badge/HowLongToBeat-4B8BBE?style=flat" /> | Game completion times | None |
+| <img src="https://img.shields.io/badge/IGDB-9147FF?style=flat" /> 🆕 | Internet Game Database — alternative metadata source | Free API key |
+| <img src="https://img.shields.io/badge/HowLongToBeat-4B8BBE?style=flat" /> | Game completion times — broken integration fixed in v1.1.0 | None |
 
 ### Anime Providers
 
@@ -295,7 +302,7 @@ npm run typecheck
 
 1. **Open Lorebase** — Click the Lorebase icon in the ribbon, or use the command palette (`Ctrl+P` → "Lorebase")
 2. **Choose your library** — Switch between Games and Anime tabs
-3. **Add your first item** — Click the ➕ button to search via configured providers
+3. **Add your first item** — Click the ➕ button to search via configured providers *(redesigned add window in v1.1.0)*
 4. **Review & create** — Select a result, review the metadata, and create a note
 5. **Edit details** — Right-click any card to edit status, rating, tags, and more
 
@@ -439,6 +446,32 @@ Lorebase is optimized for large collections:
 | 🇷🇺 Russian | ✅ Full |
 
 All UI elements, status labels, settings descriptions, and error messages are fully translated.
+
+---
+
+## 📋 Changelog
+
+<details open>
+<summary><strong>v1.1.0</strong></summary>
+<br />
+
+**Added**
+- 🔄 **Steam Sync** — import your Steam library and wishlist directly
+- <img src="https://img.shields.io/badge/IGDB-9147FF?style=flat" /> **IGDB provider** for game metadata
+- 🤖 **Anime Title Parts** auto-fill
+- 🖼️ Horizontal cover support in templates
+- 🧪 *Experimental*: poster download from URL to local storage
+
+**Improved**
+- Small redesign of the add window
+- HowLongToBeat integration
+
+**Fixed**
+- Support buttons in settings
+- Dropdown formatting under description
+- Removed unnecessary media providers block
+
+</details>
 
 ---
 
