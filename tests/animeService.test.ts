@@ -24,6 +24,8 @@ describe('AnimeService', () => {
                     dateWatched: '2025-01-02',
                     genres: 'Action, Adventure',
                     tags: ['Shonen'],
+                    integration_provider: 'anilist',
+                    integration_id: '12345',
                 },
                 tags: [{ tag: '#Classic' }],
             },
@@ -42,6 +44,8 @@ describe('AnimeService', () => {
         expect(parsed?.genres).toContain('action');
         expect(parsed?.tags).toContain('classic');
         expect(parsed?.dateWatched).toBeTypeOf('number');
+        expect(parsed?.integrationProvider).toBe('anilist');
+        expect(parsed?.integrationId).toBe('12345');
     });
 
     it('parses anime_parts and uses the active part for legacy progress fields', () => {
@@ -170,10 +174,14 @@ describe('AnimeService', () => {
             dateWatched: null,
             tags: [],
             sourceUrl: null,
+            integrationProvider: 'shikimori',
+            integrationId: '777',
         } satisfies AnimeItem;
 
         await service.updateAnime(item, {
             activePartId: 'ova-1',
+            integrationProvider: 'anilist',
+            integrationId: '42',
             parts: [
                 { id: 'tv-1', kind: 'tv', title: 'Season 1', seasonNumber: 1, episodeCurrent: 12, episodeTotal: 12, status: 'completed' },
                 { id: 'ova-1', kind: 'ova', title: 'OVA', seasonNumber: null, episodeCurrent: 2, episodeTotal: 2, status: 'completed' },
@@ -185,6 +193,8 @@ describe('AnimeService', () => {
         expect(written.episode_total).toBe(2);
         expect(written.status).toBe('completed');
         expect(written.anime_parts).toBeTypeOf('object');
+        expect(written.integration_provider).toBe('anilist');
+        expect(written.integration_id).toBe('42');
     });
 
     it('filters hidden custom posters by default and sorts by rating', () => {

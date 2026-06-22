@@ -27,6 +27,15 @@ describe('templateUtils', () => {
         expect(result).toContain('  - "RPG"');
     });
 
+    it('renders raw multiline yaml placeholder blocks', () => {
+        const template = `---\nanime_parts:\n{{VALUE:animePartsYaml}}\n---`;
+        const result = renderTemplate(template, {
+            animePartsYaml: '  - id: "tv-1"\n    kind: "tv"',
+        });
+
+        expect(result).toContain('anime_parts:\n  - id: "tv-1"\n    kind: "tv"');
+    });
+
     it('sanitizes file names', () => {
         const result = sanitizeFileName('Bad:*Name?/Game\\Title');
         expect(result).toBe('BadNameGameTitle');
