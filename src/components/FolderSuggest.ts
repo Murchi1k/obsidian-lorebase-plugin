@@ -9,7 +9,7 @@ import { filterFolders } from './folderSuggestUtils';
 export class FolderSuggest extends AbstractInputSuggest<TFolder> {
     constructor(
         private readonly appRef: App,
-        private readonly inputElement: HTMLInputElement,
+        inputElement: HTMLInputElement,
         private readonly onPick: (path: string) => void | Promise<void>,
     ) {
         super(appRef, inputElement);
@@ -17,7 +17,6 @@ export class FolderSuggest extends AbstractInputSuggest<TFolder> {
         this.onSelect((folder) => {
             const value = folder.path;
             this.setValue(value);
-            this.inputElement.value = value;
             this.close();
             void this.onPick(value);
         });
