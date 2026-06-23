@@ -1,8 +1,9 @@
-import { Setting, TFolder } from 'obsidian';
+import { Setting } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../../constants';
 import { t } from '../../localization';
 import type { CardSize } from '../../types';
 import { addLorebaseDropdown } from './customDropdown';
+import { FolderSuggest } from '../../components/FolderSuggest';
 import type { MediaTypeKey, SettingsSectionContext } from './types';
 
 export function renderLibrarySettings(
@@ -54,24 +55,20 @@ export function renderLibrarySettings(
     const folderSetting = new Setting(container)
         .setName(t('settingsFolder'))
         .setDesc(t('settingsDescFolder'));
-    const folders = context.app.vault.getAllLoadedFiles()
-        .filter((f): f is TFolder => f instanceof TFolder)
-        .sort((a, b) => a.path.localeCompare(b.path));
-    addLorebaseDropdown<string>(
-        folderSetting,
-        [
-            { value: '', label: '/ (Root)' },
-            ...folders
-                .filter((folder) => Boolean(folder.path))
-                .map((folder) => ({ value: folder.path, label: folder.path })),
-        ],
-        settings.folderPath,
-        async (value) => {
-            context.plugin.settings[key].folderPath = value;
+    folderSetting.addText((text) => {
+        const persist = async (value: string): Promise<void> => {
+            context.plugin.settings[key].folderPath = value.trim();
             await context.plugin.saveSettings();
             context.plugin.refreshViews();
-        }
-    );
+        };
+        text
+            .setPlaceholder(DEFAULT_SETTINGS[key].folderPath)
+            .setValue(settings.folderPath)
+            .onChange((value) => {
+                void persist(value);
+            });
+        new FolderSuggest(context.app, text.inputEl, persist);
+    });
 
     new Setting(container)
         .setName(t('settingsColumns'))
