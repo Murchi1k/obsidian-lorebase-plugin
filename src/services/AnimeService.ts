@@ -212,7 +212,10 @@ export class AnimeService {
                 return null;
             }
 
-            const title = file.basename?.trim();
+            const fmTitle = typeof metadata.title === 'string'
+                ? metadata.title.trim()
+                : (typeof metadata.name === 'string' ? metadata.name.trim() : '');
+            const title = fmTitle || file.basename?.trim();
 
             const summaryText = typeof metadata.summary === 'string'
                 ? metadata.summary
