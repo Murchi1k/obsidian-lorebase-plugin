@@ -1262,7 +1262,7 @@ export class LibraryView extends ItemView {
         pathD: string,
         options: { fill?: string; stroke?: string; width?: string; height?: string } = {}
     ): SVGElement {
-        const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const svg = createSvg('svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         svg.setAttribute('fill', options.fill ?? 'none');
         svg.setAttribute('stroke', options.stroke ?? 'currentColor');
@@ -1271,7 +1271,7 @@ export class LibraryView extends ItemView {
         svg.setAttribute('stroke-linejoin', 'round');
         if (options.width) svg.setAttribute('width', options.width);
         if (options.height) svg.setAttribute('height', options.height);
-        const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const path = svg.createSvg('path');
         path.setAttribute('d', pathD);
         svg.appendChild(path);
         return svg;

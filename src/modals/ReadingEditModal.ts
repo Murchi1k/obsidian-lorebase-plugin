@@ -118,9 +118,9 @@ export class ReadingEditModal extends Modal {
 
     private createTemplateFragment(template: string): DocumentFragment {
         const parsed = new DOMParser().parseFromString(template, 'text/html');
-        const fragment = this.contentEl.ownerDocument.createDocumentFragment();
+        const fragment = createFragment();
         for (const child of Array.from(parsed.body.childNodes)) {
-            fragment.appendChild(this.contentEl.ownerDocument.importNode(child, true));
+            fragment.appendChild(child.cloneNode(true));
         }
         return fragment;
     }
@@ -601,11 +601,11 @@ export class ReadingEditModal extends Modal {
     }
 
     private createStatusSegment(status: ReadingStatus, label: string): HTMLButtonElement {
-        const button = this.contentEl.ownerDocument.createElement('button');
-        button.type = 'button';
-        button.className = 'lorebase-editmode-segment';
+        const button = createEl('button', {
+            cls: 'lorebase-editmode-segment',
+            attr: { type: 'button', 'aria-pressed': 'false' },
+        });
         button.dataset.status = status;
-        button.setAttribute('aria-pressed', 'false');
         const icon = button.createSpan({ cls: 'lorebase-editmode-segment-icon', attr: { 'aria-hidden': 'true' } });
         icon.appendChild(this.createSvgIcon(STATUS_CONFIG[status].pathD));
         button.createSpan({ cls: 'lorebase-editmode-segment-label', text: label });
@@ -828,14 +828,14 @@ export class ReadingEditModal extends Modal {
     }
 
     private createSvgIcon(pathD: string): SVGElement {
-        const svg = this.contentEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const svg = createSvg('svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         svg.setAttribute('fill', 'none');
         svg.setAttribute('stroke', 'currentColor');
         svg.setAttribute('stroke-width', '2');
         svg.setAttribute('stroke-linecap', 'round');
         svg.setAttribute('stroke-linejoin', 'round');
-        const path = this.contentEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const path = svg.createSvg('path');
         path.setAttribute('d', pathD);
         svg.appendChild(path);
         return svg;

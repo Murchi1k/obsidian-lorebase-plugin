@@ -19,7 +19,7 @@ const FAVORITE_BADGE_PATH = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42
 type PreviewMode = 'game' | 'anime' | 'movie' | 'series' | 'book' | 'manga';
 
 function createSvgPathIcon(pathD: string, options: { fill?: string; stroke?: string; width?: string; height?: string } = {}): SVGElement {
-    const svg = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svg = createSvg('svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('fill', options.fill ?? 'none');
     svg.setAttribute('stroke', options.stroke ?? 'currentColor');
@@ -28,7 +28,7 @@ function createSvgPathIcon(pathD: string, options: { fill?: string; stroke?: str
     svg.setAttribute('stroke-linejoin', 'round');
     if (options.width) svg.setAttribute('width', options.width);
     if (options.height) svg.setAttribute('height', options.height);
-    const path = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const path = svg.createSvg('path');
     path.setAttribute('d', pathD);
     svg.appendChild(path);
     return svg;
@@ -1231,8 +1231,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
                 : previewMode === 'movie'
                     ? 'completed'
                     : 'watching';
-            const statusBadge = activeDocument.createElement('div');
-            statusBadge.className = `lorebase-card-status lorebase-status-${previewStatus}`;
+            const statusBadge = createDiv({ cls: `lorebase-card-status lorebase-status-${previewStatus}` });
             const iconPath = STATUS_CONFIG[previewStatus].pathD;
             statusBadge.appendChild(createSvgPathIcon(iconPath));
             if (activeBadges.status.iconOnly) {
@@ -1252,8 +1251,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         }
 
         if (badgeKey === 'rating') {
-            const ratingBadge = activeDocument.createElement('div');
-            ratingBadge.className = 'lorebase-card-rating';
+            const ratingBadge = createDiv({ cls: 'lorebase-card-rating' });
             if (activeBadges.rating.mode === 'emoji') {
                 ratingBadge.classList.add('is-emoji');
                 ratingBadge.textContent = RATING_EMOJI[4];
@@ -1264,8 +1262,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
             return;
         }
 
-        const favoriteBadge = activeDocument.createElement('div');
-        favoriteBadge.className = 'lorebase-card-favorite-badge';
+        const favoriteBadge = createDiv({ cls: 'lorebase-card-favorite-badge' });
         if (activeBadges.favorite.subtlePulse) {
             favoriteBadge.classList.add('is-subtle-pulse');
         }
@@ -1277,10 +1274,11 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
         const existing = badgeElements.get(badgeKey);
         if (existing) return existing;
 
-        const badge = activeDocument.createElement('button');
-        badge.type = 'button';
+        const badge = createEl('button', {
+            cls: 'lorebase-badges-editor-chip',
+            attr: { type: 'button' },
+        });
         badge.draggable = true;
-        badge.className = 'lorebase-badges-editor-chip';
 
         badge.addEventListener('click', () => {
             const activeBadges = getBadges(getActiveOverlayProfile());

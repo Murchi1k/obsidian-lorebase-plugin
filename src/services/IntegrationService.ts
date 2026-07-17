@@ -261,7 +261,7 @@ export class IntegrationService {
                     });
                 }
 
-                const title = this.toStringSafe(values.name || item.title || 'Untitled');
+                const title = this.firstStringValue(values, 'name', item.title, 'Untitled');
                 const renderedValues = template
                     ? await localizeTemplateImages(this.app, kind, title, values, integrations.imageStorage, template)
                     : values;
@@ -321,7 +321,7 @@ export class IntegrationService {
                 )
                 : buildSimpleTemplate(kind, getDefaultTemplateFields(kind));
             const values = this.buildManualValues(preparedDraft);
-            const title = this.toStringSafe(values.name || preparedDraft.title || 'Untitled');
+            const title = this.firstStringValue(values, 'name', preparedDraft.title, 'Untitled');
             const renderedValues = template && integrations
                 ? await localizeTemplateImages(this.app, kind, title, values, integrations.imageStorage, template)
                 : values;
@@ -1133,5 +1133,15 @@ export class IntegrationService {
     private toStringSafe(value: unknown): string {
         if (value === null || value === undefined) return '';
         return String(value);
+    }
+
+    private firstStringValue(values: Record<string, unknown>, key: string, ...fallbacks: unknown[]): string {
+        const primary = this.toStringSafe(values[key]);
+        if (primary) return primary;
+        for (const fallback of fallbacks) {
+            const text = this.toStringSafe(fallback);
+            if (text) return text;
+        }
+        return '';
     }
 }

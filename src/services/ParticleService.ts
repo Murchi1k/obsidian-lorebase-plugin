@@ -45,17 +45,16 @@ export class ParticleService {
 
     private ensureContainer(): void {
         if (this.container) return;
-        const container = activeDocument.createElement('div');
-        container.className = 'lorebase-particle-container';
-        container.setAttribute('aria-hidden', 'true');
-        container.setAttribute('role', 'presentation');
         const host = activeDocument.querySelector<HTMLElement>('.app-container')
             ?? activeDocument.body
             ?? activeDocument.documentElement;
         if (!host) {
             return;
         }
-        host.appendChild(container);
+        const container = host.createDiv({
+            cls: 'lorebase-particle-container',
+            attr: { 'aria-hidden': 'true', role: 'presentation' },
+        });
         this.container = container;
     }
 
@@ -74,7 +73,7 @@ export class ParticleService {
         if (!this.container) return;
         this.container.replaceChildren();
 
-        const fragment = this.container.ownerDocument.createDocumentFragment();
+        const fragment = createFragment();
 
         for (let i = 0; i < this.intensity; i++) {
             fragment.appendChild(this.createParticle());
@@ -84,8 +83,7 @@ export class ParticleService {
     }
 
     private createParticle(): HTMLElement {
-        const particle = activeDocument.createElement('div');
-        particle.className = `lorebase-particle lorebase-particle-${this.effect}`;
+        const particle = createDiv({ cls: `lorebase-particle lorebase-particle-${this.effect}` });
 
         const isSnow = this.effect === 'snow';
         const size = (isSnow ? 4 : 6) + Math.random() * (isSnow ? 5 : 6);

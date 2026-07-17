@@ -590,7 +590,7 @@ export class SteamSyncService {
         file: TFile,
         index: { byAppId: Map<number, TFile>; byUrl: Map<string, TFile>; byPath: Map<string, TFile> }
     ): void {
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as JsonMap | undefined;
+        const frontmatter = this.asObject(this.app.metadataCache.getFileCache(file)?.frontmatter);
         const appId = this.toNumber(frontmatter?.steamAppId) || this.toNumber(frontmatter?.appid);
         if (appId) {
             index.byAppId.set(appId, file);

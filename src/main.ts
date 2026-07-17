@@ -921,8 +921,7 @@ export default class LorebasePlugin extends Plugin {
         for (const file of this.app.vault.getMarkdownFiles()) {
             const mediaType = folders.find((entry) => this.isFileInFolder(file.path, entry.folderPath))?.type;
             if (!mediaType) continue;
-            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-            const related = parseRelatedMedia(frontmatter?.related_media);
+            const related = parseRelatedMedia(this.getFrontmatterValue(file, 'related_media'));
             if (!related.some((entry) => entry.path === targetPath)) continue;
             if (seen.has(file.path)) continue;
             incoming.push({
@@ -937,19 +936,28 @@ export default class LorebasePlugin extends Plugin {
     }
 
     private getFileTitle(file: TFile): string {
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-        const title = typeof frontmatter?.title === 'string' && frontmatter.title.trim()
-            ? frontmatter.title.trim()
-            : typeof frontmatter?.name === 'string' && frontmatter.name.trim()
-                ? frontmatter.name.trim()
+        const rawTitle = this.getFrontmatterValue(file, 'title');
+        const rawName = this.getFrontmatterValue(file, 'name');
+        const title = typeof rawTitle === 'string' && rawTitle.trim()
+            ? rawTitle.trim()
+            : typeof rawName === 'string' && rawName.trim()
+                ? rawName.trim()
                 : file.basename;
         return title || file.path;
     }
 
     private getFileImage(file: TFile): string {
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-        const raw = frontmatter?.image ?? frontmatter?.poster ?? frontmatter?.image_b ?? frontmatter?.poster_b;
-        return this.metadataService?.getImageUrl(raw, frontmatter?.cm_poster) ?? DEFAULT_COVER;
+        const raw = this.getFrontmatterValue(file, 'image')
+            ?? this.getFrontmatterValue(file, 'poster')
+            ?? this.getFrontmatterValue(file, 'image_b')
+            ?? this.getFrontmatterValue(file, 'poster_b');
+        return this.metadataService?.getImageUrl(raw, this.getFrontmatterValue(file, 'cm_poster')) ?? DEFAULT_COVER;
+    }
+
+    private getFrontmatterValue(file: TFile, key: string): unknown {
+        const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        if (!frontmatter || typeof frontmatter !== 'object') return undefined;
+        return Object.entries(frontmatter).find(([entryKey]) => entryKey === key)?.[1];
     }
 
     private isFileInFolder(filePath: string, folderPath: string): boolean {
@@ -1181,7 +1189,7 @@ export default class LorebasePlugin extends Plugin {
             menu.addItem((item) => {
                 const isSelected = this.mediaType === option.type;
                 if (isSelected) {
-                    const titleEl = activeDocument.createDocumentFragment();
+                    const titleEl = createFragment();
                     const span = titleEl.createEl('span');
                     span.setText(option.label);
                     span.addClass('lorebase-menu-selected-title');

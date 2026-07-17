@@ -341,18 +341,18 @@ export class LorebaseSettingTab extends PluginSettingTab {
     }
 
     private createSupportIcon(brand: string): SVGElement {
-        const svg = this.containerEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const svg = createSvg('svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         svg.setAttribute('aria-hidden', 'true');
 
         const addPath = (d: string, className?: string): void => {
-            const path = this.containerEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const path = svg.createSvg('path');
             path.setAttribute('d', d);
             if (className) path.setAttribute('class', className);
             svg.appendChild(path);
         };
         const addCircle = (cx: string, cy: string, r: string): void => {
-            const circle = this.containerEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            const circle = svg.createSvg('circle');
             circle.setAttribute('cx', cx);
             circle.setAttribute('cy', cy);
             circle.setAttribute('r', r);

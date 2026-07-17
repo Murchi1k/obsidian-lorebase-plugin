@@ -1,5 +1,5 @@
 import { App, TFile, TFolder } from 'obsidian';
-import { BookItem, FilterState, MangaItem, MangaPart, ReadingItem, ReadingStatus, ReadingStats, RelatedMediaLink, SortField, SortOrder } from '../types';
+import { BookItem, FilterState, MangaItem, MangaPart, ReadingItem, ReadingStatus, ReadingStats, SortField, SortOrder } from '../types';
 import { DEFAULT_COVER } from '../constants';
 import { MetadataService } from './MetadataService';
 import { filterAndSortMedia } from './media/filtering';

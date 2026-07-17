@@ -531,7 +531,7 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                 { value: 'simple', label: t('settingsIntegrationsTemplateModeSimple') },
                 { value: 'advanced', label: t('settingsIntegrationsTemplateModeAdvanced') },
             ],
-            mode as 'simple' | 'advanced',
+            mode,
             async (value) => {
                 media.templateMode = value;
                 await context.plugin.saveSettings();

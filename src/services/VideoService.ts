@@ -1,5 +1,5 @@
 import { App, TFile, TFolder } from 'obsidian';
-import { FilterState, MovieItem, RelatedMediaLink, SeriesItem, SortField, SortOrder, VideoPart, VideoStats, VideoStatus } from '../types';
+import { FilterState, MovieItem, SeriesItem, SortField, SortOrder, VideoPart, VideoStats, VideoStatus } from '../types';
 import { DEFAULT_COVER } from '../constants';
 import { MetadataService } from './MetadataService';
 import { filterAndSortMedia } from './media/filtering';
