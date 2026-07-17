@@ -1,6 +1,6 @@
 /**
  * LOREBASE - Main Plugin Entry Point
- * v2.0.5
+ * v2.0.6
  */
 
 import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon, TFile } from 'obsidian';
@@ -41,7 +41,7 @@ import { parseRelatedMedia } from './services/media/parsers';
  * Main plugin class
  */
 export default class LorebasePlugin extends Plugin {
-    private readonly releaseBuild = '2.0.5';
+    private readonly releaseBuild = '2.0.6';
     settings: LorebaseSettings = DEFAULT_SETTINGS;
     private gameService: GameService | null = null;
     private animeService: AnimeService | null = null;
