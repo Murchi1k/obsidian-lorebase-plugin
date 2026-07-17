@@ -1,7 +1,7 @@
 {
     "name": "lorebase",
-    "version": "1.1.4",
-    "description": "Track games and anime with card views, status filters, ratings, and metadata integrations.",
+    "version": "2.0.0",
+    "description": "A media hub for games, anime, movies, series, books, and manga with rich cards, progress, ratings, and metadata.",
     "main": "main.js",
     "scripts": {
         "dev": "node esbuild.config.mjs",
@@ -23,7 +23,8 @@
     "devDependencies": {
         "@types/node": "^20.10.0",
         "esbuild": "^0.28.0",
-        "obsidian": "latest",
+        "obsidian": "1.11.4",
+        "tslib": "^2.8.1",
         "typescript": "^5.3.2",
         "vitest": "^4.0.18"
     }
