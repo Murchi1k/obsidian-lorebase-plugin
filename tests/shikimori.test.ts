@@ -84,6 +84,7 @@ describe('shikimori provider', () => {
         const details = await getShikimoriDetails(fetchJson, '20');
 
         expect(details).toEqual({
+            kind: 'anime',
             name: 'Наруто',
             description: 'Anime about ninjas.',
             image: 'https://cdn.example/naruto-main.jpg',
@@ -92,7 +93,7 @@ describe('shikimori provider', () => {
             studios: ['Pierrot'],
             year: '2002',
             imdbRating: '7.99',
-            url: 'https://shikimori.io/animes/20-naruto',
+            url: 'https://shikimori.net/animes/20-naruto',
             format: 'TV',
             parts: [
                 {

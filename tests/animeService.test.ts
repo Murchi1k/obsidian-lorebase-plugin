@@ -3,7 +3,7 @@ import type { App } from 'obsidian';
 import { TFile } from 'obsidian';
 import { AnimeService } from '../src/services/AnimeService';
 import type { AnimeItem } from '../src/types';
-import { createMockApp, createBaseFilter, createMockFile } from './helpers/testHelpers';
+import { createMockApp, createBaseFilter, createMetadataService, createMockFile } from './helpers/testHelpers';
 
 describe('AnimeService', () => {
     it('parses frontmatter from cache into anime model', () => {
@@ -31,7 +31,7 @@ describe('AnimeService', () => {
             },
         });
 
-        const service = new AnimeService(app);
+        const service = new AnimeService(app, createMetadataService(app));
         const parsed = service.parseAnimeFromCache(file);
 
         expect(parsed).not.toBeNull();
@@ -46,6 +46,33 @@ describe('AnimeService', () => {
         expect(parsed?.dateWatched).toBeTypeOf('number');
         expect(parsed?.integrationProvider).toBe('anilist');
         expect(parsed?.integrationId).toBe('12345');
+    });
+
+    it('uses frontmatter title or name as display name before file basename', () => {
+        const titleFile = createMockFile('Anime/Attack_on_Titan.md', 'Attack_on_Titan');
+        const nameFile = createMockFile('Anime/Fullmetal_Alchemist.md', 'Fullmetal_Alchemist');
+        const fallbackFile = createMockFile('Anime/Fallback_Title.md', 'Fallback_Title');
+        const app = createMockApp({
+            [titleFile.path]: {
+                frontmatter: {
+                    title: 'Attack on Titan',
+                },
+            },
+            [nameFile.path]: {
+                frontmatter: {
+                    name: 'Fullmetal Alchemist',
+                },
+            },
+            [fallbackFile.path]: {
+                frontmatter: {},
+            },
+        });
+
+        const service = new AnimeService(app, createMetadataService(app));
+
+        expect(service.parseAnimeFromCache(titleFile)?.displayName).toBe('Attack on Titan');
+        expect(service.parseAnimeFromCache(nameFile)?.displayName).toBe('Fullmetal Alchemist');
+        expect(service.parseAnimeFromCache(fallbackFile)?.displayName).toBe('Fallback_Title');
     });
 
     it('parses anime_parts and uses the active part for legacy progress fields', () => {
@@ -80,7 +107,7 @@ describe('AnimeService', () => {
             },
         });
 
-        const service = new AnimeService(app);
+        const service = new AnimeService(app, createMetadataService(app));
         const parsed = service.parseAnimeFromCache(file);
 
         expect(parsed?.parts).toHaveLength(2);
@@ -88,6 +115,99 @@ describe('AnimeService', () => {
         expect(parsed?.episodeCurrent).toBe(1);
         expect(parsed?.episodeTotal).toBe(2);
         expect(parsed?.parts?.[1].kind).toBe('ova');
+    });
+
+    it('parses related media links from frontmatter', () => {
+        const file = createMockFile('Anime/Linked.md', 'Linked');
+        const app = createMockApp({
+            [file.path]: {
+                frontmatter: {
+                    type: 'anime',
+                    related_media: [
+                        { type: 'movie', path: 'Movies/Film.md', title: 'Film' },
+                        { type: 'series', path: 'Series/Show.md' },
+                        { type: 'unknown', path: 'Bad.md', title: 'Bad' },
+                    ],
+                },
+            },
+        });
+
+        const service = new AnimeService(app, createMetadataService(app));
+        const parsed = service.parseAnimeFromCache(file);
+
+        expect(parsed?.relatedMedia).toEqual([
+            { type: 'movie', path: 'Movies/Film.md', title: 'Film' },
+            { type: 'series', path: 'Series/Show.md', title: 'Show' },
+        ]);
+    });
+
+    it('writes related media links when updating anime', async () => {
+        const file = createMockFile('Anime/Related.md', 'Related');
+        let written: Record<string, unknown> = {};
+        const app = {
+            metadataCache: {
+                getFileCache(): unknown {
+                    return { frontmatter: {} };
+                },
+            },
+            vault: {
+                getAbstractFileByPath(path: string): TFile | null {
+                    return path === file.path ? file : null;
+                },
+                getFiles(): TFile[] {
+                    return [];
+                },
+                getResourcePath(): string {
+                    return '';
+                },
+            },
+            fileManager: {
+                async processFrontMatter(_file: TFile, callback: (frontmatter: Record<string, unknown>) => void): Promise<void> {
+                    const frontmatter: Record<string, unknown> = {};
+                    callback(frontmatter);
+                    written = frontmatter;
+                },
+            },
+        } as unknown as App;
+
+        const service = new AnimeService(app, createMetadataService(app));
+        const item = {
+            type: 'anime',
+            filePath: file.path,
+            displayName: 'Related',
+            nameLower: 'related',
+            year: null,
+            description: '',
+            summary: '',
+            userRating: null,
+            favorite: false,
+            poster: '',
+            imageUrl: '',
+            horizontalImageUrl: null,
+            hasCustomPoster: false,
+            isAdult: false,
+            format: 'tv',
+            status: 'planned',
+            seasonCurrent: null,
+            seasonTotal: null,
+            episodeCurrent: null,
+            episodeTotal: null,
+            genres: [],
+            dateAdded: 1,
+            dateWatched: null,
+            tags: [],
+            sourceUrl: null,
+        } satisfies AnimeItem;
+
+        await service.updateAnime(item, {
+            relatedMedia: [
+                { type: 'movie', path: 'Movies/Film.md', title: 'Film' },
+            ],
+        });
+
+        expect(written.related_media).toEqual([
+            { type: 'movie', path: 'Movies/Film.md', title: 'Film' },
+        ]);
     });
 
     it('builds a legacy anime part when anime_parts is missing', () => {
@@ -105,7 +225,7 @@ describe('AnimeService', () => {
             },
         });
 
-        const service = new AnimeService(app);
+        const service = new AnimeService(app, createMetadataService(app));
         const parsed = service.parseAnimeFromCache(file);
 
         expect(parsed?.parts).toHaveLength(1);
@@ -147,7 +267,7 @@ describe('AnimeService', () => {
             },
         } as unknown as App;
 
-        const service = new AnimeService(app);
+        const service = new AnimeService(app, createMetadataService(app));
         const item = {
             type: 'anime',
             filePath: file.path,
@@ -198,7 +318,8 @@ describe('AnimeService', () => {
     });
 
     it('filters hidden custom posters by default and sorts by rating', () => {
-        const service = new AnimeService(createMockApp({}));
+        const app = createMockApp({});
+        const service = new AnimeService(app, createMetadataService(app));
         const items: AnimeItem[] = [
             {
                 type: 'anime',

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { GameService } from '../src/services/GameService';
 import type { GameItem } from '../src/types';
-import { createMockApp, createBaseFilter, createMockFile } from './helpers/testHelpers';
-import { getStatusOptionsForMediaType } from '../src/views/library/viewOptions';
+import { createMockApp, createBaseFilter, createMetadataService, createMockFile } from './helpers/testHelpers';
+import { getSortOptionsForMediaType, getStatusOptionsForMediaType } from '../src/views/library/viewOptions';
+import { shouldGroupBySeries } from '../src/views/library/rendering';
 
 describe('GameService', () => {
     it('parses frontmatter from cache into game model', () => {
@@ -27,7 +28,7 @@ describe('GameService', () => {
             },
         });
 
-        const service = new GameService(app);
+        const service = new GameService(app, createMetadataService(app));
         const parsed = service.parseGameFromCache(file);
 
         expect(parsed).not.toBeNull();
@@ -43,7 +44,8 @@ describe('GameService', () => {
     });
 
     it('filters and sorts games by rules', () => {
-        const service = new GameService(createMockApp({}));
+        const app = createMockApp({});
+        const service = new GameService(app, createMetadataService(app));
         const games: GameItem[] = [
             {
                 type: 'game',
@@ -116,6 +118,53 @@ describe('GameService', () => {
         expect(withSearch.map((item) => item.displayName)).toEqual(['Alpha']);
     });
 
+    it('groups only in explicit series sort mode', () => {
+        const filter = createBaseFilter();
+
+        expect(shouldGroupBySeries('game', 'name', 'grid', filter, 10)).toBe(false);
+        expect(shouldGroupBySeries('game', 'series', 'grid', filter, 10)).toBe(true);
+    });
+
+    it('shows series as the primary game sort option', () => {
+        expect(getSortOptionsForMediaType('game')[0]).toMatchObject({ field: 'series' });
+    });
+
+    it('sorts games chronologically inside series groups', () => {
+        const app = createMockApp({});
+        const service = new GameService(app, createMetadataService(app));
+        const createGame = (displayName: string, year: number): GameItem => ({
+            type: 'game',
+            filePath: `${displayName}.md`,
+            displayName,
+            nameLower: displayName.toLowerCase(),
+            year,
+            description: '',
+            userRating: null,
+            favorite: false,
+            poster: '',
+            imageUrl: '',
+            horizontalImageUrl: null,
+            hasCustomPoster: false,
+            isAdult: false,
+            status: 'not_started',
+            gameSeries: 'Same series',
+            dateCompleted: null,
+            tags: [],
+            genres: [],
+        });
+
+        const sortedByName = [
+            createGame('Alpha', 2024),
+            createGame('Bravo', 1999),
+            createGame('Charlie', 2010),
+        ];
+
+        const grouped = service.groupBySeries(sortedByName, 'asc');
+        const seriesItems = Array.from(grouped.values())[0] ?? [];
+
+        expect(seriesItems.map((item) => item.displayName)).toEqual(['Bravo', 'Charlie', 'Alpha']);
+    });
+
     it('uses custom status labels without changing status values', () => {
         const options = getStatusOptionsForMediaType('game', {
             games: { completed: 'Cleared on easy' },
@@ -128,8 +177,68 @@ describe('GameService', () => {
         });
     });
 
+    it('exposes wishlist as a first-class game status option', () => {
+        expect(getStatusOptionsForMediaType('game')).toContainEqual({
+            status: 'wishlist',
+            label: 'Wishlist',
+        });
+    });
+
+    it('parses wishlist game status from status field and legacy flag', () => {
+        const statusFile = createMockFile('Games/Wish Status.md', 'Wish Status');
+        const flagFile = createMockFile('Games/Wish Flag.md', 'Wish Flag');
+        const app = createMockApp({
+            [statusFile.path]: {
+                frontmatter: {
+                    status: 'wishlist',
+                },
+            },
+            [flagFile.path]: {
+                frontmatter: {
+                    wishlist: 'true',
+                },
+            },
+        });
+
+        const service = new GameService(app, createMetadataService(app));
+
+        expect(service.parseGameFromCache(statusFile)?.status).toBe('wishlist');
+        expect(service.parseGameFromCache(flagFile)?.status).toBe('wishlist');
+    });
+
+    it('counts wishlist games in statistics', () => {
+        const app = createMockApp({});
+        const service = new GameService(app, createMetadataService(app));
+        const baseGame: GameItem = {
+            type: 'game',
+            filePath: 'wish.md',
+            displayName: 'Wish',
+            nameLower: 'wish',
+            year: 2026,
+            description: '',
+            userRating: null,
+            favorite: false,
+            poster: '',
+            imageUrl: '',
+            horizontalImageUrl: null,
+            hasCustomPoster: false,
+            isAdult: false,
+            status: 'wishlist',
+            gameSeries: '',
+            dateCompleted: null,
+            tags: [],
+            genres: [],
+        };
+
+        const stats = service.calculateStats([baseGame]);
+
+        expect(stats.wishlist).toBe(1);
+        expect(stats.statusPercentages.wishlist).toBe(100);
+    });
+
     it('filters plan presets as regular tags', () => {
-        const service = new GameService(createMockApp({}));
+        const app = createMockApp({});
+        const service = new GameService(app, createMetadataService(app));
         const games: GameItem[] = [
             {
                 type: 'game',
@@ -191,7 +300,7 @@ describe('GameService', () => {
             },
         });
 
-        const service = new GameService(app);
+        const service = new GameService(app, createMetadataService(app));
         const parsed = service.parseGameFromCache(file);
 
         expect(parsed).not.toBeNull();
@@ -212,7 +321,7 @@ describe('GameService', () => {
             },
         });
 
-        const service = new GameService(app);
+        const service = new GameService(app, createMetadataService(app));
         const parsed = service.parseGameFromCache(file);
 
         expect(parsed).not.toBeNull();

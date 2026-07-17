@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { App } from 'obsidian';
 import { IntegrationService } from '../src/services/IntegrationService';
 import type { AnimeDetails } from '../src/services/integrations/types';
 import { createMockApp } from './helpers/testHelpers';
+import type { ManualCreateDraft } from '../src/modals/ManualCreateModal';
+import { saveManualImageFileToVault } from '../src/services/integrations/imageStorage';
 
 describe('IntegrationService anime parts values', () => {
     it('keeps initial anime import free of provider parts while saving source identity', () => {
@@ -83,4 +86,98 @@ describe('IntegrationService anime parts values', () => {
         expect(values.animePartsYaml).toContain('id: "anilist-2"');
         expect(values.animePartsYaml).not.toContain('id: "anilist-1"');
     });
+
+    it('maps manual cover values to anime image fields and poster-based media fields', () => {
+        const service = new IntegrationService(createMockApp({}), () => ({
+            integrations: undefined,
+        } as never));
+        const buildManualValues = (service as unknown as {
+            buildManualValues(draft: ManualCreateDraft): Record<string, unknown>;
+        }).buildManualValues.bind(service);
+
+        const animeValues = buildManualValues({
+            ...createManualDraft('anime'),
+            poster: 'covers/frieren.jpg',
+            posterHorizontal: 'covers/frieren-wide.jpg',
+        });
+        const bookValues = buildManualValues({
+            ...createManualDraft('books'),
+            poster: 'covers/dune.jpg',
+            posterHorizontal: 'covers/dune-wide.jpg',
+        });
+
+        expect(animeValues.image).toBe('covers/frieren.jpg');
+        expect(animeValues.ImageHorizontal).toBe('covers/frieren-wide.jpg');
+        expect(bookValues.Poster).toBe('covers/dune.jpg');
+        expect(bookValues.PosterHorizontal).toBe('covers/dune-wide.jpg');
+    });
+
+    it('copies a manually selected cover file into the configured vault image folder', async () => {
+        const writes: Array<{ path: string; data: ArrayBuffer }> = [];
+        const folders: string[] = [];
+        const app = {
+            vault: {
+                getAbstractFileByPath() {
+                    return null;
+                },
+                async createFolder(path: string) {
+                    folders.push(path);
+                },
+                adapter: {
+                    async writeBinary(path: string, data: ArrayBuffer) {
+                        writes.push({ path, data });
+                    },
+                },
+            },
+        } as unknown as App;
+        const file = {
+            name: 'cover.png',
+            type: 'image/png',
+            async arrayBuffer() {
+                return new Uint8Array([1, 2, 3]).buffer;
+            },
+        } as File;
+
+        const path = await saveManualImageFileToVault(app, file, {
+            baseFolder: 'files/lorebase/images',
+            kind: 'books',
+            title: 'Dune',
+            label: 'Poster',
+        });
+
+        expect(path).toBe('files/lorebase/images/books/Dune - Poster.png');
+        expect(folders).toEqual(['files', 'files/lorebase', 'files/lorebase/images', 'files/lorebase/images/books']);
+        expect(writes).toHaveLength(1);
+        expect(writes[0].path).toBe(path);
+    });
 });
+
+function createManualDraft(kind: ManualCreateDraft['kind']): ManualCreateDraft {
+    return {
+        kind,
+        title: 'Manual',
+        year: '',
+        released: '',
+        status: kind === 'games' ? 'not_started' : 'planned',
+        url: '',
+        poster: '',
+        posterHorizontal: '',
+        posterFile: null,
+        genres: [],
+        tags: [],
+        rating: null,
+        gameSeries: '',
+        format: 'tv',
+        animeParts: [{ id: 'tv-1', kind: 'tv', title: 'Season 1', seasonNumber: 1, episodeCurrent: 0, episodeTotal: null, status: 'planned' }],
+        activeAnimePartId: 'tv-1',
+        seasonNumber: kind === 'series' ? 1 : null,
+        episodeCurrent: 0,
+        episodeTotal: kind === 'movies' ? 1 : null,
+        pageCurrent: 0,
+        pageTotal: null,
+        chapterCurrent: 0,
+        chapterTotal: null,
+        volumeCurrent: kind === 'manga' ? 1 : null,
+        volumeTotal: null,
+    };
+}

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { TFile, TFolder, __setRequestUrlMock } from './mocks/obsidian';
 import { DEFAULT_SETTINGS } from '../src/constants';
 import { SteamSyncService } from '../src/services/SteamSyncService';
+import { MetadataService } from '../src/services/MetadataService';
 import type { LorebaseSettings } from '../src/types';
 
 type CacheEntry = { frontmatter: Record<string, unknown> };
@@ -95,6 +96,11 @@ function createMockApp(initialFiles: Array<{ path: string; frontmatter: Record<s
             },
         },
     };
+}
+
+function createSteamSyncService(app: MockApp = createMockApp()): SteamSyncService {
+    const appForService = app as unknown as never;
+    return new SteamSyncService(appForService, new MetadataService(appForService));
 }
 
 function mockSteamResponses(apps: Array<{ appid: number; name: string; playtime_forever?: number }>, wishlist: Record<string, unknown> = {}): void {
@@ -382,17 +388,17 @@ describe('SteamSyncService', () => {
     });
 
     it('maps Steam playtime and wishlist statuses', () => {
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
         const settings = cloneSettings().steamSync;
 
         expect(service.mapOwnedStatus(25, settings)).toBe('not_started');
         expect(service.mapOwnedStatus(0, settings)).toBe('not_started');
-        expect(service.mapWishlistStatus(settings)).toBe('not_started');
+        expect(service.mapWishlistStatus(settings)).toBe('wishlist');
     });
 
     it('loads owned games with playtime in minutes', async () => {
         mockSteamResponses([{ appid: 10, name: 'Portal', playtime_forever: 123 }]);
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         const games = await service.getOwnedGames(STEAM_PROFILE_URL);
 
@@ -413,7 +419,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.steamId = STEAM_PROFILE_URL;
         settings.steamSync.importWishlist = false;
 
-        const service = new SteamSyncService(app as unknown as never);
+        const service = createSteamSyncService(app);
         const result = await service.sync(settings);
 
         expect(result).toEqual({ created: 1, updated: 0, skipped: 0, failed: 0 });
@@ -483,7 +489,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.importWishlist = false;
         settings.integrations!.media.games.howLongToBeatEnabled = true;
 
-        const service = new SteamSyncService(app as unknown as never);
+        const service = createSteamSyncService(app);
         const result = await service.sync(settings);
         const content = app.vault.created['Games/Portal.md'];
 
@@ -501,7 +507,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.importWishlist = false;
         settings.steamSync.duplicateMode = 'skip';
 
-        const service = new SteamSyncService(app as unknown as never);
+        const service = createSteamSyncService(app);
         const result = await service.sync(settings);
 
         expect(result).toEqual({ created: 0, updated: 0, skipped: 1, failed: 0 });
@@ -527,7 +533,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.importWishlist = false;
         settings.steamSync.duplicateMode = 'update';
 
-        const service = new SteamSyncService(app as unknown as never);
+        const service = createSteamSyncService(app);
         const result = await service.sync(settings);
         const frontmatter = app.metadataCache.getFileCache(app.vault.getFiles()[0])?.frontmatter;
 
@@ -555,7 +561,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.duplicateMode = 'ask';
 
         let askedCount = 0;
-        const service = new SteamSyncService(app as unknown as never);
+        const service = createSteamSyncService(app);
         const result = await service.sync(settings, {
             confirmDuplicateUpdate: async (count) => {
                 askedCount = count;
@@ -577,7 +583,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.importOwnedGames = true;
         settings.steamSync.importWishlist = true;
 
-        const service = new SteamSyncService(app as unknown as never);
+        const service = createSteamSyncService(app);
         const wishlist = await service.getWishlist(settings.steamSync.steamId);
         const result = await service.sync(settings);
 
@@ -591,7 +597,7 @@ describe('SteamSyncService', () => {
 
     it('loads wishlist from multiple wishlistdata pages', async () => {
         mockWishlistPages();
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         const wishlist = await service.getWishlist(STEAM_PROFILE_URL);
 
@@ -608,7 +614,7 @@ describe('SteamSyncService', () => {
         settings.steamSync.steamId = STEAM_PROFILE_URL;
         settings.steamSync.importOwnedGames = true;
         settings.steamSync.importWishlist = true;
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         await expect(service.testConnection(settings.steamSync)).resolves.toBe(1);
         await expect(service.getWishlist(settings.steamSync.steamId)).resolves.toEqual([]);
@@ -616,7 +622,7 @@ describe('SteamSyncService', () => {
 
     it('loads wishlist from IWishlistService before store wishlistdata fallback', async () => {
         mockOfficialWishlist();
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         const wishlist = await service.getWishlist(STEAM_PROFILE_URL);
 
@@ -626,21 +632,22 @@ describe('SteamSyncService', () => {
         ]);
     });
 
-    it('resolves wishlist app names before preview import', async () => {
+    it('keeps preview import lightweight without appdetails enrichment', async () => {
         mockOfficialWishlistWithDetails();
         const settings = cloneSettings().steamSync;
         settings.steamId = STEAM_PROFILE_URL;
         settings.importOwnedGames = false;
         settings.importWishlist = true;
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         const candidates = await service.previewImport(settings);
 
         expect(candidates).toEqual([
             {
                 appId: 1030300,
-                name: 'Hollow Knight: Silksong',
+                name: 'Steam App 1030300',
                 playtimeForever: 0,
+                posterHorizontal: 'https://cdn.akamai.steamstatic.com/steam/apps/1030300/header.jpg',
                 source: 'wishlist',
             },
         ]);
@@ -653,7 +660,7 @@ describe('SteamSyncService', () => {
         settings.apiKey = '';
         settings.importOwnedGames = true;
         settings.importWishlist = true;
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         await expect(service.getOwnedGames(settings.steamId, settings.apiKey)).resolves.toEqual([]);
         expect(service.consumeWarnings()).toEqual([
@@ -662,8 +669,9 @@ describe('SteamSyncService', () => {
         await expect(service.previewImport(settings)).resolves.toEqual([
             {
                 appId: 1030300,
-                name: 'Hollow Knight: Silksong',
+                name: 'Steam App 1030300',
                 playtimeForever: 0,
+                posterHorizontal: 'https://cdn.akamai.steamstatic.com/steam/apps/1030300/header.jpg',
                 source: 'wishlist',
             },
         ]);
@@ -678,16 +686,24 @@ describe('SteamSyncService', () => {
         settings.steamId = 'https://steamcommunity.com/id/MURcHIIK/';
         settings.importOwnedGames = false;
         settings.importWishlist = true;
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         const candidates = await service.previewImport(settings);
 
-        expect(candidates.map((candidate) => candidate.name)).toEqual(['Hollow Knight: Silksong']);
+        expect(candidates).toEqual([
+            {
+                appId: 1030300,
+                name: 'Steam App 1030300',
+                playtimeForever: 0,
+                posterHorizontal: 'https://cdn.akamai.steamstatic.com/steam/apps/1030300/header.jpg',
+                source: 'wishlist',
+            },
+        ]);
     });
 
     it('accepts steamcommunity profiles URL directly', async () => {
         mockOfficialWishlist();
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         const wishlist = await service.getWishlist(`https://steamcommunity.com/profiles/${TEST_STEAM_ID64}/`);
 
@@ -698,7 +714,7 @@ describe('SteamSyncService', () => {
     });
 
     it('rejects raw SteamID64 values', async () => {
-        const service = new SteamSyncService(createMockApp() as unknown as never);
+        const service = createSteamSyncService();
 
         await expect(service.getWishlist('00000000000000000')).rejects.toThrow(
             'Steam profile must be a steamcommunity.com/profiles URL or steamcommunity.com/id URL.'

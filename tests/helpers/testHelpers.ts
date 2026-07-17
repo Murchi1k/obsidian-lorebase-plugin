@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian';
 import type { FilterState } from '../../src/types';
+import { MetadataService } from '../../src/services/MetadataService';
 
 export function createMockFile(path: string, basename: string): TFile {
     const file = new TFile();
@@ -37,6 +38,10 @@ export function createMockApp(cacheByPath: Record<string, unknown>): App {
     };
 
     return app as unknown as App;
+}
+
+export function createMetadataService(app: App): MetadataService {
+    return new MetadataService(app);
 }
 
 export function createBaseFilter(): FilterState {
