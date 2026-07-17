@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Obsidian-Plugin-7C3AED?style=for-the-badge&logo=obsidian&logoColor=white" alt="Obsidian Plugin" />
-  <img src="https://img.shields.io/badge/Version-2.0.0-e4a47e?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-2.0.6-e4a47e?style=for-the-badge" alt="Version" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/badge/TypeScript-5.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
 </p>
@@ -717,14 +717,14 @@ Lorebase is optimized for large collections:
 | 🇷🇺 Russian | ✅ Full |
 | 🇺🇦 Ukrainian | 🧪 Beta |
 
-All core UI elements, status labels, settings descriptions, and error messages are translated, including all new media types and providers. Ukrainian is new in 2.0.0 and marked as beta while community wording is reviewed.
+All core UI elements, status labels, settings descriptions, and error messages are translated, including all new media types and providers. Ukrainian is new in 2.0.6 and marked as beta while community wording is reviewed.
 
 ---
 
 ## 📋 Changelog
 
 <details open>
-<summary><strong>v2.0.0</strong></summary>
+<summary><strong>v2.0.6</strong></summary>
 <br />
 
 **Added**
@@ -757,7 +757,7 @@ All core UI elements, status labels, settings descriptions, and error messages a
 - Improved Russian and English localization
 - Expanded statistics to cover all new media types
 
-**Stabilized during 2.0.0 development**
+**Stabilized during 2.0.6 development**
 - Removed the obsolete Coming Soon / In development settings section
 - Fixed book add flow using the wrong cover or metadata after selecting a search result
 - Fixed manga add flow resetting selection when searching for another title
