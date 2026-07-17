@@ -1,6 +1,6 @@
 /**
  * LOREBASE - Main Plugin Entry Point
- * Games and anime tracker plugin for Obsidian
+ * v2.0.4
  */
 
 import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon, TFile } from 'obsidian';
