@@ -32,7 +32,7 @@ export type VideoStatus = AnimeStatus;
 export type ReadingStatus = AnimeStatus;
 
 /** Status across all media types */
-export type MediaStatus = GameStatus | AnimeStatus | VideoStatus | ReadingStatus;
+export type MediaStatus = GameStatus | AnimeStatus;
 
 /** Top-level settings page presentation */
 export type SettingsLayoutMode = 'tabs' | 'accordion';
@@ -632,7 +632,7 @@ export interface LorebasePluginInterface {
     app: App;
     saveSettings(): Promise<void>;
     showEditModal(item: MediaItem, onSave: () => void): void;
-    showStatsModal(stats: GameStats | AnimeStats | VideoStats | ReadingStats, mediaType: MediaType): void;
+    showStatsModal(stats: GameStats | AnimeStats, mediaType: MediaType): void;
     showDeleteModal(game: MediaItem, onConfirm: () => Promise<void>): void;
     addMediaItem(mediaType: MediaType): void;
     runSteamSync(): Promise<void>;

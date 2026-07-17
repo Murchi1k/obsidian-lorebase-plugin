@@ -4,7 +4,7 @@
  */
 
 import { ItemView, WorkspaceLeaf, TFile, TAbstractFile } from 'obsidian';
-import { AnimeItem, BookItem, GameItem, MangaItem, MediaItem, MediaStatus, MediaType, FilterState, LorebaseSettings, LorebasePluginInterface, MovieItem, ReadingItem, SeriesItem, ViewMode, SortField } from '../types';
+import { AnimeItem, GameItem, MangaItem, MediaItem, MediaStatus, MediaType, FilterState, LorebaseSettings, LorebasePluginInterface, MovieItem, ReadingItem, SeriesItem, ViewMode, SortField } from '../types';
 import { GameService } from '../services/GameService';
 import { AnimeService } from '../services/AnimeService';
 import { VideoService } from '../services/VideoService';
@@ -652,6 +652,7 @@ export class LibraryView extends ItemView {
         if (!this.libraryContentEl) return;
 
         const layout = this.getEffectiveLayout();
+        const activeSettings = this.getActiveSettings();
         const renderedLayout = {
             ...layout,
             columns: this.getRenderedColumns(layout),
@@ -661,6 +662,14 @@ export class LibraryView extends ItemView {
             container: this.libraryContentEl,
             layout: renderedLayout,
         });
+        this.gridEl.toggleClass(
+            'lorebase-grid-book-cover-effect',
+            (this.mediaType === 'book' || this.mediaType === 'manga') && Boolean(activeSettings.bookCoverEffect)
+        );
+        this.gridEl.toggleClass(
+            'lorebase-grid-progress-style',
+            activeSettings.cardStyle === 'progress'
+        );
 
         // For small collections, render all
         if (this.filteredGames.length <= 100) {

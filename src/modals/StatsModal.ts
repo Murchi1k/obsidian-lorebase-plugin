@@ -4,7 +4,7 @@
  */
 
 import { Modal, App } from 'obsidian';
-import { GameStats, AnimeStats, MediaType, VideoStats, ReadingStats } from '../types';
+import { GameStats, AnimeStats, MediaType } from '../types';
 import { t } from '../localization';
 import { RATING_CONFIG } from '../constants';
 
@@ -16,10 +16,10 @@ import { RATING_CONFIG } from '../constants';
  * Modal for displaying collection statistics
  */
 export class StatsModal extends Modal {
-    private stats: GameStats | AnimeStats | VideoStats | ReadingStats;
+    private stats: GameStats | AnimeStats;
     private mediaType: MediaType;
 
-    constructor(app: App, stats: GameStats | AnimeStats | VideoStats | ReadingStats, mediaType: MediaType) {
+    constructor(app: App, stats: GameStats | AnimeStats, mediaType: MediaType) {
         super(app);
         this.stats = stats;
         this.mediaType = mediaType;

@@ -9,7 +9,7 @@ import { MetadataService } from './MetadataService';
 import { DEFAULT_COVER } from '../constants';
 import { filterAndSortMedia } from './media/filtering';
 import { getRandomItem, parseNumber, parseRelatedMedia, parseUserRating, parseYear, serializeRelatedMedia } from './media/parsers';
-import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy } from './media/serviceUtils';
+import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, normalizeCacheTags } from './media/serviceUtils';
 
 export class AnimeService {
     private app: App;
@@ -229,7 +229,7 @@ export class AnimeService {
                 metadata.image ?? metadata.poster,
                 metadata.cm_poster
             );
-            const tags = collectTags(metadata, cache?.tags as Array<{ tag: string }> | undefined);
+            const tags = collectTags(metadata, normalizeCacheTags(cache?.tags));
             const genres = collectFieldTags(metadata, ['genres', 'genre']);
             const dateAdded = file.stat?.ctime ?? file.stat?.mtime ?? Date.now();
             const dateWatched = this.parseDate(metadata.dateWatched);

@@ -4,7 +4,7 @@
  */
 
 import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon, TFile } from 'obsidian';
-import { LorebaseSettings, MediaItem, GameItem, GameStats, AnimeStats, VideoStats, ReadingStats, MediaType, RelatedMediaLink, ReadingItem } from './types';
+import { LorebaseSettings, MediaItem, GameStats, AnimeStats, MediaType, RelatedMediaLink } from './types';
 import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG, DEFAULT_COVER } from './constants';
 import { i18n, t } from './localization';
 import { LibraryView } from './views/LibraryView';
@@ -839,7 +839,7 @@ export default class LorebasePlugin extends Plugin {
 
         if (item.type === 'book' || item.type === 'manga') {
             const service = item.type === 'book' ? this.bookService : this.mangaService;
-            const readingItem = item as ReadingItem;
+            const readingItem = item;
             const modal = new ReadingEditModal(
                 this.app,
                 readingItem,
@@ -860,7 +860,7 @@ export default class LorebasePlugin extends Plugin {
             return;
         }
 
-        const gameItem = item as GameItem;
+        const gameItem = item;
         const seriesOptions = this.gameService?.getSeriesList() ?? [];
         const modal = new EditModal(
             this.app,
@@ -962,7 +962,7 @@ export default class LorebasePlugin extends Plugin {
     /**
      * Show statistics modal
      */
-    showStatsModal(stats: GameStats | AnimeStats | VideoStats | ReadingStats, mediaType: MediaType): void {
+    showStatsModal(stats: GameStats | AnimeStats, mediaType: MediaType): void {
         const modal = new StatsModal(this.app, stats, mediaType);
         modal.open();
     }

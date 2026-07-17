@@ -46,14 +46,29 @@ function addTagsFromValue(tagSet: Set<string>, value: unknown): void {
     }
 
     if (typeof value === 'string') {
-        const parts = value
-            .split(/[,;\n]+/)
-            .flatMap((part) => part.split(/\s+/))
-            .map((part) => part.trim())
-            .filter(Boolean);
-
-        for (const part of parts) addTag(part);
+        for (const group of value.split(/[,;\n]+/)) {
+            for (const part of group.split(/\s+/)) {
+                const trimmed = part.trim();
+                if (trimmed) addTag(trimmed);
+            }
+        }
     }
+}
+
+export function normalizeCacheTags(value: unknown): Array<{ tag: string }> | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const tags: Array<{ tag: string }> = [];
+    for (const entry of value) {
+        if (
+            entry
+            && typeof entry === 'object'
+            && 'tag' in entry
+            && typeof entry.tag === 'string'
+        ) {
+            tags.push({ tag: entry.tag });
+        }
+    }
+    return tags.length ? tags : undefined;
 }
 
 export function collectTags(metadata: Record<string, unknown>, cacheTags?: Array<{ tag: string }>): string[] {

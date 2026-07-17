@@ -169,7 +169,7 @@ export async function localizeExistingNoteImages(
 
         try {
             const cache = app.metadataCache.getFileCache(entry.file);
-            const metadata = cache?.frontmatter as Record<string, unknown> | undefined;
+            const metadata = cache?.frontmatter;
             if (!metadata) continue;
 
             const updates = await buildFrontmatterImageUpdates(app, {

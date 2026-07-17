@@ -58,7 +58,7 @@ export class DeleteModal extends Modal {
         yearLine.createEl('strong', { text: `${t('year')}:` });
         yearLine.appendText(` ${this.item.year || t('yearNotSpecified')}`);
 
-        const statusLabels: Record<MediaStatus, string> = i18n.getStatusLabels() as Record<MediaStatus, string>;
+        const statusLabels: Record<MediaStatus, string> = i18n.getStatusLabels();
         let statusLabel = statusLabels[this.item.status] ?? t('statusNotStarted');
         if (this.item.status === 'completed' && this.item.type === 'game') {
             statusLabel = t('statusPlayed');

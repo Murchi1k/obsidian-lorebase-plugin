@@ -17,7 +17,8 @@ export function getStatusOptionsForMediaType(
                         : mediaType === 'manga'
                             ? statusLabels?.manga
                             : statusLabels?.games;
-        return (labels as Partial<Record<MediaStatus, string>> | undefined)?.[status]?.trim() || fallback;
+        const labelMap: Partial<Record<MediaStatus, string>> | undefined = labels;
+        return labelMap?.[status]?.trim() || fallback;
     };
     if (mediaType === 'anime' || mediaType === 'movie' || mediaType === 'series' || mediaType === 'book' || mediaType === 'manga') {
         const plannedLabel = mediaType === 'book' || mediaType === 'manga' ? t('statusPlanToRead') : t('statusPlanned');

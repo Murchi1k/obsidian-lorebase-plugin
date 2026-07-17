@@ -688,12 +688,12 @@
     border-radius: 8px;
 }
 
-.lorebase-grid:has(.lorebase-book-cover-effect) {
+.lorebase-grid.lorebase-grid-book-cover-effect {
     gap: 20px;
     padding: 20px;
 }
 
-.lorebase-grid:has(.lorebase-card-progress-style) {
+.lorebase-grid.lorebase-grid-progress-style {
     row-gap: 34px;
 }
 
@@ -7858,37 +7858,37 @@ a.lorebase-about-meta-value:hover {
     gap: 10px;
 }
 
-.lorebase-steamgriddb-chevron {
+button.lorebase-steamgriddb-chevron {
     width: 28px;
     height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0;
-    border: 0 !important;
+    border: 0;
     border-radius: 0;
-    background: transparent !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
+    background: transparent;
+    background-color: transparent;
+    box-shadow: none;
     color: var(--text-muted);
     transition: transform 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
-.lorebase-steamgriddb-chevron:hover {
+button.lorebase-steamgriddb-chevron:hover {
     color: var(--text-normal);
-    background: transparent !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
+    background: transparent;
+    background-color: transparent;
+    box-shadow: none;
 }
 
-.lorebase-steamgriddb-chevron:focus,
-.lorebase-steamgriddb-chevron:active {
-    background: transparent !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
+button.lorebase-steamgriddb-chevron:focus,
+button.lorebase-steamgriddb-chevron:active {
+    background: transparent;
+    background-color: transparent;
+    box-shadow: none;
 }
 
-.lorebase-steamgriddb-chevron.is-open {
+button.lorebase-steamgriddb-chevron.is-open {
     transform: rotate(180deg);
     color: var(--lorebase-accent);
 }

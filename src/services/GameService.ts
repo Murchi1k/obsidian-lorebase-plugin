@@ -11,7 +11,7 @@ import { DEFAULT_COVER } from '../constants';
 import { t } from '../localization';
 import { filterAndSortMedia } from './media/filtering';
 import { getRandomItem } from './media/parsers';
-import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy } from './media/serviceUtils';
+import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, normalizeCacheTags } from './media/serviceUtils';
 
 // =============================================================================
 // GAME SERVICE - OPTIMIZED
@@ -286,7 +286,7 @@ export class GameService {
                 metadata.poster_b,
                 metadata.cm_poster
             );
-            const tags = collectTags(metadata, cache?.tags as Array<{ tag: string }> | undefined);
+            const tags = collectTags(metadata, normalizeCacheTags(cache?.tags));
             const genres = collectFieldTags(metadata, ['genres']);
             const dateCompleted = this.parseCompletionDate(metadata.dateCompleted);
             const releaseDate = this.readFrontmatterText(metadata, ['releaseDate', 'release_date', 'released', 'release']);
@@ -499,7 +499,7 @@ export class GameService {
         }
 
         const frontmatterUpdates: Record<string, unknown> = {};
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
 
         if ('userRating' in updates) frontmatterUpdates.userRating = updates.userRating;
         if ('favorite' in updates) frontmatterUpdates.favorite = updates.favorite;

@@ -176,7 +176,7 @@ export class VideoService {
         if (!(file instanceof TFile)) return;
 
         const frontmatterUpdates: Record<string, unknown> = {};
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
 
         if ('displayName' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['title', 'name'], updates.displayName);
         if ('title' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['title', 'name'], String(updates.title ?? ''));
@@ -202,9 +202,9 @@ export class VideoService {
         if ('studios' in updates) this.updateListField(frontmatterUpdates, frontmatter, ['studios', 'studio'], updates.studios);
         if ('parts' in updates) frontmatterUpdates[this.mediaType === 'series' ? 'series_parts' : 'movie_parts'] = this.serializeParts(updates.parts ?? []);
         if ('activePartId' in updates) frontmatterUpdates.active_part_id = updates.activePartId;
-        if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia as RelatedMediaLink[] | undefined);
-        if ('episodeCurrent' in updates) frontmatterUpdates.episode_current = (updates as Partial<SeriesItem>).episodeCurrent;
-        if ('episodeTotal' in updates) frontmatterUpdates.episode_total = (updates as Partial<SeriesItem>).episodeTotal;
+        if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia);
+        if ('episodeCurrent' in updates) frontmatterUpdates.episode_current = updates.episodeCurrent;
+        if ('episodeTotal' in updates) frontmatterUpdates.episode_total = updates.episodeTotal;
         if (this.mediaType === 'series') {
             const activeId = typeof updates.activePartId === 'string' ? updates.activePartId : item.activePartId;
             const parts = Array.isArray(updates.parts) ? updates.parts : item.parts;

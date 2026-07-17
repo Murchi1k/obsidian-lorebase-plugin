@@ -52,7 +52,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                         } else if (item.type === 'book' || item.type === 'manga') {
                             item.userRating = rating.value;
                             deps.onItemMutated(item, ['userRating']);
-                            deps.updateReading?.(item, { userRating: rating.value } as Partial<ReadingItem>);
+                            deps.updateReading?.(item, { userRating: rating.value });
                         } else {
                             item.userRating = rating.value;
                             deps.onItemMutated(item, ['userRating']);
@@ -73,7 +73,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                     } else if (item.type === 'movie' || item.type === 'series') {
                         deps.updateVideo?.(item, { userRating: null });
                     } else if (item.type === 'book' || item.type === 'manga') {
-                        deps.updateReading?.(item, { userRating: null } as Partial<ReadingItem>);
+                        deps.updateReading?.(item, { userRating: null });
                     } else {
                         deps.updateGame(item, { userRating: null });
                     }
@@ -106,7 +106,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                             const nextStatus = status as ReadingItem['status'];
                             item.status = nextStatus;
                             deps.onItemMutated(item, ['status']);
-                            deps.updateReading?.(item, { status: nextStatus } as Partial<ReadingItem>);
+                            deps.updateReading?.(item, { status: nextStatus });
                         } else {
                             const nextStatus = status as GameItem['status'];
                             item.status = nextStatus;
@@ -198,7 +198,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                         updates.status = 'completed';
                     }
                     deps.onItemMutated(item, ['pageCurrent', 'status']);
-                    deps.updateReading?.(item, updates as Partial<ReadingItem>);
+                    deps.updateReading?.(item, updates);
                 });
         });
     }
@@ -244,7 +244,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                         updates.status = 'completed';
                     }
                     deps.onItemMutated(item, ['chapterCurrent', 'chapterTotal', 'volumeCurrent', 'status', 'parts']);
-                    deps.updateReading?.(item, updates as Partial<ReadingItem>);
+                    deps.updateReading?.(item, updates);
                 });
         });
     }
@@ -263,7 +263,7 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                 } else if (item.type === 'movie' || item.type === 'series') {
                     deps.updateVideo?.(item, { favorite: item.favorite });
                 } else if (item.type === 'book' || item.type === 'manga') {
-                    deps.updateReading?.(item, { favorite: item.favorite } as Partial<ReadingItem>);
+                    deps.updateReading?.(item, { favorite: item.favorite });
                 } else {
                     deps.updateGame(item, { favorite: item.favorite });
                 }

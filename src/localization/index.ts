@@ -56,7 +56,6 @@ export type TranslationKey =
     | 'settingsAboutChangelog' | 'settingsAboutDocumentation'
     | 'settingsAboutAttribution' | 'settingsAboutAttributionDesc' | 'settingsAboutAttributionTmdbNotice'
     | 'settingsDangerZone' | 'settingsDangerZoneWarning' | 'settingsResetAllButton'
-    | 'settingsAnime'
     | 'settingsGeneral' | 'settingsShowAdult'
     | 'settingsBadges'
     | 'settingsPreviewMode' | 'settingsPreviewGame' | 'settingsPreviewAnime' | 'settingsPreviewMovie' | 'settingsPreviewSeries' | 'settingsPreviewBook' | 'settingsPreviewManga'

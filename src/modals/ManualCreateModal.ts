@@ -1,7 +1,7 @@
 import { App, Modal, Notice, setIcon } from 'obsidian';
 import { t } from '../localization';
 import { createLorebaseDropdown } from '../components/LorebaseDropdown';
-import type { AnimeFormat, AnimePart, AnimeStatus, GameStatus, ReadingStatus, UserRating, VideoStatus } from '../types';
+import type { AnimeFormat, AnimePart, AnimeStatus, GameStatus, UserRating } from '../types';
 import type { MediaKind } from '../services/integrations/types';
 
 export type AddMode = 'provider' | 'manual';
@@ -11,7 +11,7 @@ export interface ManualCreateDraft {
     title: string;
     year: string;
     released: string;
-    status: GameStatus | AnimeStatus | VideoStatus | ReadingStatus;
+    status: GameStatus | AnimeStatus;
     url: string;
     poster: string;
     posterHorizontal: string;

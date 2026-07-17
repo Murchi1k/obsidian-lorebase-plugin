@@ -205,7 +205,7 @@ export class ReadingService {
         const file = this.app.vault.getAbstractFileByPath(item.filePath);
         if (!(file instanceof TFile)) return;
 
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
         const frontmatterUpdates: Record<string, unknown> = {};
 
         frontmatterUpdates.type = item.type;
@@ -225,7 +225,7 @@ export class ReadingService {
         if ('sourceUrl' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['url', 'source_url'], updates.sourceUrl);
         if ('integrationProvider' in updates) frontmatterUpdates.integration_provider = updates.integrationProvider;
         if ('integrationId' in updates) frontmatterUpdates.integration_id = updates.integrationId;
-        if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia as RelatedMediaLink[] | undefined);
+        if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia);
 
         if (item.type === 'book') {
             if ('authors' in updates) this.updateListField(frontmatterUpdates, frontmatter, ['authors', 'author'], updates.authors);

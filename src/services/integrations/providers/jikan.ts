@@ -130,7 +130,7 @@ function isTransientJikanFailure(root: Record<string, unknown>): boolean {
 }
 
 function delay(ms: number): Promise<void> {
-    return new Promise(resolve => globalThis.setTimeout(resolve, ms));
+    return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 async function searchMyAnimeListManga(query: string, pageSize: number): Promise<SearchResult[]> {

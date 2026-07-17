@@ -122,7 +122,11 @@ export function parseBadges(
 
 function readRecord(value: unknown): Record<string, unknown> | null {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-    return Object.fromEntries(Object.entries(value));
+    const record: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+        record[key] = entry;
+    }
+    return record;
 }
 
 function readBoolean(value: unknown): boolean | undefined {
