@@ -51,6 +51,10 @@ export class LorebaseSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
+    getSettingDefinitions(): unknown[] {
+        return [];
+    }
+
     display(): void {
         this.detachSectionNav?.();
         this.detachSectionNav = null;

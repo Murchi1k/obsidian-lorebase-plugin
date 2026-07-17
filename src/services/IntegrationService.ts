@@ -265,10 +265,10 @@ export class IntegrationService {
                 const renderedValues = template
                     ? await localizeTemplateImages(this.app, kind, title, values, integrations.imageStorage, template)
                     : values;
-                let content = template
+                let content: string = template
                     ? renderTemplate(template, renderedValues)
                     : `# ${title}\n`;
-                if ((kind === 'movies' || kind === 'series' || kind === 'books' || kind === 'manga') && !content.trimStart().startsWith('---')) {
+                if (this.needsFrontmatterFallback(kind, content)) {
                     const fallbackTemplate = buildSimpleTemplate(kind, getDefaultTemplateFields(kind));
                     content = `${renderTemplate(fallbackTemplate, renderedValues)}\n\n${content.trim()}`;
                 }
@@ -325,10 +325,10 @@ export class IntegrationService {
             const renderedValues = template && integrations
                 ? await localizeTemplateImages(this.app, kind, title, values, integrations.imageStorage, template)
                 : values;
-            let content = template
+            let content: string = template
                 ? renderTemplate(template, renderedValues)
                 : `# ${title}\n`;
-            if (!content.trimStart().startsWith('---')) {
+            if (!this.hasFrontmatter(content)) {
                 const fallbackTemplate = buildSimpleTemplate(kind, getDefaultTemplateFields(kind));
                 content = `${renderTemplate(fallbackTemplate, renderedValues)}\n\n${content.trim()}`;
             }
@@ -1143,5 +1143,14 @@ export class IntegrationService {
             if (text) return text;
         }
         return '';
+    }
+
+    private needsFrontmatterFallback(kind: MediaKind, content: string): boolean {
+        if (kind !== 'movies' && kind !== 'series' && kind !== 'books' && kind !== 'manga') return false;
+        return !this.hasFrontmatter(content);
+    }
+
+    private hasFrontmatter(content: string): boolean {
+        return content.trimStart().startsWith('---');
     }
 }

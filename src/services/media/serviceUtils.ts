@@ -59,14 +59,15 @@ export function normalizeCacheTags(value: unknown): Array<{ tag: string }> | und
     if (!Array.isArray(value)) return undefined;
     const tags: Array<{ tag: string }> = [];
     for (const entry of value) {
-        if (entry && typeof entry === 'object') {
-            const tag = Object.entries(entry).find(([key]) => key === 'tag')?.[1];
-            if (typeof tag === 'string') {
-                tags.push({ tag });
-            }
+        if (isCacheTagEntry(entry) && typeof entry.tag === 'string') {
+            tags.push({ tag: entry.tag });
         }
     }
     return tags.length ? tags : undefined;
+}
+
+function isCacheTagEntry(value: unknown): value is { tag?: unknown } {
+    return typeof value === 'object' && value !== null && 'tag' in value;
 }
 
 export function collectTags(metadata: Record<string, unknown>, cacheTags?: Array<{ tag: string }>): string[] {

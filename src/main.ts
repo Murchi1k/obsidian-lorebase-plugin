@@ -957,7 +957,7 @@ export default class LorebasePlugin extends Plugin {
     private getFrontmatterValue(file: TFile, key: string): unknown {
         const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
         if (!frontmatter || typeof frontmatter !== 'object') return undefined;
-        return Object.entries(frontmatter).find(([entryKey]) => entryKey === key)?.[1];
+        return (frontmatter as Record<string, unknown>)[key];
     }
 
     private isFileInFolder(filePath: string, folderPath: string): boolean {
@@ -1190,9 +1190,11 @@ export default class LorebasePlugin extends Plugin {
                 const isSelected = this.mediaType === option.type;
                 if (isSelected) {
                     const titleEl = createFragment();
-                    const span = titleEl.createEl('span');
-                    span.setText(option.label);
-                    span.addClass('lorebase-menu-selected-title');
+                    const span = createSpan({
+                        text: option.label,
+                        cls: 'lorebase-menu-selected-title',
+                    });
+                    titleEl.appendChild(span);
                     item.setTitle(titleEl);
                 } else {
                     item.setTitle(option.label);

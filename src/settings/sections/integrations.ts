@@ -67,7 +67,7 @@ function renderSimpleTemplateFieldEditor(
     media: IntegrationTemplateSettings,
     fields: TemplateFieldDef[]
 ): void {
-    container.createEl('div', {
+    container.createDiv({
         text: t('settingsIntegrationsTemplateFields'),
         cls: 'lorebase-settings-fields-title'
     });

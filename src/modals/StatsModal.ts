@@ -33,7 +33,7 @@ export class StatsModal extends Modal {
 
         // Header
         const header = contentEl.createDiv({ cls: 'lorebase-stats-header lorebase-modal-header' });
-        header.createEl('span', {
+        header.createSpan({
             text: this.getMediaIcon(),
             cls: 'lorebase-stats-icon'
         });
@@ -146,8 +146,8 @@ export class StatsModal extends Modal {
         const isWatchMedia = this.mediaType !== 'game';
 
         const title = section.createDiv({ cls: 'lorebase-stats-section-title' });
-        title.createEl('span', { text: '\u{1F4C8}' });
-        title.createEl('span', { text: t('statsDistribution') });
+        title.createSpan({ text: '\u{1F4C8}' });
+        title.createSpan({ text: t('statsDistribution') });
 
         const grid = section.createDiv({ cls: 'lorebase-stats-status-grid' });
 
@@ -181,8 +181,8 @@ export class StatsModal extends Modal {
             info.createDiv({ cls: 'lorebase-stats-status-label', text: data.label });
 
             const values = info.createDiv({ cls: 'lorebase-stats-status-values' });
-            values.createEl('span', { cls: 'lorebase-stats-status-value', text: String(data.value) });
-            values.createEl('span', { cls: 'lorebase-stats-status-percent', text: `${percent}%` });
+            values.createSpan({ cls: 'lorebase-stats-status-value', text: String(data.value) });
+            values.createSpan({ cls: 'lorebase-stats-status-percent', text: `${percent}%` });
 
             const bar = card.createDiv({ cls: 'lorebase-stats-bar' });
             const fill = bar.createDiv({ cls: 'lorebase-stats-bar-fill' });
@@ -198,8 +198,8 @@ export class StatsModal extends Modal {
         const section = container.createDiv({ cls: 'lorebase-stats-section' });
 
         const title = section.createDiv({ cls: 'lorebase-stats-section-title' });
-        title.createEl('span', { text: '\u{2B50}' });
-        title.createEl('span', { text: t('statsRatingDistribution') });
+        title.createSpan({ text: '\u{2B50}' });
+        title.createSpan({ text: t('statsRatingDistribution') });
 
         const grid = section.createDiv({ cls: 'lorebase-stats-rating-grid' });
 
@@ -232,8 +232,8 @@ export class StatsModal extends Modal {
         const section = container.createDiv({ cls: 'lorebase-stats-section' });
 
         const title = section.createDiv({ cls: 'lorebase-stats-section-title' });
-        title.createEl('span', { text: '\u{2139}\u{FE0F}' });
-        title.createEl('span', { text: t('statsAdditionalInfo') });
+        title.createSpan({ text: '\u{2139}\u{FE0F}' });
+        title.createSpan({ text: t('statsAdditionalInfo') });
 
         const grid = section.createDiv({ cls: 'lorebase-stats-extra-grid' });
 
