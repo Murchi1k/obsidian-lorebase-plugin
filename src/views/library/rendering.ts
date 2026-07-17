@@ -1,6 +1,6 @@
-import { MediaItem, FilterState, ViewMode } from '../../types';
+import { MediaItem, FilterState, MediaType, ViewMode } from '../../types';
 
-export interface LibraryLayout {
+interface LibraryLayout {
     columns: number;
     orientation: 'vertical' | 'horizontal';
     minCardWidth: number;
@@ -25,7 +25,7 @@ export interface RenderRandomCardParams {
 }
 
 export function shouldGroupBySeries(
-    mediaType: 'game' | 'anime',
+    mediaType: MediaType,
     sortField: string,
     viewMode: ViewMode,
     filter: FilterState,
@@ -35,7 +35,7 @@ export function shouldGroupBySeries(
     const isGroupableView = viewMode === 'grid' || viewMode === 'horizontal';
 
     return mediaType === 'game'
-        && sortField === 'name'
+        && sortField === 'series'
         && isGroupableView
         && !hasFlagFilters
         && totalItems <= 300;

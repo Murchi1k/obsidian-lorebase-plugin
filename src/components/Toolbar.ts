@@ -203,6 +203,7 @@ export class Toolbar {
         const options = this.sortOptions;
         const iconMap: Record<SortField, string> = {
             name: 'type',
+            series: 'layers',
             rating: 'star',
             year: 'calendar',
             dateCompleted: 'calendar-check',

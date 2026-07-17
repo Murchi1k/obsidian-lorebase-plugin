@@ -1,18 +1,16 @@
 import { Setting } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../../constants';
 import { t } from '../../localization';
-import { ICON_DANGER } from './constants';
 import type { SettingsSectionContext } from './types';
 
-export function renderResetSection(context: SettingsSectionContext, container: HTMLElement): void {
-    context.createSectionHeader(container, ICON_DANGER, t('settingsDangerZone'));
-
-    new Setting(container)
+export function renderResetSettings(context: SettingsSectionContext, container: HTMLElement): void {
+    const resetSetting = new Setting(container)
         .setName(t('settingsReset'))
         .setDesc(t('settingsDescReset'))
         .addButton(button => {
             button
-                .setButtonText(t('settingsResetAllButton'))
+                .setButtonText(t('settingsReset'))
+                .setWarning()
                 .onClick(() => {
                     void (async (): Promise<void> => {
                     const { ResetModal } = await import('../../modals/ResetModal');
@@ -25,4 +23,5 @@ export function renderResetSection(context: SettingsSectionContext, container: H
                     })();
                 });
         });
+    resetSetting.settingEl.addClass('lorebase-reset-settings-row');
 }

@@ -4,12 +4,15 @@
  */
 
 import { App, Menu, Modal, TFile } from 'obsidian';
-import { AnimeFormat, AnimeItem, AnimePart, AnimeStatus, UserRating } from '../types';
-import { STATUS_CONFIG } from '../constants';
+import { AnimeFormat, AnimeItem, AnimePart, AnimeStatus, RelatedMediaLink, UserRating } from '../types';
+import { DEFAULT_COVER, STATUS_CONFIG } from '../constants';
 import { i18n, t } from '../localization';
 import { createLorebaseDropdown, LorebaseDropdownHandle } from '../components/LorebaseDropdown';
+import { GenreEditModal } from './GenreEditModal';
 
 type PartDraft = AnimePart;
+
+type RelatedCandidate = RelatedMediaLink;
 
 export class AnimeEditModal extends Modal {
     private anime: AnimeItem;
@@ -24,9 +27,13 @@ export class AnimeEditModal extends Modal {
     private summary: string;
     private format: AnimeFormat;
     private sourceUrl: string;
+    private genres: string[];
     private tags: string[];
     private parts: PartDraft[];
     private activePartId: string | null;
+    private relatedMedia: RelatedMediaLink[];
+    private relatedCandidates: RelatedCandidate[];
+    private draggedRelatedPath: string | null = null;
     private formatDropdown?: LorebaseDropdownHandle<AnimeFormat>;
     private partKindDropdown?: LorebaseDropdownHandle<AnimeFormat>;
 
@@ -53,7 +60,8 @@ export class AnimeEditModal extends Modal {
         anime: AnimeItem,
         onSave: (updates: Partial<AnimeItem>) => Promise<void>,
         onDelete?: () => void,
-        onRefreshParts?: () => Promise<boolean | void>
+        onRefreshParts?: () => Promise<boolean | void>,
+        relatedCandidates: RelatedCandidate[] = []
     ) {
         super(app);
         this.anime = anime;
@@ -68,8 +76,11 @@ export class AnimeEditModal extends Modal {
         this.summary = anime.summary ?? anime.description ?? '';
         this.format = anime.format ?? 'tv';
         this.sourceUrl = anime.sourceUrl ?? '';
+        this.genres = this.normalizeGenres(anime.genres ?? []);
         this.tags = this.normalizeTags(anime.tags ?? []);
         this.parts = this.normalizeParts(anime.parts);
+        this.relatedMedia = this.normalizeRelatedMedia(anime.relatedMedia ?? []);
+        this.relatedCandidates = relatedCandidates.filter((candidate) => candidate.path !== anime.filePath);
         this.activePartId = this.parts.some((part) => part.id === anime.activePartId)
             ? anime.activePartId ?? this.parts[0]?.id ?? null
             : this.parts[0]?.id ?? null;
@@ -95,6 +106,7 @@ export class AnimeEditModal extends Modal {
         this.bindParts(root);
         this.bindNotes(root);
         this.bindTags(root);
+        this.bindRelatedMedia(root);
         this.bindDates(root);
     }
 
@@ -170,6 +182,9 @@ export class AnimeEditModal extends Modal {
                                     <input class="lorebase-editmode-input" data-field="source-url" type="text" placeholder="https://..." />
                                 </label>
                             </div>
+                            <div class="lorebase-editmode-field lorebase-editmode-genres-field">
+                                <div class="lorebase-editmode-chip-row" data-role="genre-chips"></div>
+                            </div>
                         </section>
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-status-rating">
@@ -228,6 +243,14 @@ export class AnimeEditModal extends Modal {
                                 </div>
                                 <div class="lorebase-editmode-segmented lorebase-editmode-part-status" data-role="part-status-segments"></div>
                             </div>
+                        </section>
+
+                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-related lorebase-editmode-related-main">
+                            <div class="lorebase-editmode-panel-title-row">
+                                <h3 class="lorebase-editmode-panel-title">${t('editRelatedMedia')}</h3>
+                                <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-tight" data-action="add-related">${t('editAddRelated')}</button>
+                            </div>
+                            <div class="lorebase-editmode-related-list" data-role="related-media"></div>
                         </section>
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-notes">
@@ -293,7 +316,9 @@ export class AnimeEditModal extends Modal {
         this.renderStars(root);
         this.renderPartStrip(root);
         this.renderActivePartEditor(root);
+        this.renderGenreChips(root);
         this.renderTagChips(root);
+        this.renderRelatedMedia(root);
         this.updateQuickSettingSwitches(root);
         this.updateStatusUI(root);
         this.updateRatingUI(root);
@@ -481,6 +506,17 @@ export class AnimeEditModal extends Modal {
         });
     }
 
+    private bindRelatedMedia(root: HTMLElement): void {
+        this.qs<HTMLButtonElement>(root, '[data-action="add-related"]')?.addEventListener('click', () => {
+            const selected = new Set(this.relatedMedia.map((item) => item.path));
+            const candidates = this.relatedCandidates.filter((candidate) => !selected.has(candidate.path));
+            new RelatedMediaPickerModal(this.app, candidates, (items) => {
+                this.relatedMedia = this.normalizeRelatedMedia([...this.relatedMedia, ...items]);
+                this.renderRelatedMedia(root);
+            }).open();
+        });
+    }
+
     private bindDates(root: HTMLElement): void {
         const file = this.getFile();
         if (!file) return;
@@ -586,6 +622,148 @@ export class AnimeEditModal extends Modal {
                 this.renderTagChips(root);
             });
         }
+    }
+
+    private renderGenreChips(root: HTMLElement): void {
+        const container = this.qs<HTMLElement>(root, '[data-role="genre-chips"]');
+        if (!container) return;
+        container.empty();
+        for (const genre of this.genres) {
+            const chip = container.createEl('button', {
+                cls: 'lorebase-editmode-chip',
+                text: genre,
+                attr: { type: 'button', title: t('editRemoveHint') },
+            });
+            chip.addEventListener('click', () => {
+                this.genres = this.genres.filter((entry) => entry !== genre);
+                this.renderGenreChips(root);
+            });
+        }
+        const add = container.createEl('button', {
+            cls: 'lorebase-editmode-chip lorebase-editmode-chip-add is-action',
+            text: '+',
+            attr: { type: 'button', 'aria-label': t('templateFieldGenres') },
+        });
+        add.addEventListener('click', () => {
+            new GenreEditModal(this.app, this.genres, (values) => {
+                this.genres = this.normalizeGenres(values);
+                this.renderGenreChips(root);
+            }).open();
+        });
+    }
+
+    private renderRelatedMedia(root: HTMLElement): void {
+        const container = this.qs<HTMLElement>(root, '[data-role="related-media"]');
+        if (!container) return;
+        container.empty();
+        if (!this.relatedMedia.length) {
+            container.createDiv({ cls: 'lorebase-editmode-related-empty', text: t('editRelatedEmpty') });
+            return;
+        }
+
+        for (const [index, item] of this.relatedMedia.entries()) {
+            const imageUrl = item.imageUrl || this.relatedCandidates.find((candidate) => candidate.path === item.path)?.imageUrl || DEFAULT_COVER;
+            const row = container.createDiv({
+                cls: 'lorebase-editmode-related-item',
+                attr: { title: item.title || item.path, draggable: 'true', 'data-path': item.path },
+            });
+            this.bindRelatedDrag(row, item.path, () => {
+                this.reorderRelatedMedia(item.path);
+                this.renderRelatedMedia(root);
+            });
+            const image = row.createDiv({ cls: 'lorebase-editmode-related-image' });
+            image.setCssStyles({
+                backgroundImage: `url("${imageUrl.replace(/"/g, '\\"')}")`,
+                height: '76px',
+                minHeight: '76px',
+            });
+            image.createSpan({ cls: 'lorebase-editmode-related-type', text: this.getRelatedTypeLabel(item.type) });
+            row.createSpan({ cls: 'lorebase-editmode-related-title', text: item.title || item.path });
+            const order = row.createDiv({ cls: 'lorebase-editmode-related-order' });
+            const up = order.createEl('button', {
+                cls: 'lorebase-editmode-related-order-btn',
+                text: '↑',
+                attr: { type: 'button', 'aria-label': 'Move up' },
+            });
+            up.disabled = index === 0;
+            up.toggleClass('is-disabled', up.disabled);
+            up.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.moveRelatedMedia(index, -1);
+                this.renderRelatedMedia(root);
+            });
+            const down = order.createEl('button', {
+                cls: 'lorebase-editmode-related-order-btn',
+                text: '↓',
+                attr: { type: 'button', 'aria-label': 'Move down' },
+            });
+            down.disabled = index === this.relatedMedia.length - 1;
+            down.toggleClass('is-disabled', down.disabled);
+            down.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.moveRelatedMedia(index, 1);
+                this.renderRelatedMedia(root);
+            });
+            const remove = row.createEl('button', {
+                cls: 'lorebase-editmode-related-remove',
+                text: '×',
+                attr: { type: 'button', 'aria-label': t('editRemoveHint') },
+            });
+            remove.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.relatedMedia = this.relatedMedia.filter((entry) => entry.path !== item.path);
+                this.renderRelatedMedia(root);
+            });
+        }
+    }
+
+    private bindRelatedDrag(card: HTMLElement, targetPath: string, onDrop: () => void): void {
+        card.addEventListener('dragstart', (event) => {
+            this.draggedRelatedPath = targetPath;
+            card.addClass('is-dragging');
+            event.dataTransfer?.setData('text/plain', targetPath);
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragover', (event) => {
+            if (!this.draggedRelatedPath || this.draggedRelatedPath === targetPath) return;
+            event.preventDefault();
+            card.addClass('is-drop-target');
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        });
+        card.addEventListener('dragleave', () => {
+            card.removeClass('is-drop-target');
+        });
+        card.addEventListener('drop', (event) => {
+            event.preventDefault();
+            card.removeClass('is-drop-target');
+            if (!this.draggedRelatedPath || this.draggedRelatedPath === targetPath) return;
+            onDrop();
+        });
+        card.addEventListener('dragend', () => {
+            this.draggedRelatedPath = null;
+            card.removeClass('is-dragging');
+            card.removeClass('is-drop-target');
+        });
+    }
+
+    private reorderRelatedMedia(targetPath: string): void {
+        const draggedPath = this.draggedRelatedPath;
+        if (!draggedPath || draggedPath === targetPath) return;
+        const next = [...this.relatedMedia];
+        const from = next.findIndex((item) => item.path === draggedPath);
+        const to = next.findIndex((item) => item.path === targetPath);
+        if (from < 0 || to < 0) return;
+        const [item] = next.splice(from, 1);
+        next.splice(to, 0, item);
+        this.relatedMedia = next;
+    }
+
+    private moveRelatedMedia(index: number, direction: -1 | 1): void {
+        const target = index + direction;
+        if (target < 0 || target >= this.relatedMedia.length) return;
+        const next = [...this.relatedMedia];
+        [next[index], next[target]] = [next[target], next[index]];
+        this.relatedMedia = next;
     }
 
     private createStatusSegment(status: AnimeStatus, label: string): HTMLButtonElement {
@@ -776,6 +954,44 @@ export class AnimeEditModal extends Modal {
         return Array.from(unique.values());
     }
 
+    private normalizeGenre(value: string): string | null {
+        const cleaned = value.trim().toLowerCase();
+        return cleaned || null;
+    }
+
+    private normalizeGenres(values: string[]): string[] {
+        const unique = new Set<string>();
+        for (const value of values) {
+            const normalized = this.normalizeGenre(value);
+            if (normalized) unique.add(normalized);
+        }
+        return Array.from(unique.values());
+    }
+
+    private normalizeRelatedMedia(values: RelatedMediaLink[]): RelatedMediaLink[] {
+        const unique = new Map<string, RelatedMediaLink>();
+        for (const value of values) {
+            const path = value.path?.trim();
+            if (!path) continue;
+            unique.set(path, {
+                type: value.type,
+                path,
+                title: value.title?.trim() || path.split('/').pop()?.replace(/\.md$/i, '') || path,
+                imageUrl: value.imageUrl ?? null,
+            });
+        }
+        return Array.from(unique.values());
+    }
+
+    private getRelatedTypeLabel(type: RelatedMediaLink['type']): string {
+        if (type === 'anime') return t('settingsAnime');
+        if (type === 'movie') return t('settingsMovies');
+        if (type === 'series') return t('settingsSeries');
+        if (type === 'book') return t('settingsBooks');
+        if (type === 'manga') return t('settingsManga');
+        return t('settingsGames');
+    }
+
     private qs<T extends Element>(root: HTMLElement, selector: string): T | null {
         return root.querySelector<T>(selector);
     }
@@ -819,9 +1035,11 @@ export class AnimeEditModal extends Modal {
             sourceUrl: this.sourceUrl || null,
             integrationProvider: this.anime.integrationProvider ?? null,
             integrationId: this.anime.integrationId ?? null,
+            genres: this.genres,
             tags: this.tags,
             parts: this.parts,
             activePartId: activePart?.id ?? this.activePartId,
+            relatedMedia: this.relatedMedia,
             seasonCurrent: activePart?.seasonNumber ?? null,
             episodeCurrent: activePart?.episodeCurrent ?? null,
             episodeTotal: activePart?.episodeTotal ?? null,
@@ -829,5 +1047,163 @@ export class AnimeEditModal extends Modal {
 
         await this.onSave(updates);
         this.close();
+    }
+}
+
+class RelatedMediaPickerModal extends Modal {
+    private candidates: RelatedCandidate[];
+    private onPick: (candidates: RelatedCandidate[]) => void;
+    private query = '';
+    private mediaFilter: RelatedMediaLink['type'] = 'movie';
+    private listEl: HTMLElement | null = null;
+    private footerEl: HTMLElement | null = null;
+    private selectedPaths = new Set<string>();
+    private selectedOrder: string[] = [];
+
+    constructor(app: App, candidates: RelatedCandidate[], onPick: (candidates: RelatedCandidate[]) => void) {
+        super(app);
+        this.candidates = candidates;
+        this.onPick = onPick;
+    }
+
+    onOpen(): void {
+        this.contentEl.empty();
+        this.modalEl.addClass('lorebase-related-picker-container');
+        this.contentEl.addClass('lorebase-related-picker', 'lorebase-modal-panel');
+        const header = this.contentEl.createDiv({ cls: 'lorebase-related-picker-header' });
+        header.createEl('h2', { text: t('editRelatedPickerTitle') });
+        const input = this.contentEl.createEl('input', {
+            cls: 'lorebase-editmode-input lorebase-related-picker-search',
+            attr: { type: 'text', placeholder: t('searchPlaceholder') },
+        });
+        const filters = this.contentEl.createDiv({ cls: 'lorebase-related-picker-filters' });
+        this.createFilterButton(filters, 'movie', t('settingsMovies'));
+        this.createFilterButton(filters, 'series', t('settingsSeries'));
+        this.createFilterButton(filters, 'book', t('settingsBooks'));
+        this.createFilterButton(filters, 'manga', t('settingsManga'));
+        this.listEl = this.contentEl.createDiv({ cls: 'lorebase-related-picker-grid' });
+        this.footerEl = this.contentEl.createDiv({ cls: 'lorebase-related-picker-footer' });
+        input.addEventListener('input', () => {
+            this.query = input.value.trim().toLowerCase();
+            this.renderList();
+        });
+        this.renderList();
+        this.renderFooter();
+        input.focus();
+    }
+
+    onClose(): void {
+        this.contentEl.empty();
+        this.modalEl.removeClass('lorebase-related-picker-container');
+    }
+
+    private renderList(): void {
+        if (!this.listEl) return;
+        this.listEl.empty();
+        const filtered = this.candidates
+            .filter((candidate) => {
+                if (!this.query) return true;
+                return candidate.title.toLowerCase().includes(this.query)
+                    || candidate.path.toLowerCase().includes(this.query);
+            })
+            .filter((candidate) => this.query || candidate.type === this.mediaFilter)
+            .slice(0, 50);
+
+        if (!filtered.length) {
+            this.listEl.createDiv({ cls: 'lorebase-select-empty', text: t('noticeNoResults') });
+            return;
+        }
+
+        for (const candidate of filtered) {
+            const row = this.listEl.createEl('button', {
+                cls: `lorebase-related-picker-card ${this.selectedPaths.has(candidate.path) ? 'is-selected' : ''}`,
+                attr: {
+                    type: 'button',
+                    title: candidate.path,
+                    'aria-pressed': String(this.selectedPaths.has(candidate.path)),
+                },
+            });
+            const image = row.createDiv({ cls: 'lorebase-related-picker-card-image' });
+            const imageUrl = candidate.imageUrl || DEFAULT_COVER;
+            image.setCssStyles({ backgroundImage: `url("${imageUrl.replace(/"/g, '\\"')}")` });
+            image.createSpan({ cls: 'lorebase-related-picker-card-type', text: this.getTypeLabel(candidate.type) });
+            row.createSpan({ cls: 'lorebase-related-picker-card-check', text: '✓' });
+            const body = row.createDiv({ cls: 'lorebase-related-picker-card-body' });
+            body.createSpan({ cls: 'lorebase-related-picker-card-title', text: candidate.title });
+            body.createSpan({ cls: 'lorebase-related-picker-card-path', text: candidate.path });
+            row.addEventListener('click', () => {
+                this.toggleCandidate(candidate.path);
+                this.renderList();
+                this.renderFooter();
+            });
+        }
+    }
+
+    private toggleCandidate(path: string): void {
+        if (this.selectedPaths.has(path)) {
+            this.selectedPaths.delete(path);
+            this.selectedOrder = this.selectedOrder.filter((entry) => entry !== path);
+            return;
+        }
+        this.selectedPaths.add(path);
+        this.selectedOrder.push(path);
+    }
+
+    private renderFooter(): void {
+        if (!this.footerEl) return;
+        this.footerEl.empty();
+        const count = this.selectedPaths.size;
+        this.footerEl.createSpan({
+            cls: 'lorebase-related-picker-selected',
+            text: count ? `${t('promptSelectedLabel')}: ${count}` : '',
+        });
+        const actions = this.footerEl.createDiv({ cls: 'lorebase-related-picker-actions' });
+        const cancel = actions.createEl('button', {
+            cls: 'lorebase-button lorebase-button-secondary',
+            text: t('commonCancel'),
+            attr: { type: 'button' },
+        });
+        cancel.addEventListener('click', () => this.close());
+        const add = actions.createEl('button', {
+            cls: 'lorebase-button lorebase-button-primary',
+            text: count ? `${t('promptAddSelected')} (${count})` : t('promptAddSelected'),
+            attr: { type: 'button' },
+        });
+        add.disabled = count === 0;
+        add.toggleClass('is-disabled', add.disabled);
+        add.addEventListener('click', () => {
+            const picked = this.selectedOrder
+                .map((path) => this.candidates.find((candidate) => candidate.path === path))
+                .filter((candidate): candidate is RelatedCandidate => Boolean(candidate));
+            if (!picked.length) return;
+            this.onPick(picked);
+            this.close();
+        });
+    }
+
+    private getTypeLabel(type: RelatedMediaLink['type']): string {
+        if (type === 'anime') return t('settingsAnime');
+        if (type === 'movie') return t('settingsMovies');
+        if (type === 'series') return t('settingsSeries');
+        if (type === 'book') return t('settingsBooks');
+        if (type === 'manga') return t('settingsManga');
+        return t('settingsGames');
+    }
+
+    private createFilterButton(parent: HTMLElement, value: RelatedMediaLink['type'], label: string): void {
+        const button = parent.createEl('button', {
+            cls: `lorebase-related-picker-filter ${this.mediaFilter === value ? 'is-active' : ''}`,
+            text: label,
+            attr: { type: 'button', 'aria-pressed': String(this.mediaFilter === value) },
+        });
+        button.addEventListener('click', () => {
+            this.mediaFilter = value;
+            parent.querySelectorAll<HTMLButtonElement>('.lorebase-related-picker-filter').forEach((entry) => {
+                const active = entry === button;
+                entry.toggleClass('is-active', active);
+                entry.setAttr('aria-pressed', String(active));
+            });
+            this.renderList();
+        });
     }
 }

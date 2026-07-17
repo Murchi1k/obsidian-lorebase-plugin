@@ -4,6 +4,20 @@ import { JsonFetcher, asObject, getArray, getString, mapStringList, stripHtml, t
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_GAMES_URL = 'https://api.igdb.com/v4/games';
 
+interface SearchPageOptions {
+    page?: number;
+    pageSize?: number;
+}
+
+function withHasNext<T>(items: T[], hasNext: boolean): T[] {
+    Object.defineProperty(items, 'hasNext', {
+        value: hasNext,
+        enumerable: false,
+        configurable: true,
+    });
+    return items;
+}
+
 function getNumber(source: Record<string, unknown> | null, key: string): number | null {
     if (!source) return null;
     const value = source[key];
@@ -20,7 +34,7 @@ function getYear(timestamp: number | null): string {
     return new Date(timestamp * 1000).getUTCFullYear().toString();
 }
 
-function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot_big'): string {
+function getIgdbImageUrl(imageId: string, size: 'cover_big_2x' | 'screenshot_huge'): string {
     return imageId ? `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg` : '';
 }
 
@@ -72,18 +86,23 @@ export async function searchIgdb(
     fetchJson: JsonFetcher,
     query: string,
     clientId: string,
-    clientSecret: string
+    clientSecret: string,
+    options: SearchPageOptions = {}
 ): Promise<SearchResult[]> {
+    const page = Math.max(1, options.page ?? 1);
+    const pageSize = Math.max(1, options.pageSize ?? 10);
     const body = [
         'fields name,first_release_date,cover.image_id;',
         `search "${escapeIgdbString(query)}";`,
         'where version_parent = null;',
-        'limit 10;',
+        `limit ${pageSize + 1};`,
+        `offset ${(page - 1) * pageSize};`,
     ].join('\n');
 
     const results = await fetchIgdbGames(fetchJson, clientId, clientSecret, body);
+    const hasNext = results.length > pageSize;
 
-    return results.map((item) => {
+    const mapped = results.slice(0, pageSize).map((item) => {
         const record = asObject(item);
         const released = getNumber(record, 'first_release_date');
         const cover = asObject(record?.cover);
@@ -94,10 +113,12 @@ export async function searchIgdb(
             title: getString(record, 'name') || 'Unknown',
             subtitle: year,
             year,
-            image: getIgdbImageUrl(getString(cover, 'image_id'), 'cover_big'),
-            provider: 'igdb',
+            image: getIgdbImageUrl(getString(cover, 'image_id'), 'cover_big_2x'),
+            provider: 'igdb' as const,
         };
     });
+
+    return withHasNext(mapped, hasNext);
 }
 
 export async function getIgdbDetails(
@@ -138,10 +159,11 @@ export async function getIgdbDetails(
     const firstWebsiteUrl = getString(asObject(websites[0]), 'url');
 
     return {
+        kind: 'game',
         name: getString(item, 'name') || 'Unknown',
         description: stripHtml(getString(item, 'summary') || getString(item, 'storyline')),
-        poster: getIgdbImageUrl(getString(cover, 'image_id'), 'cover_big'),
-        posterHorizontal: getIgdbImageUrl(getString(firstScreenshot, 'image_id'), 'screenshot_big'),
+        poster: getIgdbImageUrl(getString(cover, 'image_id'), 'cover_big_2x'),
+        posterHorizontal: getIgdbImageUrl(getString(firstScreenshot, 'image_id'), 'screenshot_huge'),
         genres: mapStringList(getArray(item, 'genres'), (entry) => getString(asObject(entry), 'name')),
         platforms: mapStringList(getArray(item, 'platforms'), (entry) => getString(asObject(entry), 'name')),
         developers,

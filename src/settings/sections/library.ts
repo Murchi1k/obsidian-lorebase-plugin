@@ -1,24 +1,85 @@
-import { Setting, TFolder } from 'obsidian';
+import { Setting } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../../constants';
 import { t } from '../../localization';
-import type { CardSize } from '../../types';
+import type { CardSize, CardStyle } from '../../types';
+import { FolderSuggest } from '../../components/FolderSuggest';
+import { ICON_MEDIA } from './constants';
 import { addLorebaseDropdown } from './customDropdown';
+import { renderLocalImageSettings } from './experiment';
+import { createMediaTabs } from './mediaTabs';
 import type { MediaTypeKey, SettingsSectionContext } from './types';
 
-export function renderLibrarySettings(
+const MEDIA_SETTINGS_OPTIONS: Array<{
+    key: MediaTypeKey;
+    label: () => string;
+    icon: string;
+}> = [
+    { key: 'games', label: () => t('settingsGames'), icon: 'gamepad-2' },
+    { key: 'anime', label: () => t('settingsAnime'), icon: 'clapperboard' },
+    { key: 'movies', label: () => t('settingsMovies'), icon: 'film' },
+    { key: 'series', label: () => t('settingsSeries'), icon: 'tv' },
+    { key: 'books', label: () => t('settingsBooks'), icon: 'book-open' },
+    { key: 'manga', label: () => t('settingsManga'), icon: 'book-open-text' },
+];
+
+export function renderMediaSettings(context: SettingsSectionContext, container: HTMLElement): void {
+    context.createSectionHeader(container, ICON_MEDIA, t('settingsMedia'));
+
+    const root = container.createDiv({ cls: 'lorebase-media-settings' });
+    root.createDiv({ cls: 'lorebase-settings-section-description', text: t('settingsMediaDesc') });
+    const tabsHost = root.createDiv({ cls: 'lorebase-media-settings-tabs' });
+    const panels = root.createDiv({ cls: 'lorebase-media-settings-panels' });
+    const panelMap = new Map<MediaTypeKey, HTMLElement>();
+
+    const selectMedia = (media: MediaTypeKey): void => {
+        context.setActiveMediaTab('mediaSettings', media);
+        panelMap.forEach((panel, key) => {
+            const active = key === media;
+            panel.toggleClass('is-active', active);
+            panel.toggleAttribute('hidden', !active);
+        });
+    };
+
+    for (const option of MEDIA_SETTINGS_OPTIONS) {
+        const panel = panels.createDiv({ cls: `lorebase-media-settings-panel is-${option.key}` });
+        panel.setAttribute('role', 'tabpanel');
+        panelMap.set(option.key, panel);
+        renderLibrarySettingsPanel(context, panel, option.key);
+    }
+
+    createMediaTabs(
+        tabsHost,
+        MEDIA_SETTINGS_OPTIONS.map((option) => ({
+            value: option.key,
+            label: option.label(),
+            icon: option.icon,
+        })),
+        context.getActiveMediaTab('mediaSettings'),
+        t('settingsMediaTabs'),
+        selectMedia
+    );
+    selectMedia(context.getActiveMediaTab('mediaSettings'));
+    renderLocalImageSettings(context, root);
+}
+
+function renderLibrarySettingsPanel(
     context: SettingsSectionContext,
     container: HTMLElement,
-    title: string,
-    key: MediaTypeKey,
-    icon: string
+    key: MediaTypeKey
 ): void {
-    context.createSectionHeader(container, icon, title);
-
     const settings = context.plugin.settings[key];
-    const mediaToggleLabel = key === 'games' ? t('settingsMediaGames') : t('settingsMediaAnime');
-    const mediaToggleValue = key === 'games'
-        ? context.plugin.settings.enabledMedia.games
-        : context.plugin.settings.enabledMedia.anime;
+    const mediaToggleLabel = key === 'games'
+        ? t('settingsMediaGames')
+        : key === 'anime'
+            ? t('settingsMediaAnime')
+            : key === 'movies'
+                ? t('settingsMediaMovies')
+                : key === 'series'
+                    ? t('settingsMediaSeries')
+                    : key === 'books'
+                        ? t('settingsMediaBooks')
+                        : t('settingsMediaManga');
+    const mediaToggleValue = context.plugin.settings.enabledMedia[key];
 
     new Setting(container)
         .setName(mediaToggleLabel)
@@ -26,26 +87,15 @@ export function renderLibrarySettings(
             toggle
                 .setValue(mediaToggleValue)
                 .onChange(async (value) => {
-                    let nextGames = context.plugin.settings.enabledMedia.games;
-                    let nextAnime = context.plugin.settings.enabledMedia.anime;
+                    const nextEnabled = { ...context.plugin.settings.enabledMedia };
+                    nextEnabled[key] = value;
 
-                    if (key === 'games') {
-                        nextGames = value;
-                    } else {
-                        nextAnime = value;
+                    if (!Object.values(nextEnabled).some(Boolean)) {
+                        nextEnabled[key] = true;
+                        toggle.setValue(true);
                     }
 
-                    if (!nextGames && !nextAnime) {
-                        if (key === 'games') {
-                            nextGames = true;
-                            toggle.setValue(true);
-                        } else {
-                            nextAnime = true;
-                            toggle.setValue(true);
-                        }
-                    }
-
-                    context.plugin.settings.enabledMedia = { games: nextGames, anime: nextAnime };
+                    context.plugin.settings.enabledMedia = nextEnabled;
                     await context.plugin.saveSettings();
                     context.plugin.refreshViews();
                 });
@@ -54,24 +104,24 @@ export function renderLibrarySettings(
     const folderSetting = new Setting(container)
         .setName(t('settingsFolder'))
         .setDesc(t('settingsDescFolder'));
-    const folders = context.app.vault.getAllLoadedFiles()
-        .filter((f): f is TFolder => f instanceof TFolder)
-        .sort((a, b) => a.path.localeCompare(b.path));
-    addLorebaseDropdown<string>(
-        folderSetting,
-        [
-            { value: '', label: '/ (Root)' },
-            ...folders
-                .filter((folder) => Boolean(folder.path))
-                .map((folder) => ({ value: folder.path, label: folder.path })),
-        ],
-        settings.folderPath,
-        async (value) => {
-            context.plugin.settings[key].folderPath = value;
+    folderSetting.addText(text => {
+        const persistFolderPath = async (value: string): Promise<void> => {
+            context.plugin.settings[key].folderPath = value.trim();
             await context.plugin.saveSettings();
             context.plugin.refreshViews();
-        }
-    );
+        };
+
+        text
+            .setPlaceholder(DEFAULT_SETTINGS[key].folderPath)
+            .setValue(settings.folderPath)
+            .onChange((value) => {
+                void persistFolderPath(value);
+            });
+
+        new FolderSuggest(context.app, text.inputEl, (path) => {
+            void persistFolderPath(path);
+        });
+    });
 
     new Setting(container)
         .setName(t('settingsColumns'))
@@ -104,6 +154,40 @@ export function renderLibrarySettings(
             context.plugin.refreshViews();
         }
     );
+
+    if (key === 'anime' || key === 'series' || key === 'books' || key === 'manga') {
+        const cardStyleSetting = new Setting(container)
+            .setName(t('settingsCardStyle'))
+            .setDesc(t('settingsCardStyleDesc'));
+        addLorebaseDropdown<CardStyle>(
+            cardStyleSetting,
+            [
+                { value: 'hover', label: t('settingsCardStyleHover') },
+                { value: 'progress', label: t('settingsCardStyleProgress') },
+            ],
+            settings.cardStyle ?? DEFAULT_SETTINGS[key].cardStyle,
+            async (value) => {
+                context.plugin.settings[key].cardStyle = value;
+                await context.plugin.saveSettings();
+                context.plugin.refreshViews();
+            }
+        );
+    }
+
+    if (key === 'books' || key === 'manga') {
+        new Setting(container)
+            .setName(t('settingsBookCoverEffect'))
+            .setDesc(t('settingsBookCoverEffectDesc'))
+            .addToggle(toggle => {
+                toggle
+                    .setValue(settings.bookCoverEffect)
+                    .onChange(async (value) => {
+                        context.plugin.settings[key].bookCoverEffect = value;
+                        await context.plugin.saveSettings();
+                        context.plugin.refreshViewsVisuals();
+                    });
+            });
+    }
 
     new Setting(container)
         .setName(t('settingsCustomCardSize'))

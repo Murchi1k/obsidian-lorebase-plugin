@@ -3,7 +3,7 @@
  * Default values, configurations, and static data
  */
 
-import { LorebaseSettings, MediaStatus, CardSize, CardOrientation } from './types';
+import { LorebaseSettings, MediaStatus, CardSize, CardOrientation, CardStyle } from './types';
 import type { TranslationKey } from './localization';
 
 // =============================================================================
@@ -15,6 +15,7 @@ const DEFAULT_LIBRARY_SETTINGS = {
     folderPath: '',
     columns: 5,
     cardSize: 'medium' as CardSize,
+    cardStyle: 'hover' as CardStyle,
     customCardSize: false,
     customCardMinWidth: 220,
     customCardMinHeight: 380,
@@ -23,6 +24,7 @@ const DEFAULT_LIBRARY_SETTINGS = {
     customHorizontalCardHeight: 220,
     showAnimeSeasonProgress: true,
     showAnimeEpisodeProgress: true,
+    bookCoverEffect: false,
     orientation: 'vertical' as CardOrientation,
     sortField: 'name' as const,
     sortOrder: 'asc' as const,
@@ -30,6 +32,7 @@ const DEFAULT_LIBRARY_SETTINGS = {
 };
 
 const DEFAULT_ANIME_TEMPLATE = `---
+title: "{{VALUE:name}}"
 image: "{{VALUE:image}}"
 image_b: "{{VALUE:ImageHorizontal}}"
 plot: "{{VALUE:Plot}}"
@@ -44,7 +47,104 @@ episode_total: "{{VALUE:episodeTotal}}"
 active_part_id: "{{VALUE:activePartId}}"
 anime_parts:
 {{VALUE:animePartsYaml}}
-rating:
+rating: "{{VALUE:rating}}"
+status: "{{VALUE:status}}"
+favorite: false
+url: "{{VALUE:url}}"
+---`;
+
+const DEFAULT_MOVIE_TEMPLATE = `---
+type: "movie"
+title: "{{VALUE:name}}"
+poster: "{{VALUE:Poster}}"
+poster_b: "{{VALUE:PosterHorizontal}}"
+plot: "{{VALUE:Plot}}"
+genres: "{{VALUE:genres}}"
+year: "{{VALUE:Year}}"
+released: "{{VALUE:released}}"
+runtime: "{{VALUE:runtime}}"
+director: "{{VALUE:director}}"
+actors: "{{VALUE:actors}}"
+rating: "{{VALUE:rating}}"
+status: "{{VALUE:status}}"
+favorite: false
+active_part_id: "{{VALUE:activePartId}}"
+movie_parts:
+{{VALUE:videoPartsYaml}}
+integration_provider: "{{VALUE:integrationProvider}}"
+integration_id: "{{VALUE:integrationId}}"
+url: "{{VALUE:url}}"
+---`;
+
+const DEFAULT_SERIES_TEMPLATE = `---
+type: "series"
+title: "{{VALUE:name}}"
+poster: "{{VALUE:Poster}}"
+poster_b: "{{VALUE:PosterHorizontal}}"
+plot: "{{VALUE:Plot}}"
+genres: "{{VALUE:genres}}"
+year: "{{VALUE:Year}}"
+released: "{{VALUE:released}}"
+runtime: "{{VALUE:runtime}}"
+director: "{{VALUE:director}}"
+actors: "{{VALUE:actors}}"
+seasons: "{{VALUE:seasons}}"
+episode_current: "{{VALUE:episodeCurrent}}"
+episode_total: "{{VALUE:episodeTotal}}"
+active_part_id: "{{VALUE:activePartId}}"
+series_parts:
+{{VALUE:videoPartsYaml}}
+rating: "{{VALUE:rating}}"
+status: "{{VALUE:status}}"
+favorite: false
+integration_provider: "{{VALUE:integrationProvider}}"
+integration_id: "{{VALUE:integrationId}}"
+url: "{{VALUE:url}}"
+---`;
+
+const DEFAULT_BOOK_TEMPLATE = `---
+type: "book"
+title: "{{VALUE:name}}"
+poster: "{{VALUE:Poster}}"
+poster_b: "{{VALUE:PosterHorizontal}}"
+plot: "{{VALUE:Plot}}"
+authors: "{{VALUE:authors}}"
+publisher: "{{VALUE:publisher}}"
+genres: "{{VALUE:genres}}"
+tags: "{{VALUE:tags}}"
+year: "{{VALUE:Year}}"
+released: "{{VALUE:released}}"
+page_current: "{{VALUE:pageCurrent}}"
+page_total: "{{VALUE:pageTotal}}"
+chapter_current: "{{VALUE:chapterCurrent}}"
+chapter_total: "{{VALUE:chapterTotal}}"
+rating: "{{VALUE:rating}}"
+status: "{{VALUE:status}}"
+favorite: false
+integration_provider: "{{VALUE:integrationProvider}}"
+integration_id: "{{VALUE:integrationId}}"
+url: "{{VALUE:url}}"
+---`;
+
+const DEFAULT_MANGA_TEMPLATE = `---
+type: "manga"
+title: "{{VALUE:name}}"
+poster: "{{VALUE:Poster}}"
+poster_b: "{{VALUE:PosterHorizontal}}"
+plot: "{{VALUE:Plot}}"
+authors: "{{VALUE:authors}}"
+artists: "{{VALUE:artists}}"
+genres: "{{VALUE:genres}}"
+tags: "{{VALUE:tags}}"
+year: "{{VALUE:Year}}"
+chapter_current: "{{VALUE:chapterCurrent}}"
+chapter_total: "{{VALUE:chapterTotal}}"
+volume_current: "{{VALUE:volumeCurrent}}"
+volume_total: "{{VALUE:volumeTotal}}"
+active_part_id: "{{VALUE:activePartId}}"
+manga_parts:
+{{VALUE:mangaPartsYaml}}
+rating: "{{VALUE:rating}}"
 status: "{{VALUE:status}}"
 favorite: false
 integration_provider: "{{VALUE:integrationProvider}}"
@@ -53,6 +153,7 @@ url: "{{VALUE:url}}"
 ---`;
 
 const DEFAULT_GAME_TEMPLATE = `---
+name: "{{VALUE:name}}"
 poster: "{{VALUE:Poster}}"
 poster_b: "{{VALUE:PosterHorizontal}}"
 gameSeries:
@@ -76,6 +177,7 @@ main_plus_sides: "{{VALUE:main_plus_sides}}"
 perfectionist: "{{VALUE:perfectionist}}"
 ---`;
 const DEFAULT_GAME_TEMPLATE_FIELDS = [
+    'name',
     'poster',
     'posterHorizontal',
     'plot',
@@ -94,6 +196,7 @@ const DEFAULT_GAME_TEMPLATE_FIELDS = [
 ];
 
 const DEFAULT_ANIME_TEMPLATE_FIELDS = [
+    'name',
     'image',
     'imageHorizontal',
     'plot',
@@ -103,6 +206,86 @@ const DEFAULT_ANIME_TEMPLATE_FIELDS = [
     'studios',
     'format',
     'animeParts',
+    'rating',
+    'status',
+    'favorite',
+    'url',
+];
+
+const DEFAULT_MOVIE_TEMPLATE_FIELDS = [
+    'name',
+    'poster',
+    'posterHorizontal',
+    'plot',
+    'genres',
+    'year',
+    'released',
+    'runtime',
+    'director',
+    'actors',
+    'rating',
+    'status',
+    'favorite',
+    'movieParts',
+    'integrationSource',
+    'url',
+];
+
+const DEFAULT_SERIES_TEMPLATE_FIELDS = [
+    'name',
+    'poster',
+    'posterHorizontal',
+    'plot',
+    'genres',
+    'year',
+    'seasons',
+    'episodeCurrent',
+    'episodeTotal',
+    'seriesParts',
+    'rating',
+    'status',
+    'favorite',
+    'integrationSource',
+    'url',
+];
+
+const DEFAULT_BOOK_TEMPLATE_FIELDS = [
+    'name',
+    'poster',
+    'posterHorizontal',
+    'plot',
+    'authors',
+    'publisher',
+    'genres',
+    'tags',
+    'year',
+    'released',
+    'pageCurrent',
+    'pageTotal',
+    'chapterCurrent',
+    'chapterTotal',
+    'rating',
+    'status',
+    'favorite',
+    'integrationSource',
+    'url',
+];
+
+const DEFAULT_MANGA_TEMPLATE_FIELDS = [
+    'name',
+    'poster',
+    'posterHorizontal',
+    'plot',
+    'authors',
+    'artists',
+    'genres',
+    'tags',
+    'year',
+    'chapterCurrent',
+    'chapterTotal',
+    'volumeCurrent',
+    'volumeTotal',
+    'mangaParts',
     'rating',
     'status',
     'favorite',
@@ -117,12 +300,40 @@ export const DEFAULT_GAME_TAG_PRESETS = [
     { id: 'next-playthrough', label: 'Next in queue', tag: 'next in queue', icon: 'list-start' },
 ] as const;
 
+function createDefaultBadges(): LorebaseSettings['badges'] {
+    return {
+        status: {
+            enabled: true,
+            position: 'bottom-right',
+            iconOnly: false,
+            x: 70,
+            y: 86,
+        },
+        rating: {
+            enabled: true,
+            position: 'bottom-right',
+            mode: 'emoji',
+            x: 88,
+            y: 86,
+        },
+        favorite: {
+            enabled: true,
+            position: 'top-right',
+            subtlePulse: false,
+            x: 90,
+            y: 10,
+        },
+    };
+}
+
 
 /** Default plugin settings */
 export const DEFAULT_SETTINGS: LorebaseSettings = {
     language: 'en',
+    settingsLayoutMode: 'tabs',
     accentColor: '#e4a47e',
-    enabledMedia: { games: true, anime: true },
+    showAddModeChoice: true,
+    enabledMedia: { games: true, anime: true, movies: true, series: true, books: true, manga: true },
     particleEffect: 'none',
     particleIntensity: 70,
     descriptionLines: 4,
@@ -153,6 +364,14 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
     },
     animeDescriptionLines: 4,
     animeHorizontalDescriptionLines: 4,
+    movieDescriptionLines: 4,
+    movieHorizontalDescriptionLines: 4,
+    seriesDescriptionLines: 4,
+    seriesHorizontalDescriptionLines: 4,
+    bookDescriptionLines: 4,
+    bookHorizontalDescriptionLines: 4,
+    mangaDescriptionLines: 4,
+    mangaHorizontalDescriptionLines: 4,
     animeOverlayTextLayout: {
         title: { x: 7, y: 6.5 },
         year: { x: 7, y: 15 },
@@ -160,6 +379,54 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         description: { x: 2, y: 24 },
     },
     animeHorizontalOverlayTextLayout: {
+        title: { x: 7, y: 11.2 },
+        year: { x: 7, y: 25.9 },
+        format: { x: 30, y: 25.9 },
+        description: { x: 2, y: 41.5 },
+    },
+    movieOverlayTextLayout: {
+        title: { x: 7, y: 6.5 },
+        year: { x: 7, y: 15 },
+        format: { x: 30, y: 15 },
+        description: { x: 2, y: 24 },
+    },
+    movieHorizontalOverlayTextLayout: {
+        title: { x: 7, y: 11.2 },
+        year: { x: 7, y: 25.9 },
+        format: { x: 30, y: 25.9 },
+        description: { x: 2, y: 41.5 },
+    },
+    seriesOverlayTextLayout: {
+        title: { x: 7, y: 6.5 },
+        year: { x: 7, y: 15 },
+        format: { x: 30, y: 15 },
+        description: { x: 2, y: 24 },
+    },
+    seriesHorizontalOverlayTextLayout: {
+        title: { x: 7, y: 11.2 },
+        year: { x: 7, y: 25.9 },
+        format: { x: 30, y: 25.9 },
+        description: { x: 2, y: 41.5 },
+    },
+    bookOverlayTextLayout: {
+        title: { x: 7, y: 6.5 },
+        year: { x: 7, y: 15 },
+        format: { x: 30, y: 15 },
+        description: { x: 2, y: 24 },
+    },
+    bookHorizontalOverlayTextLayout: {
+        title: { x: 7, y: 11.2 },
+        year: { x: 7, y: 25.9 },
+        format: { x: 30, y: 25.9 },
+        description: { x: 2, y: 41.5 },
+    },
+    mangaOverlayTextLayout: {
+        title: { x: 7, y: 6.5 },
+        year: { x: 7, y: 15 },
+        format: { x: 30, y: 15 },
+        description: { x: 2, y: 24 },
+    },
+    mangaHorizontalOverlayTextLayout: {
         title: { x: 7, y: 11.2 },
         year: { x: 7, y: 25.9 },
         format: { x: 30, y: 25.9 },
@@ -177,108 +444,87 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         format: true,
         description: true,
     },
+    movieOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    movieHorizontalOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    seriesOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    seriesHorizontalOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    bookOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    bookHorizontalOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    mangaOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
+    mangaHorizontalOverlayTextVisibility: {
+        title: true,
+        year: true,
+        format: false,
+        description: true,
+    },
     overlayApplyToAllMedia: false,
-    badges: {
-        status: {
-            enabled: true,
-            position: 'bottom-right',
-            iconOnly: false,
-            x: 70,
-            y: 86,
-        },
-        rating: {
-            enabled: true,
-            position: 'bottom-right',
-            mode: 'emoji',
-            x: 88,
-            y: 86,
-        },
-        favorite: {
-            enabled: true,
-            position: 'top-right',
-            subtlePulse: false,
-            x: 90,
-            y: 10,
-        },
-    },
-    horizontalBadges: {
-        status: {
-            enabled: true,
-            position: 'bottom-right',
-            iconOnly: false,
-            x: 70,
-            y: 86,
-        },
-        rating: {
-            enabled: true,
-            position: 'bottom-right',
-            mode: 'emoji',
-            x: 88,
-            y: 86,
-        },
-        favorite: {
-            enabled: true,
-            position: 'top-right',
-            subtlePulse: false,
-            x: 90,
-            y: 10,
-        },
-    },
-    animeBadges: {
-        status: {
-            enabled: true,
-            position: 'bottom-right',
-            iconOnly: false,
-            x: 70,
-            y: 86,
-        },
-        rating: {
-            enabled: true,
-            position: 'bottom-right',
-            mode: 'emoji',
-            x: 88,
-            y: 86,
-        },
-        favorite: {
-            enabled: true,
-            position: 'top-right',
-            subtlePulse: false,
-            x: 90,
-            y: 10,
-        },
-    },
-    animeHorizontalBadges: {
-        status: {
-            enabled: true,
-            position: 'bottom-right',
-            iconOnly: false,
-            x: 70,
-            y: 86,
-        },
-        rating: {
-            enabled: true,
-            position: 'bottom-right',
-            mode: 'emoji',
-            x: 88,
-            y: 86,
-        },
-        favorite: {
-            enabled: true,
-            position: 'top-right',
-            subtlePulse: false,
-            x: 90,
-            y: 10,
-        },
-    },
+    badges: createDefaultBadges(),
+    horizontalBadges: createDefaultBadges(),
+    animeBadges: createDefaultBadges(),
+    animeHorizontalBadges: createDefaultBadges(),
+    movieBadges: createDefaultBadges(),
+    movieHorizontalBadges: createDefaultBadges(),
+    seriesBadges: createDefaultBadges(),
+    seriesHorizontalBadges: createDefaultBadges(),
+    bookBadges: createDefaultBadges(),
+    bookHorizontalBadges: createDefaultBadges(),
+    mangaBadges: createDefaultBadges(),
+    mangaHorizontalBadges: createDefaultBadges(),
     statusLabels: {
         games: {},
         anime: {},
+        movies: {},
+        series: {},
+        books: {},
+        manga: {},
     },
     tagPresets: {
         games: DEFAULT_GAME_TAG_PRESETS.map((preset) => ({ ...preset })),
     },
-    games: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Games' },
-    anime: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Anime' },
+    migrations: {
+        animeProgressCardStyle: false,
+    },
+    games: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Games', sortField: 'series' as const },
+    anime: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Anime', cardStyle: 'progress' },
+    movies: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Movies' },
+    series: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Series' },
+    books: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Books' },
+    manga: { ...DEFAULT_LIBRARY_SETTINGS, folderPath: 'Manga' },
     integrations: {
         enabled: true,
         imageStorage: {
@@ -288,9 +534,17 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         providers: {
             rawg: { enabled: true, apiKey: '' },
             steam: { enabled: true },
+            steamgriddb: { enabled: false, apiKey: '' },
             igdb: { enabled: false, apiKey: '', clientSecret: '' },
             anilist: { enabled: true },
             shikimori: { enabled: true },
+            tmdb: { enabled: false, apiKey: '' },
+            tvmaze: { enabled: true, apiKey: '' },
+            omdb: { enabled: false, apiKey: '' },
+            hardcover: { enabled: true, apiKey: '' },
+            googlebooks: { enabled: false, apiKey: '' },
+            jikan: { enabled: true },
+            mangadex: { enabled: true },
         },
         media: {
             games: {
@@ -308,6 +562,34 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
                 templateFields: [...DEFAULT_ANIME_TEMPLATE_FIELDS],
                 template: DEFAULT_ANIME_TEMPLATE,
             },
+            movies: {
+                provider: 'tmdb',
+                templateEnabled: true,
+                templateMode: 'simple',
+                templateFields: [...DEFAULT_MOVIE_TEMPLATE_FIELDS],
+                template: DEFAULT_MOVIE_TEMPLATE,
+            },
+            series: {
+                provider: 'tmdb',
+                templateEnabled: true,
+                templateMode: 'simple',
+                templateFields: [...DEFAULT_SERIES_TEMPLATE_FIELDS],
+                template: DEFAULT_SERIES_TEMPLATE,
+            },
+            books: {
+                provider: 'hardcover',
+                templateEnabled: true,
+                templateMode: 'simple',
+                templateFields: [...DEFAULT_BOOK_TEMPLATE_FIELDS],
+                template: DEFAULT_BOOK_TEMPLATE,
+            },
+            manga: {
+                provider: 'anilist',
+                templateEnabled: true,
+                templateMode: 'simple',
+                templateFields: [...DEFAULT_MANGA_TEMPLATE_FIELDS],
+                template: DEFAULT_MANGA_TEMPLATE,
+            },
         },
     },
     steamSync: {
@@ -318,7 +600,7 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         duplicateMode: 'skip',
         statusWithPlaytime: 'not_started',
         statusWithoutPlaytime: 'not_started',
-        statusWishlist: 'not_started',
+        statusWishlist: 'wishlist',
         fields: {
             playtime: true,
             genres: true,
@@ -342,6 +624,9 @@ export const STATUS_CONFIG: Record<MediaStatus, { pathD: string }> = {
     },
     sandbox: {
         pathD: 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z',
+    },
+    wishlist: {
+        pathD: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z',
     },
     not_started: {
         pathD: 'M12 2c5.52 0 10 4.48 10 10s-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z',
@@ -370,6 +655,7 @@ export const STATUS_ICON_MAP: Record<MediaStatus, string> = {
     not_started: 'circle',
     dropped: 'x',
     sandbox: 'hexagon',
+    wishlist: 'bookmark',
     planned: 'circle',
     watching: 'play',
     completed: 'check',
@@ -454,7 +740,6 @@ export const SERIES_COLORS = [
 /** Number of extra rows to render above/below viewport */
 export const VIRTUALIZATION_BUFFER = 3;
 
-/** Debounce delay for scroll events (ms) */
 /** Debounce delay for search input (ms) */
 export const SEARCH_DEBOUNCE_MS = 150;
 

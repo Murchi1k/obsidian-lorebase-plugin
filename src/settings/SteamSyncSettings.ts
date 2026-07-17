@@ -6,7 +6,8 @@ import type { SettingsSectionContext } from './sections/types';
 type SteamSyncTab = 'setup' | 'import' | 'sync';
 
 function label(context: SettingsSectionContext, key: string): string {
-    const ru = context.plugin.settings.language === 'ru';
+    const language = context.plugin.settings.language;
+    const ru = language === 'ru';
     const values: Record<string, [string, string]> = {
         title: ['Sync', 'Sync'],
         subtitle: ['Connect external libraries and keep LOREBASE data in sync.', 'Подключайте внешние библиотеки и синхронизируйте данные LOREBASE.'],
@@ -61,16 +62,67 @@ function label(context: SettingsSectionContext, key: string): string {
         runNow: ['Sync now', 'Синхронизировать сейчас'],
         how: ['How it works', 'Как это работает'],
     };
+    const ukValues: Record<string, string> = {
+        title: 'Sync',
+        subtitle: 'Підключайте зовнішні бібліотеки та синхронізуйте дані LOREBASE.',
+        steamSettings: 'Налаштування Steam',
+        setup: 'Налаштування',
+        import: 'Імпорт',
+        sync: 'Синхронізація',
+        connection: 'Підключення',
+        cors: 'Steam-запити проходять через проксі Obsidian. Бажане працює без API Key; імпорт бібліотеки може вимагати ключ навіть для публічних профілів.',
+        steamId: 'URL профілю Steam',
+        steamIdPlaceholder: 'https://steamcommunity.com/profiles/... або /id/name',
+        apiKey: 'API Key',
+        apiKeyPlaceholder: 'Steam Web API Key',
+        apiKeyHelp: 'Як отримати API Key',
+        apiKeyHelpText: 'Відкрийте сторінку Steam Web API, увійдіть в акаунт, введіть будь-який домен і скопіюйте створений ключ.',
+        apiKeyHelpOpen: 'Відкрити сторінку Steam API',
+        test: 'Перевірити підключення',
+        testOk: 'Підключення до Steam працює',
+        testFail: 'Не вдалося підключитися до Steam',
+        whatImport: 'Що імпортувати',
+        library: 'Бібліотека',
+        libraryDesc: 'Куплені та безкоштовні ігри',
+        wishlist: 'Бажане',
+        wishlistDesc: 'Ігри зі списку бажаного Steam',
+        duplicates: 'Дублікати',
+        skip: 'Пропускати існуючі',
+        update: 'Оновлювати дані',
+        ask: 'Запитувати',
+        steamData: 'Дані Steam',
+        steamDataDesc: 'Виберіть, які поля Steam записуються в нотатки.',
+        playtime: 'Playtime',
+        playtimeDesc: 'Хвилини з бібліотеки',
+        genres: 'Жанри',
+        genresDesc: 'Жанри зі Steam',
+        releaseDate: 'Дата релізу',
+        releaseDateDesc: 'Дата і рік',
+        autoSync: 'Автосинхронізація',
+        autoPlaytime: 'Синхронізувати playtime',
+        autoPlaytimeDesc: 'Оновлювати поле playtime в існуючих картках під час відкриття Obsidian',
+        runNow: 'Синхронізувати зараз',
+        how: 'Як це працює',
+    };
+    if (language === 'uk') return ukValues[key] ?? values[key]?.[0] ?? key;
     return values[key]?.[ru ? 1 : 0] ?? key;
 }
 
-export function renderSteamSyncSettings(context: SettingsSectionContext, container: HTMLElement): void {
+export function renderSteamSyncSettings(
+    context: SettingsSectionContext,
+    container: HTMLElement,
+    options: { embedded?: boolean } = {}
+): void {
     let activeTab: SteamSyncTab = 'setup';
 
-    createSyncSectionHeader(container, label(context, 'title'));
-    container.createDiv({ cls: 'lorebase-steam-sync-subtitle', text: label(context, 'subtitle') });
+    if (!options.embedded) {
+        createSyncSectionHeader(container, label(context, 'title'));
+        container.createDiv({ cls: 'lorebase-steam-sync-subtitle', text: label(context, 'subtitle') });
+    }
 
-    const root = container.createDiv({ cls: 'lorebase-steam-sync' });
+    const root = container.createDiv({
+        cls: `lorebase-steam-sync ${options.embedded ? 'is-embedded' : ''}`,
+    });
     const providerHeader = root.createDiv({ cls: 'lorebase-sync-provider-header' });
     const providerTitle = providerHeader.createDiv({ cls: 'lorebase-sync-provider-title' });
     const providerTitleIcon = providerTitle.createSpan({ cls: 'lorebase-sync-provider-title-icon' });

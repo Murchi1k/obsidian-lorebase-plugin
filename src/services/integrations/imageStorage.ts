@@ -15,6 +15,22 @@ const IMAGE_FIELDS: Record<MediaKind, Array<{ key: ImageValueKey; label: string 
         { key: 'image', label: 'Image' },
         { key: 'ImageHorizontal', label: 'Horizontal' },
     ],
+    movies: [
+        { key: 'Poster', label: 'Poster' },
+        { key: 'PosterHorizontal', label: 'Horizontal' },
+    ],
+    series: [
+        { key: 'Poster', label: 'Poster' },
+        { key: 'PosterHorizontal', label: 'Horizontal' },
+    ],
+    books: [
+        { key: 'Poster', label: 'Poster' },
+        { key: 'PosterHorizontal', label: 'Horizontal' },
+    ],
+    manga: [
+        { key: 'Poster', label: 'Poster' },
+        { key: 'PosterHorizontal', label: 'Horizontal' },
+    ],
 };
 
 const FRONTMATTER_IMAGE_FIELDS: Record<MediaKind, Array<{ key: string; label: string }>> = {
@@ -25,6 +41,22 @@ const FRONTMATTER_IMAGE_FIELDS: Record<MediaKind, Array<{ key: string; label: st
     anime: [
         { key: 'image', label: 'Image' },
         { key: 'image_b', label: 'Horizontal' },
+        { key: 'poster', label: 'Poster' },
+        { key: 'poster_b', label: 'Horizontal' },
+    ],
+    movies: [
+        { key: 'poster', label: 'Poster' },
+        { key: 'poster_b', label: 'Horizontal' },
+    ],
+    series: [
+        { key: 'poster', label: 'Poster' },
+        { key: 'poster_b', label: 'Horizontal' },
+    ],
+    books: [
+        { key: 'poster', label: 'Poster' },
+        { key: 'poster_b', label: 'Horizontal' },
+    ],
+    manga: [
         { key: 'poster', label: 'Poster' },
         { key: 'poster_b', label: 'Horizontal' },
     ],
@@ -45,9 +77,12 @@ export async function localizeTemplateImages(
     settings: IntegrationImageStorageSettings | undefined,
     template: string
 ): Promise<Record<string, unknown>> {
-    if (!settings?.enabled) return values;
+    const forceLocalMangaDex = kind === 'manga' && Object.values(values).some((value) => (
+        typeof value === 'string' && isMangaDexCoverUrl(value)
+    ));
+    if (!settings?.enabled && !forceLocalMangaDex) return values;
 
-    const baseFolder = normalizeVaultPath(settings.folderPath || 'files/lorebase/images');
+    const baseFolder = normalizeVaultPath(settings?.folderPath || 'files/lorebase/images');
     if (!baseFolder) return values;
 
     const nextValues = { ...values };
@@ -84,6 +119,24 @@ export async function localizeTemplateImages(
     return nextValues;
 }
 
+export async function saveManualImageFileToVault(
+    app: App,
+    file: File,
+    params: { baseFolder: string; kind: MediaKind; title: string; label: string }
+): Promise<string> {
+    const baseFolder = normalizeVaultPath(params.baseFolder || 'files/lorebase/images');
+    const folderPath = normalizeVaultPath(`${baseFolder}/${params.kind}`);
+    const titlePart = sanitizeFileName(params.title) || 'Untitled';
+    const labelPart = sanitizeFileName(params.label) || 'Image';
+    const extension = getFileImageExtension(file);
+    const filePath = normalizeVaultPath(`${folderPath}/${titlePart} - ${labelPart}.${extension}`);
+
+    await ensureFolder(app, folderPath);
+    await app.vault.adapter.writeBinary(filePath, await file.arrayBuffer());
+
+    return filePath;
+}
+
 export async function localizeExistingNoteImages(
     app: App,
     settings: LorebaseSettings
@@ -102,6 +155,10 @@ export async function localizeExistingNoteImages(
     const files = [
         ...getLibraryFiles(app, settings.games.folderPath, 'games'),
         ...getLibraryFiles(app, settings.anime.folderPath, 'anime'),
+        ...getLibraryFiles(app, settings.movies.folderPath, 'movies'),
+        ...getLibraryFiles(app, settings.series.folderPath, 'series'),
+        ...getLibraryFiles(app, settings.books.folderPath, 'books'),
+        ...getLibraryFiles(app, settings.manga.folderPath, 'manga'),
     ];
     const seen = new Set<string>();
 
@@ -223,6 +280,10 @@ function isRemoteImageUrl(value: string): boolean {
     return /^https?:\/\//i.test(value);
 }
 
+function isMangaDexCoverUrl(value: string): boolean {
+    return /^https:\/\/uploads\.mangadex\.org\/covers\//i.test(value);
+}
+
 function normalizeVaultPath(path: string): string {
     return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/{2,}/g, '/').trim();
 }
@@ -244,5 +305,19 @@ function getImageExtension(url: string, contentType?: string): string {
         // Fall back below.
     }
 
+    return 'jpg';
+}
+
+function getFileImageExtension(file: File): string {
+    const type = file.type.toLowerCase();
+    if (type.includes('png')) return 'png';
+    if (type.includes('webp')) return 'webp';
+    if (type.includes('gif')) return 'gif';
+    if (type.includes('jpeg') || type.includes('jpg')) return 'jpg';
+
+    const match = file.name.match(/\.([a-z0-9]+)$/i);
+    const ext = match?.[1]?.toLowerCase();
+    if (ext === 'jpeg') return 'jpg';
+    if (ext && ['jpg', 'png', 'webp', 'gif'].includes(ext)) return ext;
     return 'jpg';
 }

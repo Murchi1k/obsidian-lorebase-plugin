@@ -1,11 +1,18 @@
+import { requestUrl } from 'obsidian';
+
 /**
  * LOREBASE - Game Card Component
  * Matches original 2.0.txt card structure exactly
  */
 
-import { AnimeItem, GameItem, MediaItem, CardSize, CardOrientation, SortField, LorebaseSettings, BadgePosition, MediaStatus } from '../types';
+import { AnimeItem, BookItem, GameItem, MediaItem, CardSize, CardOrientation, CardStyle, SortField, LorebaseSettings, BadgePosition, MediaStatus, MangaItem, SeriesItem } from '../types';
 import { t, i18n } from '../localization';
 import { STATUS_CONFIG, RATING_EMOJI, CARD_SIZES, DEFAULT_COVER, DEFAULT_SETTINGS, HORIZONTAL_CARD_SIZES } from '../constants';
+import {
+    getSteamAppIdFromImageUrl,
+    getSteamHorizontalImageCandidates,
+    getSteamVerticalImageCandidates
+} from '../services/integrations/steamImages';
 
 // =============================================================================
 // CARD CALLBACKS
@@ -39,6 +46,7 @@ export class GameCard {
     private callbacks: CardCallbacks;
     private cardSize: CardSize;
     private orientation: CardOrientation;
+    private cardStyle: CardStyle;
     private sortField: SortField;
     private badges: LorebaseSettings['badges'];
     private overlayTextLayout: LorebaseSettings['overlayTextLayout'];
@@ -48,6 +56,7 @@ export class GameCard {
     private animeProgressVisibility: AnimeProgressVisibility;
     private statusLabels: Partial<Record<MediaStatus, string>>;
     private abortController: AbortController;
+    private objectUrls: string[] = [];
 
     // Cached SVG template elements for cloneNode
     private static svgTemplateCache = new Map<string, HTMLElement>();
@@ -58,6 +67,7 @@ export class GameCard {
         callbacks: CardCallbacks,
         cardSize: CardSize = 'medium',
         orientation: CardOrientation = 'vertical',
+        cardStyle: CardStyle = 'hover',
         sortField: SortField = 'name',
         badges: LorebaseSettings['badges'] = {
             status: { enabled: true, position: 'bottom-right', iconOnly: false, x: 70, y: 86 },
@@ -85,6 +95,7 @@ export class GameCard {
         this.callbacks = callbacks;
         this.cardSize = cardSize;
         this.orientation = orientation;
+        this.cardStyle = cardStyle;
         this.sortField = sortField;
         this.badges = badges;
         this.overlayTextLayout = overlayTextLayout;
@@ -103,8 +114,13 @@ export class GameCard {
 
     private render(): void {
         const isHorizontal = this.orientation === 'horizontal';
+        const isProgressStyle = this.isProgressStyle();
         this.container.toggleClass('is-adult', this.game.isAdult);
         this.container.toggleClass('is-anime', this.game.type === 'anime');
+        this.container.toggleClass('is-series', this.game.type === 'series');
+        this.container.toggleClass('is-book', this.game.type === 'book');
+        this.container.toggleClass('is-manga', this.game.type === 'manga');
+        this.container.toggleClass('lorebase-card-progress-style', isProgressStyle);
         this.container.toggleClass(
             'lorebase-card-favorite-pulse',
             this.badges.favorite.enabled && this.badges.favorite.subtlePulse && this.game.favorite
@@ -161,32 +177,53 @@ export class GameCard {
             ? this.game.horizontalImageUrl
             : (this.game.imageUrl || DEFAULT_COVER);
         if (imgSrc) {
+            const imageCandidates = this.getImageCandidates(imgSrc, isHorizontal);
+            let imageCandidateIndex = 0;
             const img = imageWrapper.createEl('img', {
                 attr: {
-                    src: imgSrc,
+                    src: '',
                     alt: this.game.displayName,
                     loading: 'lazy'
                 }
             });
 
+            const loadCandidate = (): void => {
+                const next = imageCandidates[imageCandidateIndex];
+                if (!next) {
+                    if (isHorizontal) {
+                        img.remove();
+                        return;
+                    }
+                    if (img.src !== DEFAULT_COVER) img.src = DEFAULT_COVER;
+                    return;
+                }
+
+                if (this.isMangaDexImage(next)) {
+                    void this.setMangaDexImageSource(img, next, () => {
+                        imageCandidateIndex++;
+                        loadCandidate();
+                    });
+                    return;
+                }
+
+                img.src = next;
+            };
+
             img.addEventListener('error', () => {
-                if (isHorizontal) {
-                    img.remove();
-                    return;
-                }
-                if (this.game.horizontalImageUrl && img.src !== this.game.horizontalImageUrl) {
-                    img.src = this.game.horizontalImageUrl;
-                    return;
-                }
-                if (img.src !== DEFAULT_COVER) {
-                    img.src = DEFAULT_COVER;
-                }
+                imageCandidateIndex++;
+                loadCandidate();
             });
+            loadCandidate();
         }
 
-        this.renderOverlay(imageContainer);
-        this.renderProgressBadge(imageContainer);
+        if (!isProgressStyle) {
+            this.renderOverlay(imageContainer);
+            this.renderProgressBadge(imageContainer);
+        }
         this.renderBadges(imageContainer);
+        if (isProgressStyle) {
+            this.renderProgressFooter();
+        }
 
         const signal = this.abortController.signal;
 
@@ -200,6 +237,55 @@ export class GameCard {
             e.stopPropagation();
             this.callbacks.onContextMenu(this.game, e.clientX, e.clientY);
         }, { signal });
+    }
+
+    private getImageCandidates(primary: string, isHorizontal: boolean): string[] {
+        const appId = getSteamAppIdFromImageUrl(primary)
+            || getSteamAppIdFromImageUrl(this.game.imageUrl || '')
+            || getSteamAppIdFromImageUrl(this.game.horizontalImageUrl || '');
+
+        if (appId) {
+            const candidates = isHorizontal
+                ? getSteamHorizontalImageCandidates(appId, primary)
+                : getSteamVerticalImageCandidates(appId, primary);
+            return Array.from(new Set([primary, ...candidates].filter(Boolean)));
+        }
+
+        const mangaDexCandidates = this.getMangaDexImageCandidates(primary);
+        if (mangaDexCandidates.length) {
+            return mangaDexCandidates;
+        }
+
+        return [primary].filter(Boolean);
+    }
+
+    private getMangaDexImageCandidates(primary: string): string[] {
+        if (!this.isMangaDexImage(primary)) return [];
+        const base = primary
+            .replace(/\.512\.jpg$/i, '')
+            .replace(/\.256\.jpg$/i, '');
+        return Array.from(new Set([
+            primary,
+            `${base}.512.jpg`,
+            `${base}.256.jpg`,
+            base,
+        ].filter(Boolean)));
+    }
+
+    private async setMangaDexImageSource(img: HTMLImageElement, url: string, onError: () => void): Promise<void> {
+        try {
+            const response = await requestUrl({ url, method: 'GET' });
+            const type = response.headers?.['content-type'] || 'image/jpeg';
+            const objectUrl = URL.createObjectURL(new Blob([response.arrayBuffer], { type }));
+            this.objectUrls.push(objectUrl);
+            img.src = objectUrl;
+        } catch {
+            onError();
+        }
+    }
+
+    private isMangaDexImage(url: string): boolean {
+        return url.includes('uploads.mangadex.org/covers/');
     }
 
     private renderOverlay(parent: HTMLElement): void {
@@ -253,9 +339,9 @@ export class GameCard {
     }
 
     private renderProgressBadge(parent: HTMLElement): void {
-        if (!this.isAnime(this.game)) return;
+        if (!this.isProgressMedia(this.game)) return;
         if (!this.animeProgressVisibility.showSeason && !this.animeProgressVisibility.showEpisode) return;
-        const progress = this.getAnimeProgressTexts(this.game);
+        const progress = this.getProgressTexts(this.game);
         if (!progress) return;
 
         const badge = parent.createDiv({ cls: 'lorebase-card-metacritic' });
@@ -271,6 +357,25 @@ export class GameCard {
         if (this.animeProgressVisibility.showEpisode && progress.ep) {
             badge.createSpan({ cls: 'lorebase-card-progress-ep', text: progress.ep });
         }
+    }
+
+    private renderProgressFooter(): void {
+        if (!this.isProgressMedia(this.game)) return;
+        const footer = this.container.createDiv({ cls: 'lorebase-card-progress-footer' });
+
+        const progress = this.getProgressTexts(this.game);
+        const metaParts = [progress?.season, progress?.ep].filter((value): value is string => Boolean(value));
+
+        const header = footer.createDiv({ cls: 'lorebase-card-progress-header' });
+        header.createDiv({ cls: 'lorebase-card-progress-title', text: this.game.displayName });
+        if (metaParts.length) {
+            header.createSpan({ cls: 'lorebase-card-progress-meta', text: metaParts.join(' \u00B7  ') });
+        }
+
+        const row = footer.createDiv({ cls: 'lorebase-card-progress-row' });
+        const track = row.createDiv({ cls: 'lorebase-card-progress-track' });
+        const fill = track.createDiv({ cls: 'lorebase-card-progress-fill' });
+        fill.setCssStyles({ width: `${this.getProgressPercent(this.game)}%` });
     }
 
     private renderBadges(parent: HTMLElement): void {
@@ -302,18 +407,27 @@ export class GameCard {
 
     private renderStatusBadge(parent: HTMLElement): void {
         const config = STATUS_CONFIG[this.game.status];
+        const isReadingMedia = this.game.type === 'book' || this.game.type === 'manga';
         const statusLabels: Record<string, string> = {
-            completed: this.isAnime(this.game) ? t('statusCompleted') : t('statusPlayed'),
+            completed: this.game.type === 'game' ? t('statusPlayed') : t('statusCompleted'),
             playing: t('statusPlaying'),
             dropped: t('statusDropped'),
             sandbox: t('statusSandbox'),
+            wishlist: t('statusWishlist'),
             not_started: t('statusNotStarted'),
-            planned: t('statusPlanned'),
-            watching: t('statusWatching'),
+            planned: isReadingMedia ? t('statusPlanToRead') : t('statusPlanned'),
+            watching: isReadingMedia ? t('statusReading') : t('statusWatching'),
             paused: t('statusPaused'),
         };
 
-        let statusText = this.statusLabels[this.game.status]?.trim() || statusLabels[this.game.status] || String(this.game.status);
+        const overrideStatusText = this.statusLabels[this.game.status]?.trim();
+        const isLegacyGameCompletedLabel = this.game.type !== 'game'
+            && this.game.status === 'completed'
+            && overrideStatusText === t('statusPlayed')
+            && t('statusPlayed') !== t('statusCompleted');
+        let statusText = !isLegacyGameCompletedLabel && overrideStatusText
+            ? overrideStatusText
+            : statusLabels[this.game.status] || String(this.game.status);
         if (!this.badges.status.iconOnly && this.shouldShowCompletionDate()) {
             const game = this.game as GameItem;
             const formatted = this.formatCompletionDate(game.dateCompleted);
@@ -462,6 +576,42 @@ export class GameCard {
         return Math.max(1, Math.min(70, Math.round(value)));
     }
 
+    private isProgressStyle(): boolean {
+        return this.cardStyle === 'progress'
+            && this.orientation === 'vertical'
+            && this.isProgressMedia(this.game);
+    }
+
+    private getProgressPercent(item: AnimeItem | SeriesItem | BookItem | MangaItem): number {
+        if (this.isBook(item)) {
+            const pagePercent = this.progressPercent(item.pageCurrent, item.pageTotal);
+            if (pagePercent > 0) return pagePercent;
+            return this.progressPercent(item.chapterCurrent, item.chapterTotal);
+        }
+        if (this.isManga(item)) {
+            const activePart = item.parts?.find((part) => part.id === item.activePartId) ?? item.parts?.[0] ?? null;
+            return this.progressPercent(
+                activePart?.chapterCurrent ?? item.chapterCurrent,
+                activePart?.chapterTotal ?? item.chapterTotal
+            );
+        }
+        const activePart = item.parts?.find((part) => part.id === item.activePartId) ?? item.parts?.[0] ?? null;
+        const current = this.isAnime(item)
+            ? activePart?.episodeCurrent ?? item.episodeCurrent
+            : activePart?.episodeCurrent ?? item.episodeCurrent;
+        const total = this.isAnime(item)
+            ? activePart?.episodeTotal ?? item.episodeTotal
+            : activePart?.episodeTotal ?? item.episodeTotal;
+        return this.progressPercent(current, total);
+    }
+
+    private progressPercent(current: number | null | undefined, total: number | null | undefined): number {
+        const normalizedCurrent = Number.isFinite(current) ? Math.max(0, Math.trunc(current as number)) : 0;
+        const normalizedTotal = Number.isFinite(total) ? Math.max(0, Math.trunc(total as number)) : 0;
+        if (normalizedTotal <= 0) return 0;
+        return Math.max(0, Math.min(100, Math.round((normalizedCurrent / normalizedTotal) * 1000) / 10));
+    }
+
     private parseCssPixels(value: string, fallback: number): number {
         const parsed = Number.parseInt(value, 10);
         if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -512,8 +662,94 @@ export class GameCard {
         return { ep: epText, season: seasonText };
     }
 
+    private getProgressTexts(item: AnimeItem | SeriesItem | BookItem | MangaItem): { ep: string | null; season: string | null } | null {
+        if (this.isAnime(item)) return this.getAnimeProgressTexts(item);
+        if (this.isBook(item)) {
+            const pageCurrent = Number.isFinite(item.pageCurrent) ? Math.trunc(item.pageCurrent as number) : null;
+            const pageTotal = Number.isFinite(item.pageTotal) ? Math.trunc(item.pageTotal as number) : null;
+            const chapterCurrent = Number.isFinite(item.chapterCurrent) ? Math.trunc(item.chapterCurrent as number) : null;
+            const chapterTotal = Number.isFinite(item.chapterTotal) ? Math.trunc(item.chapterTotal as number) : null;
+            const pageText = pageCurrent !== null || pageTotal !== null
+                ? `Pg ${pageCurrent !== null ? pageCurrent : '?'}/${pageTotal !== null ? pageTotal : '?'}`
+                : null;
+            const chapterText = chapterCurrent !== null || chapterTotal !== null
+                ? `Ch. ${chapterCurrent !== null ? chapterCurrent : '?'}/${chapterTotal !== null ? chapterTotal : '?'}`
+                : null;
+            if (!pageText && !chapterText) return null;
+            return {
+                season: pageText,
+                ep: chapterText,
+            };
+        }
+        if (this.isManga(item)) {
+            const activePart = item.parts?.find((part) => part.id === item.activePartId) ?? item.parts?.[0] ?? null;
+            const chapterCurrent = Number.isFinite(activePart?.chapterCurrent ?? item.chapterCurrent)
+                ? Math.trunc((activePart?.chapterCurrent ?? item.chapterCurrent) as number)
+                : null;
+            const chapterTotal = Number.isFinite(activePart?.chapterTotal ?? item.chapterTotal)
+                ? Math.trunc((activePart?.chapterTotal ?? item.chapterTotal) as number)
+                : null;
+            const volumeCurrent = Number.isFinite(activePart?.volumeNumber ?? item.volumeCurrent)
+                ? Math.trunc((activePart?.volumeNumber ?? item.volumeCurrent) as number)
+                : null;
+            const volumeTotal = Number.isFinite(item.volumeTotal) ? Math.trunc(item.volumeTotal as number) : null;
+            if (chapterCurrent === null && chapterTotal === null && volumeCurrent === null && volumeTotal === null) return null;
+            return {
+                season: volumeCurrent !== null || volumeTotal !== null
+                    ? `Vol. ${volumeCurrent !== null ? volumeCurrent : '?'}/${volumeTotal !== null ? volumeTotal : '?'}`
+                    : null,
+                ep: chapterCurrent !== null || chapterTotal !== null
+                    ? `Ch. ${chapterCurrent !== null ? chapterCurrent : '?'}/${chapterTotal !== null ? chapterTotal : '?'}`
+                    : null,
+            };
+        }
+
+        const activePart = item.parts?.find((part) => part.id === item.activePartId) ?? item.parts?.[0] ?? null;
+        const season = Number.isFinite(activePart?.seasonNumber)
+            ? Math.trunc(activePart?.seasonNumber as number)
+            : null;
+        const seasonTotal = Number.isFinite(item.seasons) ? Math.trunc(item.seasons as number) : null;
+        const epCurrent = Number.isFinite(activePart?.episodeCurrent ?? item.episodeCurrent)
+            ? Math.trunc((activePart?.episodeCurrent ?? item.episodeCurrent) as number)
+            : null;
+        const epTotal = Number.isFinite(activePart?.episodeTotal ?? item.episodeTotal)
+            ? Math.trunc((activePart?.episodeTotal ?? item.episodeTotal) as number)
+            : null;
+
+        if (season === null && seasonTotal === null && epCurrent === null && epTotal === null) return null;
+
+        let seasonText: string | null = null;
+        if (season !== null && seasonTotal !== null) {
+            seasonText = `S ${season}/${seasonTotal}`;
+        } else if (season !== null) {
+            seasonText = `S ${season}`;
+        } else if (seasonTotal !== null) {
+            seasonText = `S ?/${seasonTotal}`;
+        }
+        const epText = epCurrent !== null || epTotal !== null
+            ? `EP ${epCurrent !== null ? epCurrent : '?'}/${epTotal !== null ? epTotal : '?'}`
+            : null;
+        return { ep: epText, season: seasonText };
+    }
+
     private isAnime(item: MediaItem): item is AnimeItem {
         return item.type === 'anime';
+    }
+
+    private isSeries(item: MediaItem): item is SeriesItem {
+        return item.type === 'series';
+    }
+
+    private isBook(item: MediaItem): item is BookItem {
+        return item.type === 'book';
+    }
+
+    private isManga(item: MediaItem): item is MangaItem {
+        return item.type === 'manga';
+    }
+
+    private isProgressMedia(item: MediaItem): item is AnimeItem | SeriesItem | BookItem | MangaItem {
+        return this.isAnime(item) || this.isSeries(item) || this.isBook(item) || this.isManga(item);
     }
 
     private getAnimeFormatLabel(format: AnimeItem['format']): string {
@@ -552,6 +788,8 @@ export class GameCard {
 
     destroy(): void {
         this.abortController.abort();
+        for (const url of this.objectUrls) URL.revokeObjectURL(url);
+        this.objectUrls = [];
         if (this.container && this.container.parentElement) {
             this.container.remove();
         }

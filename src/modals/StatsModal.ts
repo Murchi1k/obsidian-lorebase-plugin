@@ -4,7 +4,7 @@
  */
 
 import { Modal, App } from 'obsidian';
-import { GameStats, AnimeStats, MediaType } from '../types';
+import { GameStats, AnimeStats, MediaType, VideoStats, ReadingStats } from '../types';
 import { t } from '../localization';
 import { RATING_CONFIG } from '../constants';
 
@@ -16,10 +16,10 @@ import { RATING_CONFIG } from '../constants';
  * Modal for displaying collection statistics
  */
 export class StatsModal extends Modal {
-    private stats: GameStats | AnimeStats;
+    private stats: GameStats | AnimeStats | VideoStats | ReadingStats;
     private mediaType: MediaType;
 
-    constructor(app: App, stats: GameStats | AnimeStats, mediaType: MediaType) {
+    constructor(app: App, stats: GameStats | AnimeStats | VideoStats | ReadingStats, mediaType: MediaType) {
         super(app);
         this.stats = stats;
         this.mediaType = mediaType;
@@ -34,7 +34,7 @@ export class StatsModal extends Modal {
         // Header
         const header = contentEl.createDiv({ cls: 'lorebase-stats-header lorebase-modal-header' });
         header.createEl('span', {
-            text: this.mediaType === 'anime' ? '\u{1F4FA}' : '\u{1F4CA}',
+            text: this.getMediaIcon(),
             cls: 'lorebase-stats-icon'
         });
         header.createEl('h2', { text: t('statsTitle'), cls: 'lorebase-stats-title' });
@@ -68,12 +68,12 @@ export class StatsModal extends Modal {
      */
     private renderMainStats(container: HTMLElement): void {
         const grid = container.createDiv({ cls: 'lorebase-stats-main-grid' });
-        const isAnime = this.mediaType === 'anime';
+        const isWatchMedia = this.mediaType !== 'game';
         const stats = this.stats as (GameStats & AnimeStats);
 
         // Total
         this.createStatCard(grid, {
-            icon: isAnime ? '\u{1F4FA}' : '\u{1F3AE}',
+            icon: this.getMediaIcon(),
             label: t('statsTotal'),
             value: stats.total,
             color: 'blue'
@@ -82,9 +82,9 @@ export class StatsModal extends Modal {
         // Completed / Watched
         this.createStatCard(grid, {
             icon: '\u{2705}',
-            label: isAnime ? t('statusCompleted') : t('statsCompleted'),
-            value: isAnime ? stats.completed : (stats as GameStats).completed,
-            percent: isAnime
+            label: isWatchMedia ? t('statusCompleted') : t('statsCompleted'),
+            value: isWatchMedia ? stats.completed : (stats as GameStats).completed,
+            percent: isWatchMedia
                 ? (stats.statusPercentages.completed || 0)
                 : ((stats as GameStats).statusPercentages.completed || 0),
             color: 'green'
@@ -143,7 +143,7 @@ export class StatsModal extends Modal {
      */
     private renderStatusDistribution(container: HTMLElement): void {
         const section = container.createDiv({ cls: 'lorebase-stats-section' });
-        const isAnime = this.mediaType === 'anime';
+        const isWatchMedia = this.mediaType !== 'game';
 
         const title = section.createDiv({ cls: 'lorebase-stats-section-title' });
         title.createEl('span', { text: '\u{1F4C8}' });
@@ -151,10 +151,11 @@ export class StatsModal extends Modal {
 
         const grid = section.createDiv({ cls: 'lorebase-stats-status-grid' });
 
-        const statusData = isAnime
+        const isReadingMedia = this.mediaType === 'book' || this.mediaType === 'manga';
+        const statusData = isWatchMedia
             ? [
-                { key: 'planned', icon: '\u{1F5D3}\u{FE0F}', label: t('statusPlanned'), value: (this.stats as AnimeStats).planned, color: '#9e9e9e' },
-                { key: 'watching', icon: '\u{1F440}', label: t('statusWatching'), value: (this.stats as AnimeStats).watching, color: '#2196f3' },
+                { key: 'planned', icon: '\u{1F5D3}\u{FE0F}', label: isReadingMedia ? t('statusPlanToRead') : t('statusPlanned'), value: (this.stats as AnimeStats).planned, color: '#9e9e9e' },
+                { key: 'watching', icon: '\u{1F440}', label: isReadingMedia ? t('statusReading') : t('statusWatching'), value: (this.stats as AnimeStats).watching, color: '#2196f3' },
                 { key: 'completed', icon: '\u{2705}', label: t('statusCompleted'), value: (this.stats as AnimeStats).completed, color: '#4caf50' },
                 { key: 'dropped', icon: '\u{1F494}', label: t('statusDropped'), value: (this.stats as AnimeStats).dropped, color: '#ff9800' },
                 { key: 'paused', icon: '\u{23F8}\u{FE0F}', label: t('statusPaused'), value: (this.stats as AnimeStats).paused, color: '#ffeb3b' },
@@ -163,6 +164,7 @@ export class StatsModal extends Modal {
                 { key: 'completed', icon: '\u{2705}', label: t('statusPlayed'), value: (this.stats as GameStats).completed, color: '#4caf50' },
                 { key: 'playing', icon: '\u{1F3AE}', label: t('statusPlaying'), value: (this.stats as GameStats).playing, color: '#2196f3' },
                 { key: 'dropped', icon: '\u{1F6AB}', label: t('statusDropped'), value: (this.stats as GameStats).dropped, color: '#ff9800' },
+                { key: 'wishlist', icon: '\u{1F516}', label: t('statusWishlist'), value: (this.stats as GameStats).wishlist, color: '#ff6fb1' },
                 { key: 'sandbox', icon: '\u{1F9E9}', label: t('statusSandbox'), value: (this.stats as GameStats).sandbox, color: '#ffeb3b' },
                 { key: 'notStarted', icon: '\u{23F8}\u{FE0F}', label: t('statusNotStarted'), value: (this.stats as GameStats).notStarted, color: '#9e9e9e' },
             ];
@@ -256,5 +258,13 @@ export class StatsModal extends Modal {
             card.createDiv({ cls: 'lorebase-stats-extra-label', text: data.label });
             card.createDiv({ cls: 'lorebase-stats-extra-value', text: String(data.value) });
         }
+    }
+
+    private getMediaIcon(): string {
+        if (this.mediaType === 'game') return '\u{1F3AE}';
+        if (this.mediaType === 'movie') return '\u{1F3AC}';
+        if (this.mediaType === 'book') return '\u{1F4D6}';
+        if (this.mediaType === 'manga') return '\u{1F4DA}';
+        return '\u{1F4FA}';
     }
 }

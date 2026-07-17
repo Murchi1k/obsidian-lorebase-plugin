@@ -5,8 +5,9 @@
 
 import { App, Menu, Modal, TFile, setIcon } from 'obsidian';
 import { GameItem, GameStatus, TagPreset, UserRating } from '../types';
-import { STATUS_CONFIG } from '../constants';
+import { DEFAULT_GAME_TAG_PRESETS, STATUS_CONFIG } from '../constants';
 import { i18n, t } from '../localization';
+import { GenreEditModal } from './GenreEditModal';
 
 /**
  * Modal for editing game properties
@@ -214,6 +215,10 @@ export class EditModal extends Modal {
                                     <button type="button" class="lorebase-editmode-segment" data-status="dropped">
                                         <span class="lorebase-editmode-segment-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${STATUS_CONFIG.dropped.pathD}" /></svg></span>
                                         <span class="lorebase-editmode-segment-label">${t('statusDropped')}</span>
+                                    </button>
+                                    <button type="button" class="lorebase-editmode-segment" data-status="wishlist">
+                                        <span class="lorebase-editmode-segment-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${STATUS_CONFIG.wishlist.pathD}" /></svg></span>
+                                        <span class="lorebase-editmode-segment-label">${t('statusWishlist')}</span>
                                     </button>
                                     <button type="button" class="lorebase-editmode-segment" data-status="sandbox">
                                         <span class="lorebase-editmode-segment-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${STATUS_CONFIG.sandbox.pathD}" /></svg></span>
@@ -749,6 +754,17 @@ export class EditModal extends Modal {
                 this.renderGenreChips(root);
             });
         });
+        const add = container.createEl('button', {
+            cls: 'lorebase-editmode-chip lorebase-editmode-chip-add is-action',
+            text: '+',
+            attr: { type: 'button', 'aria-label': t('templateFieldGenres') },
+        });
+        add.addEventListener('click', () => {
+            new GenreEditModal(this.app, this.genres, (values) => {
+                this.genres = this.normalizeGenres(values);
+                this.renderGenreChips(root);
+            }).open();
+        });
     }
 
     private createRemovableChip(container: HTMLElement, label: string, onRemove: () => void): void {
@@ -767,7 +783,10 @@ export class EditModal extends Modal {
             'wait-early-access': t('planWaitEarlyAccess'),
             'next-playthrough': t('planNextInQueue'),
         };
-        return labels[preset.id] ?? preset.label;
+        const defaultPreset = DEFAULT_GAME_TAG_PRESETS.find((entry) => entry.id === preset.id);
+        return defaultPreset && preset.label === defaultPreset.label
+            ? labels[preset.id] ?? preset.label
+            : preset.label;
     }
 
     private updateQuickSettingSwitches(root: HTMLElement): void {

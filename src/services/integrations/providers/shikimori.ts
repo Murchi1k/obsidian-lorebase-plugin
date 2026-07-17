@@ -1,10 +1,11 @@
 import type { AnimeFormat } from '../../../types';
-import { AnimeDetails, IntegrationAnimePart, SearchResult } from '../types';
+import { AnimeDetails, IntegrationAnimePart, IntegrationMangaPart, MangaDetails, SearchResult } from '../types';
 import { JsonFetcher, asArray, asObject, getArray, getObject, getString, mapAnimeFormat, mapStringList, stripHtml, toStringSafe } from './common';
 
-const SHIKIMORI_PRIMARY_BASE_URL = 'https://shikimori.io';
+const SHIKIMORI_PRIMARY_BASE_URL = 'https://shikimori.net';
+const SHIKIMORI_LEGACY_IO_BASE_URL = 'https://shikimori.io';
 const SHIKIMORI_LEGACY_BASE_URL = 'https://shikimori.one';
-const SHIKIMORI_BASE_URLS = [SHIKIMORI_PRIMARY_BASE_URL, SHIKIMORI_LEGACY_BASE_URL];
+const SHIKIMORI_BASE_URLS = [SHIKIMORI_PRIMARY_BASE_URL, SHIKIMORI_LEGACY_IO_BASE_URL, SHIKIMORI_LEGACY_BASE_URL];
 const SHIKIMORI_HEADERS = {
     'Accept': 'application/json',
     'User-Agent': 'LOREBASE/1.0 (Obsidian plugin; metadata search)',
@@ -14,24 +15,45 @@ const SHIKIMORI_GRAPHQL_HEADERS = {
     'Content-Type': 'application/json',
 };
 
-export async function searchShikimori(fetchJson: JsonFetcher, query: string): Promise<SearchResult[]> {
-    const graphqlResults = await searchShikimoriGraphql(fetchJson, query);
+interface SearchPageOptions {
+    page?: number;
+    pageSize?: number;
+}
+
+function withHasNext<T>(items: T[], hasNext: boolean): T[] {
+    Object.defineProperty(items, 'hasNext', {
+        value: hasNext,
+        enumerable: false,
+        configurable: true,
+    });
+    return items;
+}
+
+export async function searchShikimori(
+    fetchJson: JsonFetcher,
+    query: string,
+    options: SearchPageOptions = {}
+): Promise<SearchResult[]> {
+    const page = Math.max(1, options.page ?? 1);
+    const pageSize = Math.max(1, options.pageSize ?? 10);
+    const graphqlResults = await searchShikimoriGraphql(fetchJson, query, page, pageSize);
     if (graphqlResults.length) return graphqlResults;
 
     for (const baseUrl of SHIKIMORI_BASE_URLS) {
         const url = new URL(`${baseUrl}/api/animes`);
         url.searchParams.set('search', query);
-        url.searchParams.set('limit', '20');
+        url.searchParams.set('limit', String(pageSize));
+        url.searchParams.set('page', String(page));
 
         const json = await fetchJson(url.toString(), SHIKIMORI_HEADERS);
         const results = asArray(json);
         if (results.length) {
-            return results
+            const mapped = results
                 .map((item) => mapShikimoriSearchResult(asObject(item), query))
                 .filter((item): item is SearchResult & { sortScore: number } => Boolean(item?.id))
                 .sort((a, b) => b.sortScore - a.sortScore)
-                .slice(0, 10)
                 .map(({ sortScore, ...item }) => item);
+            return withHasNext(mapped, results.length >= pageSize);
         }
     }
 
@@ -58,8 +80,9 @@ export async function getShikimoriDetails(fetchJson: JsonFetcher, id: string): P
         const parts = await getShikimoriRelatedParts(fetchJson, id, item);
 
         return {
+            kind: 'anime',
             name: getString(item, 'russian') || getString(item, 'name') || 'Unknown',
-            description: stripHtml(getString(item, 'description')),
+            description: cleanShikimoriDescription(getString(item, 'description')),
             image,
             imageHorizontal: image,
             tags,
@@ -75,9 +98,73 @@ export async function getShikimoriDetails(fetchJson: JsonFetcher, id: string): P
     return null;
 }
 
-async function searchShikimoriGraphql(fetchJson: JsonFetcher, query: string): Promise<SearchResult[]> {
-    const gql = `query ($search: String!, $limit: Int!) {
-  animes(search: $search, limit: $limit) {
+export async function searchShikimoriManga(
+    fetchJson: JsonFetcher,
+    query: string,
+    options: SearchPageOptions = {}
+): Promise<SearchResult[]> {
+    const page = Math.max(1, options.page ?? 1);
+    const pageSize = Math.max(1, options.pageSize ?? 10);
+
+    for (const baseUrl of SHIKIMORI_BASE_URLS) {
+        const url = new URL(`${baseUrl}/api/mangas`);
+        url.searchParams.set('search', query);
+        url.searchParams.set('limit', String(pageSize));
+        url.searchParams.set('page', String(page));
+
+        const json = await fetchJson(url.toString(), SHIKIMORI_HEADERS);
+        const results = asArray(json);
+        if (results.length) {
+            const mapped = results
+                .map((item) => mapShikimoriSearchResult(asObject(item), query, 'manga'))
+                .filter((item): item is SearchResult & { sortScore: number } => Boolean(item?.id))
+                .sort((a, b) => b.sortScore - a.sortScore)
+                .map(({ sortScore, ...item }) => item);
+            return withHasNext(mapped, results.length >= pageSize);
+        }
+    }
+
+    return [];
+}
+
+export async function getShikimoriMangaDetails(fetchJson: JsonFetcher, id: string): Promise<MangaDetails | null> {
+    for (const baseUrl of SHIKIMORI_BASE_URLS) {
+        const url = new URL(`${baseUrl}/api/mangas/${id}`);
+        const item = asObject(await fetchJson(url.toString(), SHIKIMORI_HEADERS));
+        if (!item) continue;
+
+        const genres = mapStringList(
+            getArray(item, 'genres'),
+            (entry) => getString(asObject(entry), 'russian') || getString(asObject(entry), 'name')
+        );
+        const image = getBestImage(getObject(item, 'image'));
+        const chapters = getNumber(item, 'chapters');
+        const volumes = getNumber(item, 'volumes');
+
+        return {
+            kind: 'manga',
+            name: getString(item, 'russian') || getString(item, 'name') || 'Unknown',
+            description: cleanShikimoriDescription(getString(item, 'description')),
+            poster: image,
+            posterHorizontal: image,
+            authors: [],
+            artists: [],
+            genres,
+            year: getShikimoriYear(item),
+            chapters: chapters ? String(chapters) : '',
+            volumes: volumes ? String(volumes) : '',
+            rating: toStringSafe(item.score),
+            url: `${SHIKIMORI_PRIMARY_BASE_URL}/mangas/${id}`,
+            parts: buildShikimoriMangaParts(volumes, chapters),
+        };
+    }
+
+    return null;
+}
+
+async function searchShikimoriGraphql(fetchJson: JsonFetcher, query: string, page: number, pageSize: number): Promise<SearchResult[]> {
+    const gql = `query ($search: String!, $limit: Int!, $page: Int!) {
+  animes(search: $search, limit: $limit, page: $page) {
     id
     name
     russian
@@ -102,7 +189,7 @@ async function searchShikimoriGraphql(fetchJson: JsonFetcher, query: string): Pr
             'POST',
             JSON.stringify({
                 query: gql,
-                variables: { search: query, limit: 20 },
+                variables: { search: query, limit: pageSize, page },
             })
         );
 
@@ -110,12 +197,12 @@ async function searchShikimoriGraphql(fetchJson: JsonFetcher, query: string): Pr
         const data = getObject(root, 'data');
         const results = getArray(data, 'animes');
         if (results.length) {
-            return results
+            const mapped = results
                 .map((item) => mapShikimoriSearchResult(asObject(item), query))
                 .filter((item): item is SearchResult & { sortScore: number } => Boolean(item?.id))
                 .sort((a, b) => b.sortScore - a.sortScore)
-                .slice(0, 10)
                 .map(({ sortScore, ...item }) => item);
+            return withHasNext(mapped, results.length >= pageSize);
         }
     }
 
@@ -179,8 +266,9 @@ async function getShikimoriDetailsGraphql(fetchJson: JsonFetcher, id: string): P
     const parts = await getShikimoriRelatedParts(fetchJson, id, item);
 
     return {
+        kind: 'anime',
         name: getString(item, 'russian') || getString(item, 'name') || 'Unknown',
-        description: stripHtml(getString(item, 'description')),
+        description: cleanShikimoriDescription(getString(item, 'description')),
         image,
         imageHorizontal: image,
         tags,
@@ -193,7 +281,7 @@ async function getShikimoriDetailsGraphql(fetchJson: JsonFetcher, id: string): P
     };
 }
 
-function mapShikimoriSearchResult(record: Record<string, unknown> | null, query: string): (SearchResult & { sortScore: number }) | null {
+function mapShikimoriSearchResult(record: Record<string, unknown> | null, query: string, media: 'anime' | 'manga' = 'anime'): (SearchResult & { sortScore: number }) | null {
     if (!record) return null;
 
     const image = getBestImage(getObject(record, 'image')) || getBestImage(getObject(record, 'poster'));
@@ -206,11 +294,33 @@ function mapShikimoriSearchResult(record: Record<string, unknown> | null, query:
         title,
         subtitle,
         year: getShikimoriYear(record),
-        format: mapAnimeFormat(getString(record, 'kind')),
+        format: media === 'manga' ? (getString(record, 'kind') || 'Manga') : mapAnimeFormat(getString(record, 'kind')),
         image,
         provider: 'shikimori' as const,
         sortScore: getSearchSortScore(record, query, image),
     };
+}
+
+function buildShikimoriMangaParts(volumes: number | null, chapters: number | null): IntegrationMangaPart[] {
+    if (!volumes || volumes <= 0) return [];
+    const perVolume = chapters && chapters > 0 ? Math.ceil(chapters / volumes) : null;
+    return Array.from({ length: Math.min(volumes, 200) }, (_, index) => ({
+        id: `volume-${index + 1}`,
+        kind: 'volume' as const,
+        title: `Volume ${index + 1}`,
+        volumeNumber: index + 1,
+        chapterCurrent: 0,
+        chapterTotal: perVolume,
+        status: 'planned' as const,
+    }));
+}
+
+function cleanShikimoriDescription(value: string): string {
+    return stripHtml(value)
+        .replace(/\[\/?summary[^\]]*\]/gi, '')
+        .replace(/\[\/?[a-z][^\]]*\]/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function getBestImage(imageData: Record<string, unknown> | null): string {

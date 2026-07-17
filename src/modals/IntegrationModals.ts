@@ -3,8 +3,9 @@
  * Simple input, choice, and search modals for integrations
  */
 
-import { App, Modal, setIcon } from 'obsidian';
+import { App, Modal, requestUrl, setIcon } from 'obsidian';
 import { t } from '../localization';
+import { getSteamAppIdFromImageUrl, getSteamVerticalImageCandidates } from '../services/integrations/steamImages';
 
 export class ChoiceModal extends Modal {
     private titleText: string;
@@ -86,9 +87,15 @@ export interface SearchProviderOption {
     disabledReason?: string;
 }
 
-type SearchHandler<T extends SearchItem> = (query: string, providerId?: string) => Promise<T[]>;
+type SearchOptions = {
+    includeDlc?: boolean;
+    page?: number;
+    pageSize?: number;
+};
+type SearchHandler<T extends SearchItem> = (query: string, providerId?: string, options?: SearchOptions) => Promise<T[]>;
 
 const AUTO_SEARCH_DEBOUNCE_MS = 350;
+const SEARCH_PAGE_SIZE = 10;
 
 export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     private searchHandler: SearchHandler<T>;
@@ -103,6 +110,9 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     private titleIcon: string;
     private syncActionText?: string;
     private onSyncAction?: () => void;
+    private manualActionText?: string;
+    private onManualAction?: () => void;
+    private includeDlcToggleText?: string;
     private providerOptions: SearchProviderOption[];
     private activeProviderId?: string;
     private resolve?: (value: T[] | null) => void;
@@ -111,13 +121,21 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     private searchSeq = 0;
     private searchTimer: number | null = null;
     private currentQuery = '';
+    private currentPage = 1;
     private isReviewing = false;
+    private includeDlc = false;
 
     private inputEl?: HTMLInputElement;
     private providerListEl?: HTMLElement;
+    private searchOptionsEl?: HTMLElement;
     private gridEl?: HTMLElement;
+    private paginationEl?: HTMLElement;
     private doneBtn?: HTMLButtonElement;
     private lastErrorText = '';
+    private lastResultCount = 0;
+    private isLoading = false;
+    private hasNextPage = false;
+    private objectUrls: string[] = [];
 
     constructor(
         app: App,
@@ -134,6 +152,9 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             titleIcon?: string;
             syncActionText?: string;
             onSyncAction?: () => void;
+            manualActionText?: string;
+            onManualAction?: () => void;
+            includeDlcToggleText?: string;
         }
     ) {
         super(app);
@@ -147,6 +168,9 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.titleIcon = options.titleIcon ?? 'search';
         this.syncActionText = options.syncActionText;
         this.onSyncAction = options.onSyncAction;
+        this.manualActionText = options.manualActionText;
+        this.onManualAction = options.onManualAction;
+        this.includeDlcToggleText = options.includeDlcToggleText;
         this.providerOptions = options.providerOptions ?? [];
         this.activeProviderId = this.resolveInitialProvider(options.initialProviderId);
     }
@@ -168,6 +192,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.modalEl.removeClass('lorebase-select-modal-container');
         this.modalEl.removeEventListener('keydown', this.onKeydown);
         this.clearSearchTimer();
+        this.revokeObjectUrls();
         if (!this.hasResolved) {
             this.resolve?.(null);
         }
@@ -189,6 +214,9 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         const syncBtn = this.onSyncAction && this.syncActionText
             ? this.createHeaderActionButton(titleRow, 'refresh-cw', this.syncActionText)
             : null;
+        const manualBtn = this.onManualAction && this.manualActionText
+            ? this.createHeaderActionButton(titleRow, 'file-plus-2', this.manualActionText)
+            : null;
 
         const searchShell = contentEl.createDiv({ cls: 'lorebase-select-search-shell' });
         const searchWrap = searchShell.createDiv({ cls: 'lorebase-select-search-wrap' });
@@ -199,8 +227,11 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             attr: { type: 'text', placeholder: this.placeholder }
         });
         this.inputEl.value = this.currentQuery;
-        this.providerListEl = searchShell.createDiv({ cls: 'lorebase-select-providers' });
+        const searchControls = searchShell.createDiv({ cls: 'lorebase-select-search-controls' });
+        this.providerListEl = searchControls.createDiv({ cls: 'lorebase-select-providers' });
+        this.searchOptionsEl = searchControls.createDiv({ cls: 'lorebase-select-search-options' });
         this.renderProviders();
+        this.renderSearchOptions();
 
         this.inputEl.addEventListener('input', () => this.scheduleSearch());
         this.inputEl.addEventListener('keydown', (event) => {
@@ -213,6 +244,8 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
 
         this.gridEl = contentEl.createDiv({ cls: 'lorebase-select-grid lorebase-select-search-grid' });
         this.renderGrid();
+        this.paginationEl = contentEl.createDiv({ cls: 'lorebase-select-pagination' });
+        this.renderPagination();
 
         const footer = contentEl.createDiv({ cls: 'lorebase-modal-actions lorebase-select-footer' });
         const cancelBtn = this.createFooterButton(footer, 'x', this.cancelText, 'secondary');
@@ -230,6 +263,12 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             this.resolve?.(null);
             this.close();
             this.onSyncAction?.();
+        });
+        manualBtn?.addEventListener('click', () => {
+            this.hasResolved = true;
+            this.resolve?.(null);
+            this.close();
+            this.onManualAction?.();
         });
 
         this.doneBtn.addEventListener('click', () => this.renderReviewView());
@@ -377,6 +416,11 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     private scheduleSearch(): void {
         if (!this.inputEl) return;
         const query = this.inputEl.value.trim();
+        if (query !== this.currentQuery) {
+            this.currentPage = 1;
+            this.lastResultCount = 0;
+            this.hasNextPage = false;
+        }
         this.currentQuery = query;
         this.clearSearchTimer();
 
@@ -384,7 +428,11 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             this.searchSeq++;
             this.items = [];
             this.focusedIndex = 0;
+            this.currentPage = 1;
+            this.lastResultCount = 0;
+            this.hasNextPage = false;
             this.renderGrid();
+            this.renderPagination();
             return;
         }
 
@@ -402,26 +450,41 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         if (this.providerOptions.length && !this.activeProviderId) {
             this.items = [];
             this.focusedIndex = 0;
+            this.lastResultCount = 0;
+            this.hasNextPage = false;
             this.renderGrid();
+            this.renderPagination();
             return;
         }
         const seq = ++this.searchSeq;
         this.items = [];
         this.focusedIndex = 0;
         this.lastErrorText = '';
+        this.lastResultCount = 0;
+        this.hasNextPage = false;
+        this.isLoading = true;
         this.renderGrid(true);
+        this.renderPagination();
 
         let results: T[] = [];
         try {
-            results = await this.searchHandler(query, this.activeProviderId);
+            results = await this.searchHandler(query, this.activeProviderId, {
+                includeDlc: this.includeDlc,
+                page: this.currentPage,
+                pageSize: SEARCH_PAGE_SIZE,
+            });
         } catch (error) {
-            console.error('Integration search error:', error);
-            this.lastErrorText = t('noticeIntegrationsError');
+            const message = error instanceof Error && error.message ? `: ${error.message}` : '';
+            this.lastErrorText = `${t('noticeIntegrationsError')}${message}`;
         }
         if (seq !== this.searchSeq) return;
         this.items = Array.isArray(results) ? results : [];
+        this.lastResultCount = this.items.length;
+        this.hasNextPage = this.readHasNextPage(results);
+        this.isLoading = false;
         this.focusedIndex = 0;
         this.renderGrid();
+        this.renderPagination();
     }
 
     private renderProviders(): void {
@@ -453,10 +516,101 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
             chip.addEventListener('click', () => {
                 if (provider.disabled || provider.id === this.activeProviderId) return;
                 this.activeProviderId = provider.id;
+                this.currentPage = 1;
+                this.lastResultCount = 0;
+                this.hasNextPage = false;
                 this.renderProviders();
+                this.renderSearchOptions();
                 this.scheduleSearch();
             });
         }
+    }
+
+    private renderSearchOptions(): void {
+        if (!this.searchOptionsEl) return;
+        this.searchOptionsEl.empty();
+        this.searchOptionsEl.toggleClass('is-hidden', !this.includeDlcToggleText || this.activeProviderId !== 'steam');
+        if (!this.includeDlcToggleText || this.activeProviderId !== 'steam') return;
+
+        const label = this.searchOptionsEl.createEl('label', { cls: 'lorebase-select-dlc-toggle' });
+        const input = label.createEl('input', {
+            attr: {
+                type: 'checkbox',
+            },
+        });
+        input.checked = this.includeDlc;
+        label.createSpan({ text: this.includeDlcToggleText });
+
+        input.addEventListener('change', () => {
+            this.includeDlc = input.checked;
+            this.currentPage = 1;
+            this.lastResultCount = 0;
+            this.hasNextPage = false;
+            this.clearSearchTimer();
+            void this.runSearch();
+        });
+    }
+
+    private readHasNextPage(results: T[]): boolean {
+        const metadata = results as T[] & { hasNext?: boolean };
+        return typeof metadata.hasNext === 'boolean'
+            ? metadata.hasNext
+            : results.length >= SEARCH_PAGE_SIZE;
+    }
+
+    private renderPagination(): void {
+        if (!this.paginationEl) return;
+        this.paginationEl.empty();
+
+        const hasQuery = Boolean(this.currentQuery.trim());
+        if (!hasQuery && !this.items.length) {
+            this.paginationEl.addClass('is-hidden');
+            return;
+        }
+
+        this.paginationEl.removeClass('is-hidden');
+        const previousBtn = this.paginationEl.createEl('button', {
+            cls: 'lorebase-select-page-btn',
+            attr: {
+                type: 'button',
+                'aria-label': t('promptPreviousPage'),
+            },
+        });
+        setIcon(previousBtn.createSpan({ cls: 'lorebase-select-page-icon' }), 'arrow-left');
+        previousBtn.createSpan({ text: t('promptPreviousPage') });
+
+        const pageLabel = this.paginationEl.createDiv({
+            cls: 'lorebase-select-page-label',
+            text: `${t('promptPage')} ${this.currentPage}`,
+        });
+        pageLabel.setAttr('aria-live', 'polite');
+
+        const nextBtn = this.paginationEl.createEl('button', {
+            cls: 'lorebase-select-page-btn',
+            attr: {
+                type: 'button',
+                'aria-label': t('promptNextPage'),
+            },
+        });
+        nextBtn.createSpan({ text: t('promptNextPage') });
+        setIcon(nextBtn.createSpan({ cls: 'lorebase-select-page-icon' }), 'arrow-right');
+
+        previousBtn.disabled = this.isLoading || this.currentPage <= 1;
+        nextBtn.disabled = this.isLoading || !this.hasNextPage;
+
+        previousBtn.addEventListener('click', () => {
+            if (previousBtn.disabled) return;
+            this.currentPage = Math.max(1, this.currentPage - 1);
+            this.clearSearchTimer();
+            void this.runSearch();
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (nextBtn.disabled) return;
+            this.currentPage += 1;
+            this.clearSearchTimer();
+            void this.runSearch();
+        });
     }
 
     private renderSelected(): void {
@@ -559,6 +713,14 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
                 return;
             }
 
+            if (this.isMangaDexImage(next)) {
+                void this.setMangaDexPreviewBackground(target, next, () => {
+                    index++;
+                    apply();
+                });
+                return;
+            }
+
             const probe = new Image();
             probe.onload = () => {
                 target.removeClass('is-empty');
@@ -574,19 +736,48 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         apply();
     }
 
-    private getImageCandidates(imageUrl: string): string[] {
-        const candidates = [imageUrl];
-        const steamMatch = imageUrl.match(/steam\/apps\/(\d+)\//);
-        const appId = steamMatch?.[1];
-        if (appId) {
-            candidates.push(
-                `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
-                `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`,
-                `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
-                `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`
-            );
+    private async setMangaDexPreviewBackground(target: HTMLElement, url: string, onError: () => void): Promise<void> {
+        try {
+            const response = await requestUrl({ url, method: 'GET' });
+            const type = response.headers?.['content-type'] || 'image/jpeg';
+            const objectUrl = URL.createObjectURL(new Blob([response.arrayBuffer], { type }));
+            this.objectUrls.push(objectUrl);
+            target.removeClass('is-empty');
+            target.setCssStyles({ backgroundImage: `url("${objectUrl}")` });
+        } catch {
+            onError();
         }
-        return Array.from(new Set(candidates.filter(Boolean)));
+    }
+
+    private getImageCandidates(imageUrl: string): string[] {
+        const appId = getSteamAppIdFromImageUrl(imageUrl);
+        const mangaDexCandidates = this.getMangaDexImageCandidates(imageUrl);
+        if (mangaDexCandidates.length) return mangaDexCandidates;
+        return appId
+            ? getSteamVerticalImageCandidates(appId, imageUrl)
+            : [imageUrl].filter(Boolean);
+    }
+
+    private getMangaDexImageCandidates(imageUrl: string): string[] {
+        if (!this.isMangaDexImage(imageUrl)) return [];
+        const base = imageUrl
+            .replace(/\.512\.jpg$/i, '')
+            .replace(/\.256\.jpg$/i, '');
+        return Array.from(new Set([
+            imageUrl,
+            `${base}.512.jpg`,
+            `${base}.256.jpg`,
+            base,
+        ].filter(Boolean)));
+    }
+
+    private isMangaDexImage(imageUrl: string): boolean {
+        return imageUrl.includes('uploads.mangadex.org/covers/');
+    }
+
+    private revokeObjectUrls(): void {
+        for (const url of this.objectUrls) URL.revokeObjectURL(url);
+        this.objectUrls = [];
     }
 
     private onKeydown = (event: KeyboardEvent): void => {

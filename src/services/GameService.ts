@@ -10,6 +10,7 @@ import { MetadataService } from './MetadataService';
 import { DEFAULT_COVER } from '../constants';
 import { t } from '../localization';
 import { filterAndSortMedia } from './media/filtering';
+import { getRandomItem } from './media/parsers';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy } from './media/serviceUtils';
 
 // =============================================================================
@@ -23,9 +24,9 @@ export class GameService {
     private cacheValid = false;
     private folderPath = 'Games';
 
-    constructor(app: App) {
+    constructor(app: App, metadataService: MetadataService) {
         this.app = app;
-        this.metadataService = new MetadataService(app);
+        this.metadataService = metadataService;
     }
 
     setFolderPath(path: string): void {
@@ -297,9 +298,10 @@ export class GameService {
             let status: GameStatus = 'not_started';
             const statusRaw = typeof metadata.status === 'string' ? metadata.status.toLowerCase() : '';
             const statusNormalized = statusRaw.replace(/[-\s]+/g, '_');
+            // @deprecated Legacy boolean status fallback kept for old notes.
             if (statusNormalized === 'played') {
                 status = 'completed';
-            } else if (['completed', 'playing', 'dropped', 'sandbox', 'not_started'].includes(statusNormalized)) {
+            } else if (['completed', 'playing', 'dropped', 'sandbox', 'wishlist', 'not_started'].includes(statusNormalized)) {
                 status = statusNormalized as GameStatus;
             } else if (isTruthy(metadata.played)) {
                 status = 'completed';
@@ -309,6 +311,8 @@ export class GameService {
                 status = 'dropped';
             } else if (isTruthy(metadata.sandbox)) {
                 status = 'sandbox';
+            } else if (isTruthy(metadata.wishlist)) {
+                status = 'wishlist';
             }
 
             // Parse rating safely
@@ -406,7 +410,7 @@ export class GameService {
             grouped.get(series)!.push(game);
         }
 
-        // Sort within each series
+        // Sort within each series by release year for chronological series order.
         for (const seriesGames of grouped.values()) {
             seriesGames.sort((a, b) => {
                 const aYear = a?.year ?? 0;
@@ -433,7 +437,7 @@ export class GameService {
     calculateStats(games: GameItem[]): GameStats {
         const stats: GameStats = {
             total: games.length,
-            completed: 0, playing: 0, dropped: 0, sandbox: 0, notStarted: 0,
+            completed: 0, playing: 0, dropped: 0, sandbox: 0, wishlist: 0, notStarted: 0,
             favorite: 0, withRating: 0, avgRating: 0,
             customPosters: 0, adult: 0, seriesCount: 0,
             ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
@@ -451,6 +455,7 @@ export class GameService {
                 case 'playing': stats.playing++; break;
                 case 'dropped': stats.dropped++; break;
                 case 'sandbox': stats.sandbox++; break;
+                case 'wishlist': stats.wishlist++; break;
                 case 'not_started': stats.notStarted++; break;
             }
 
@@ -478,6 +483,7 @@ export class GameService {
                     playing: Math.round((stats.playing / stats.total) * 1000) / 10,
                     dropped: Math.round((stats.dropped / stats.total) * 1000) / 10,
                     sandbox: Math.round((stats.sandbox / stats.total) * 1000) / 10,
+                    wishlist: Math.round((stats.wishlist / stats.total) * 1000) / 10,
                     notStarted: Math.round((stats.notStarted / stats.total) * 1000) / 10,
                 };
             }
@@ -503,6 +509,7 @@ export class GameService {
             frontmatterUpdates.playing = null;
             frontmatterUpdates.dropped = null;
             frontmatterUpdates.sandbox = null;
+            frontmatterUpdates.wishlist = null;
         }
         if ('year' in updates) frontmatterUpdates.year = updates.year;
         if ('displayName' in updates) {
@@ -550,7 +557,6 @@ export class GameService {
     }
 
     getRandomGame(games: GameItem[]): GameItem | null {
-        if (games.length === 0) return null;
-        return games[Math.floor(Math.random() * games.length)];
+        return getRandomItem(games);
     }
 }

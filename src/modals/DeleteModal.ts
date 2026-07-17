@@ -38,9 +38,10 @@ export class DeleteModal extends Modal {
         const headerIcon = header.createDiv({ cls: 'lorebase-delete-icon' });
         setIcon(headerIcon, 'trash-2');
         const headerText = header.createDiv({ cls: 'lorebase-delete-header-text' });
-        const isAnime = this.item.type === 'anime';
-        headerText.createEl('h2', { text: isAnime ? t('deleteTitleAnime') : t('deleteTitle') });
-        headerText.createEl('p', { cls: 'lorebase-delete-subtitle', text: isAnime ? t('deleteSubtitleAnime') : t('deleteSubtitle') });
+        const isWatchMedia = this.item.type === 'anime' || this.item.type === 'movie' || this.item.type === 'series';
+        const isReadingMedia = this.item.type === 'book' || this.item.type === 'manga';
+        headerText.createEl('h2', { text: isReadingMedia ? t('deleteTitleReading') : isWatchMedia ? t('deleteTitleAnime') : t('deleteTitle') });
+        headerText.createEl('p', { cls: 'lorebase-delete-subtitle', text: isReadingMedia ? t('deleteSubtitleReading') : isWatchMedia ? t('deleteSubtitleAnime') : t('deleteSubtitle') });
 
         // Game info
         const gameInfo = contentEl.createDiv({ cls: 'lorebase-delete-game-info' });
@@ -59,8 +60,12 @@ export class DeleteModal extends Modal {
 
         const statusLabels: Record<MediaStatus, string> = i18n.getStatusLabels() as Record<MediaStatus, string>;
         let statusLabel = statusLabels[this.item.status] ?? t('statusNotStarted');
-        if (this.item.status === 'completed' && !isAnime) {
+        if (this.item.status === 'completed' && this.item.type === 'game') {
             statusLabel = t('statusPlayed');
+        } else if (isReadingMedia && this.item.status === 'planned') {
+            statusLabel = t('statusPlanToRead');
+        } else if (isReadingMedia && this.item.status === 'watching') {
+            statusLabel = t('statusReading');
         }
         const statusLine = details.createEl('p');
         statusLine.createEl('strong', { text: `${t('status')}:` });
@@ -82,7 +87,7 @@ export class DeleteModal extends Modal {
         confirmCheckbox.setAttr('id', checkboxId);
 
         const confirmLabel = confirmRow.createEl('label', {
-            text: isAnime ? t('deleteConfirmAckAnime') : t('deleteConfirmAck'),
+            text: isReadingMedia ? t('deleteConfirmAckReading') : isWatchMedia ? t('deleteConfirmAckAnime') : t('deleteConfirmAck'),
             cls: 'lorebase-delete-confirm-label'
         });
         confirmLabel.setAttr('for', checkboxId);

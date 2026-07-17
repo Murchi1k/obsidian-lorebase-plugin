@@ -1,5 +1,5 @@
 import { Menu, MenuItem } from 'obsidian';
-import { AnimeItem, GameItem, MediaItem, MediaStatus } from '../../types';
+import { AnimeItem, BookItem, GameItem, MangaItem, MediaItem, MediaStatus, MovieItem, ReadingItem, SeriesItem } from '../../types';
 import { FILTER_ICON_MAP, RATING_EMOJI, STATUS_ICON_MAP } from '../../constants';
 import { t } from '../../localization';
 
@@ -14,6 +14,8 @@ export interface MediaContextMenuDeps {
     onItemMutated: (item: MediaItem, changedFields: string[]) => void;
     updateAnime: (anime: AnimeItem, updates: Partial<AnimeItem>) => void;
     updateGame: (game: GameItem, updates: Partial<GameItem>) => void;
+    updateVideo?: (item: MovieItem | SeriesItem, updates: Partial<MovieItem | SeriesItem>) => void;
+    updateReading?: (item: ReadingItem, updates: Partial<ReadingItem>) => void;
 }
 
 export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps: MediaContextMenuDeps): void {
@@ -43,6 +45,14 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                             item.userRating = rating.value;
                             deps.onItemMutated(item, ['userRating']);
                             deps.updateAnime(item, { userRating: rating.value });
+                        } else if (item.type === 'movie' || item.type === 'series') {
+                            item.userRating = rating.value;
+                            deps.onItemMutated(item, ['userRating']);
+                            deps.updateVideo?.(item, { userRating: rating.value });
+                        } else if (item.type === 'book' || item.type === 'manga') {
+                            item.userRating = rating.value;
+                            deps.onItemMutated(item, ['userRating']);
+                            deps.updateReading?.(item, { userRating: rating.value } as Partial<ReadingItem>);
                         } else {
                             item.userRating = rating.value;
                             deps.onItemMutated(item, ['userRating']);
@@ -60,6 +70,10 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                     deps.onItemMutated(item, ['userRating']);
                     if (item.type === 'anime') {
                         deps.updateAnime(item, { userRating: null });
+                    } else if (item.type === 'movie' || item.type === 'series') {
+                        deps.updateVideo?.(item, { userRating: null });
+                    } else if (item.type === 'book' || item.type === 'manga') {
+                        deps.updateReading?.(item, { userRating: null } as Partial<ReadingItem>);
                     } else {
                         deps.updateGame(item, { userRating: null });
                     }
@@ -83,6 +97,16 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                             item.status = nextStatus;
                             deps.onItemMutated(item, ['status']);
                             deps.updateAnime(item, { status: nextStatus });
+                        } else if (item.type === 'movie' || item.type === 'series') {
+                            const nextStatus = status as MovieItem['status'];
+                            item.status = nextStatus;
+                            deps.onItemMutated(item, ['status']);
+                            deps.updateVideo?.(item, { status: nextStatus });
+                        } else if (item.type === 'book' || item.type === 'manga') {
+                            const nextStatus = status as ReadingItem['status'];
+                            item.status = nextStatus;
+                            deps.onItemMutated(item, ['status']);
+                            deps.updateReading?.(item, { status: nextStatus } as Partial<ReadingItem>);
                         } else {
                             const nextStatus = status as GameItem['status'];
                             item.status = nextStatus;
@@ -154,6 +178,77 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
         });
     }
 
+    if (item.type === 'book') {
+        menu.addItem((menuItem) => {
+            menuItem.setTitle(t('contextPagePlusOne'))
+                .setIcon('plus')
+                .onClick(() => {
+                    if (deps.isDestroyed()) return;
+                    const current = Number.isFinite(item.pageCurrent) ? Math.max(0, Math.trunc(item.pageCurrent as number)) : 0;
+                    const total = Number.isFinite(item.pageTotal) ? Math.max(0, Math.trunc(item.pageTotal as number)) : null;
+                    const next = total ? Math.min(current + 1, total) : current + 1;
+                    const updates: Partial<BookItem> = { pageCurrent: next };
+                    item.pageCurrent = next;
+                    if (item.status === 'planned') {
+                        item.status = 'watching';
+                        updates.status = 'watching';
+                    }
+                    if (total && next >= total) {
+                        item.status = 'completed';
+                        updates.status = 'completed';
+                    }
+                    deps.onItemMutated(item, ['pageCurrent', 'status']);
+                    deps.updateReading?.(item, updates as Partial<ReadingItem>);
+                });
+        });
+    }
+
+    if (item.type === 'manga') {
+        menu.addItem((menuItem) => {
+            menuItem.setTitle(t('contextChapterPlusOne'))
+                .setIcon('plus')
+                .onClick(() => {
+                    if (deps.isDestroyed()) return;
+                    const parts = item.parts?.length ? item.parts.map((part) => ({ ...part })) : [];
+                    const activePart = parts.find((part) => part.id === item.activePartId) ?? parts[0] ?? null;
+                    const currentSource = activePart?.chapterCurrent ?? item.chapterCurrent;
+                    const current = Number.isFinite(currentSource) ? Math.max(0, Math.trunc(currentSource as number)) : 0;
+                    const totalSource = activePart?.chapterTotal ?? item.chapterTotal;
+                    const total = Number.isFinite(totalSource) ? Math.max(0, Math.trunc(totalSource as number)) : null;
+                    const next = total ? Math.min(current + 1, total) : current + 1;
+                    const updates: Partial<MangaItem> = { chapterCurrent: next };
+                    item.chapterCurrent = next;
+                    if (activePart) {
+                        activePart.chapterCurrent = next;
+                        if (total && next >= total) {
+                            activePart.status = 'completed';
+                        } else if (activePart.status === 'planned') {
+                            activePart.status = 'watching';
+                        }
+                        item.parts = parts;
+                        item.activePartId = activePart.id;
+                        item.chapterTotal = activePart.chapterTotal;
+                        item.volumeCurrent = activePart.volumeNumber;
+                        updates.parts = parts;
+                        updates.activePartId = activePart.id;
+                        updates.chapterTotal = activePart.chapterTotal;
+                        updates.volumeCurrent = activePart.volumeNumber;
+                    }
+                    if (item.status === 'planned') {
+                        item.status = 'watching';
+                        updates.status = 'watching';
+                    }
+                    const allPartsCompleted = parts.length > 0 && parts.every((part) => part.status === 'completed');
+                    if ((parts.length === 0 && total && next >= total) || allPartsCompleted) {
+                        item.status = 'completed';
+                        updates.status = 'completed';
+                    }
+                    deps.onItemMutated(item, ['chapterCurrent', 'chapterTotal', 'volumeCurrent', 'status', 'parts']);
+                    deps.updateReading?.(item, updates as Partial<ReadingItem>);
+                });
+        });
+    }
+
     menu.addSeparator();
 
     menu.addItem((menuItem) => {
@@ -165,6 +260,10 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                 deps.onItemMutated(item, ['favorite']);
                 if (item.type === 'anime') {
                     deps.updateAnime(item, { favorite: item.favorite });
+                } else if (item.type === 'movie' || item.type === 'series') {
+                    deps.updateVideo?.(item, { favorite: item.favorite });
+                } else if (item.type === 'book' || item.type === 'manga') {
+                    deps.updateReading?.(item, { favorite: item.favorite } as Partial<ReadingItem>);
                 } else {
                     deps.updateGame(item, { favorite: item.favorite });
                 }

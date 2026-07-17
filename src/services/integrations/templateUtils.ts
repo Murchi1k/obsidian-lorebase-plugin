@@ -3,6 +3,7 @@ import type { MediaKind } from './types';
 export function getDefaultTemplateFields(kind: MediaKind): string[] {
     if (kind === 'games') {
         return [
+            'name',
             'poster',
             'posterHorizontal',
             'plot',
@@ -21,7 +22,8 @@ export function getDefaultTemplateFields(kind: MediaKind): string[] {
         ];
     }
 
-    return [
+    if (kind === 'anime') return [
+        'name',
         'image',
         'imageHorizontal',
         'plot',
@@ -31,6 +33,96 @@ export function getDefaultTemplateFields(kind: MediaKind): string[] {
         'studios',
         'format',
         'animeParts',
+        'rating',
+        'status',
+        'favorite',
+        'url',
+    ];
+
+    if (kind === 'movies') {
+        return [
+            'name',
+            'poster',
+            'posterHorizontal',
+            'plot',
+            'genres',
+            'year',
+            'released',
+            'runtime',
+            'director',
+            'actors',
+            'rating',
+            'status',
+            'favorite',
+            'movieParts',
+            'integrationSource',
+            'url',
+        ];
+    }
+
+    if (kind === 'books') {
+        return [
+            'name',
+            'poster',
+            'posterHorizontal',
+            'plot',
+            'authors',
+            'publisher',
+            'genres',
+            'tags',
+            'year',
+            'released',
+            'pageCurrent',
+            'pageTotal',
+            'chapterCurrent',
+            'chapterTotal',
+            'rating',
+            'status',
+            'favorite',
+            'integrationSource',
+            'url',
+        ];
+    }
+
+    if (kind === 'manga') {
+        return [
+            'name',
+            'poster',
+            'posterHorizontal',
+            'plot',
+            'authors',
+            'artists',
+            'genres',
+            'tags',
+            'year',
+            'chapterCurrent',
+            'chapterTotal',
+            'volumeCurrent',
+            'volumeTotal',
+            'mangaParts',
+            'rating',
+            'status',
+            'favorite',
+            'integrationSource',
+            'url',
+        ];
+    }
+
+    return [
+        'name',
+        'poster',
+        'posterHorizontal',
+        'plot',
+        'genres',
+        'year',
+        'released',
+        'runtime',
+        'director',
+        'actors',
+        'seasons',
+        'episodeCurrent',
+        'episodeTotal',
+        'seriesParts',
         'rating',
         'status',
         'favorite',
@@ -44,6 +136,7 @@ export function buildSimpleTemplate(kind: MediaKind, fields: string[]): string {
     const lines: string[] = ['---'];
 
     if (kind === 'games') {
+        if (set.has('name')) lines.push('name: "{{VALUE:name}}"');
         if (set.has('poster')) lines.push('poster: "{{VALUE:Poster}}"');
         if (set.has('posterHorizontal')) lines.push('poster_b: "{{VALUE:PosterHorizontal}}"');
         if (set.has('plot')) lines.push('plot: "{{VALUE:Plot}}"');
@@ -64,7 +157,8 @@ export function buildSimpleTemplate(kind: MediaKind, fields: string[]): string {
         if (set.has('perfectionist') || set.has('completionist')) {
             lines.push('perfectionist: "{{VALUE:perfectionist}}"');
         }
-    } else {
+    } else if (kind === 'anime') {
+        if (set.has('name')) lines.push('title: "{{VALUE:name}}"');
         if (set.has('image')) lines.push('image: "{{VALUE:image}}"');
         if (set.has('imageHorizontal')) lines.push('image_b: "{{VALUE:ImageHorizontal}}"');
         if (set.has('plot')) lines.push('plot: "{{VALUE:Plot}}"');
@@ -82,6 +176,79 @@ export function buildSimpleTemplate(kind: MediaKind, fields: string[]): string {
             lines.push('{{VALUE:animePartsYaml}}');
         }
         if (set.has('rating')) lines.push('rating:');
+        if (set.has('status')) lines.push('status: "{{VALUE:status}}"');
+        if (set.has('favorite')) lines.push('favorite: false');
+        if (set.has('url')) lines.push('url: "{{VALUE:url}}"');
+    } else if (kind === 'movies' || kind === 'series') {
+        lines.push(`type: "${kind === 'movies' ? 'movie' : 'series'}"`);
+        if (set.has('name')) lines.push('title: "{{VALUE:name}}"');
+        if (set.has('poster')) lines.push('poster: "{{VALUE:Poster}}"');
+        if (set.has('posterHorizontal')) lines.push('poster_b: "{{VALUE:PosterHorizontal}}"');
+        if (set.has('plot')) lines.push('plot: "{{VALUE:Plot}}"');
+        if (set.has('genres')) lines.push('genres: "{{VALUE:genres}}"');
+        if (set.has('year')) lines.push('year: "{{VALUE:Year}}"');
+        if (kind === 'movies') {
+            if (set.has('released')) lines.push('released: "{{VALUE:released}}"');
+            if (set.has('runtime')) lines.push('runtime: "{{VALUE:runtime}}"');
+            if (set.has('director')) lines.push('director: "{{VALUE:director}}"');
+            if (set.has('actors')) lines.push('actors: "{{VALUE:actors}}"');
+            if (set.has('movieParts')) {
+                lines.push('active_part_id: "{{VALUE:activePartId}}"');
+                lines.push('movie_parts:');
+                lines.push('{{VALUE:videoPartsYaml}}');
+            }
+        } else {
+            if (set.has('released')) lines.push('released: "{{VALUE:released}}"');
+            if (set.has('runtime')) lines.push('runtime: "{{VALUE:runtime}}"');
+            if (set.has('director')) lines.push('director: "{{VALUE:director}}"');
+            if (set.has('actors')) lines.push('actors: "{{VALUE:actors}}"');
+            if (set.has('seasons')) lines.push('seasons: "{{VALUE:seasons}}"');
+            if (set.has('episodeCurrent')) lines.push('episode_current: "{{VALUE:episodeCurrent}}"');
+            if (set.has('episodeTotal')) lines.push('episode_total: "{{VALUE:episodeTotal}}"');
+            if (set.has('seriesParts')) {
+                lines.push('active_part_id: "{{VALUE:activePartId}}"');
+                lines.push('series_parts:');
+                lines.push('{{VALUE:videoPartsYaml}}');
+            }
+        }
+        if (set.has('rating')) lines.push('rating: "{{VALUE:rating}}"');
+        if (set.has('status')) lines.push('status: "{{VALUE:status}}"');
+        if (set.has('favorite')) lines.push('favorite: false');
+        if (set.has('integrationSource')) {
+            lines.push('integration_provider: "{{VALUE:integrationProvider}}"');
+            lines.push('integration_id: "{{VALUE:integrationId}}"');
+        }
+        if (set.has('url')) lines.push('url: "{{VALUE:url}}"');
+    } else {
+        lines.push(`type: "${kind === 'books' ? 'book' : 'manga'}"`);
+        if (set.has('name')) lines.push('title: "{{VALUE:name}}"');
+        if (set.has('poster')) lines.push('poster: "{{VALUE:Poster}}"');
+        if (set.has('posterHorizontal')) lines.push('poster_b: "{{VALUE:PosterHorizontal}}"');
+        if (set.has('plot')) lines.push('plot: "{{VALUE:Plot}}"');
+        if (set.has('authors')) lines.push('authors: "{{VALUE:authors}}"');
+        if (kind === 'manga' && set.has('artists')) lines.push('artists: "{{VALUE:artists}}"');
+        if (kind === 'books' && set.has('publisher')) lines.push('publisher: "{{VALUE:publisher}}"');
+        if (set.has('genres')) lines.push('genres: "{{VALUE:genres}}"');
+        if (set.has('tags')) lines.push('tags: "{{VALUE:tags}}"');
+        if (set.has('year')) lines.push('year: "{{VALUE:Year}}"');
+        if (kind === 'books') {
+            if (set.has('released')) lines.push('released: "{{VALUE:released}}"');
+            if (set.has('pageCurrent')) lines.push('page_current: "{{VALUE:pageCurrent}}"');
+            if (set.has('pageTotal')) lines.push('page_total: "{{VALUE:pageTotal}}"');
+            if (set.has('chapterCurrent')) lines.push('chapter_current: "{{VALUE:chapterCurrent}}"');
+            if (set.has('chapterTotal')) lines.push('chapter_total: "{{VALUE:chapterTotal}}"');
+        } else {
+            if (set.has('chapterCurrent')) lines.push('chapter_current: "{{VALUE:chapterCurrent}}"');
+            if (set.has('chapterTotal')) lines.push('chapter_total: "{{VALUE:chapterTotal}}"');
+            if (set.has('volumeCurrent')) lines.push('volume_current: "{{VALUE:volumeCurrent}}"');
+            if (set.has('volumeTotal')) lines.push('volume_total: "{{VALUE:volumeTotal}}"');
+            if (set.has('mangaParts')) {
+                lines.push('active_part_id: "{{VALUE:activePartId}}"');
+                lines.push('manga_parts:');
+                lines.push('{{VALUE:mangaPartsYaml}}');
+            }
+        }
+        if (set.has('rating')) lines.push('rating: "{{VALUE:rating}}"');
         if (set.has('status')) lines.push('status: "{{VALUE:status}}"');
         if (set.has('favorite')) lines.push('favorite: false');
         if (set.has('integrationSource')) {

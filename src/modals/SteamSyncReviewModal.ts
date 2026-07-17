@@ -59,6 +59,24 @@ const STEAM_REVIEW_TEXT: Record<Language, Record<SteamReviewTextKey, string>> = 
         libraryWishlist: '\u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430 + \u0432\u0438\u0448\u043b\u0438\u0441\u0442',
         hours: '\u0447',
     },
+    uk: {
+        title: 'Синхронізація Steam',
+        subtitle: 'За замовчуванням нічого не вибрано. Позначте тільки ігри, які потрібно створити або оновити в LOREBASE.',
+        searchPlaceholder: 'Пошук ігор...',
+        played: 'З прогресом',
+        wishlist: 'Бажане',
+        all: 'Усе',
+        clear: 'Очистити',
+        selected: 'Вибрано',
+        shown: 'показано',
+        total: 'усього',
+        empty: 'Немає ігор під поточний пошук.',
+        cancel: 'Скасувати',
+        import: 'Імпорт',
+        library: 'бібліотека',
+        libraryWishlist: 'бібліотека + бажане',
+        hours: 'год',
+    },
 };
 
 export class SteamSyncReviewModal extends Modal {
@@ -223,18 +241,28 @@ export class SteamSyncReviewModal extends Modal {
             row.toggleClass('is-selected', checked);
 
             const thumb = row.createDiv({ cls: 'lorebase-sr-thumb' });
+            const imageUrls = this.getImageUrls(candidate);
             const img = thumb.createEl('img', {
                 attr: {
-                    src: this.getHeaderUrl(candidate.appId),
+                    src: imageUrls[0] ?? '',
                     alt: candidate.name,
                     loading: 'lazy',
                 },
             });
+            let imageIndex = 0;
             img.addEventListener('error', () => {
+                imageIndex++;
+                const nextUrl = imageUrls[imageIndex];
+                if (nextUrl) {
+                    img.src = nextUrl;
+                    return;
+                }
                 img.addClass('is-hidden');
                 thumb.addClass('is-fallback');
-                const fallbackIcon = thumb.createSpan({ cls: 'lorebase-sr-thumb-fallback' });
-                setIcon(fallbackIcon, 'gamepad-2');
+                if (!thumb.querySelector('.lorebase-sr-thumb-fallback')) {
+                    const fallbackIcon = thumb.createSpan({ cls: 'lorebase-sr-thumb-fallback' });
+                    setIcon(fallbackIcon, 'gamepad-2');
+                }
             });
 
             const body = row.createDiv({ cls: 'lorebase-sr-body' });
@@ -354,8 +382,25 @@ export class SteamSyncReviewModal extends Modal {
         return `${hours}${this.text('hours')}`;
     }
 
-    private getHeaderUrl(appId: number): string {
-        return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+    private getImageUrls(candidate: SteamImportCandidate): string[] {
+        return [
+            candidate.poster,
+            candidate.posterHorizontal,
+            this.getCdnImageUrl(candidate.appId, 'header.jpg'),
+            this.getStoreAssetImageUrl(candidate.appId, 'header.jpg'),
+            this.getCdnImageUrl(candidate.appId, 'capsule_616x353.jpg'),
+            this.getStoreAssetImageUrl(candidate.appId, 'capsule_616x353.jpg'),
+            this.getCdnImageUrl(candidate.appId, 'capsule_231x87.jpg'),
+            this.getStoreAssetImageUrl(candidate.appId, 'capsule_231x87.jpg'),
+        ].filter((url, index, urls): url is string => Boolean(url) && urls.indexOf(url) === index);
+    }
+
+    private getCdnImageUrl(appId: number, fileName: string): string {
+        return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/${fileName}`;
+    }
+
+    private getStoreAssetImageUrl(appId: number, fileName: string): string {
+        return `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/${fileName}`;
     }
 
     private text(key: SteamReviewTextKey): string {

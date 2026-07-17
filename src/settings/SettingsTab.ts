@@ -3,23 +3,48 @@
  * Plugin settings interface integrated with Obsidian Settings
  */
 
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, setIcon } from 'obsidian';
 import { t } from '../localization';
 import type LorebasePlugin from '../main';
-import { ICON_ANIME, ICON_GAMES } from './sections/constants';
-import { renderComingSoonSection } from './sections/comingSoon';
-import { renderExperimentSettings } from './sections/experiment';
-import { renderGeneralSettings } from './sections/general';
+import type { SettingsLayoutMode } from '../types';
+import { renderAboutSection } from './sections/about';
+import {
+    ICON_CARD_CUSTOMIZATION,
+    ICON_GENERAL,
+    ICON_INTEGRATIONS,
+    ICON_MEDIA,
+} from './sections/constants';
+import { renderCardCustomizationSettings, renderGeneralSettings } from './sections/general';
 import { renderIntegrationsSection } from './sections/integrations';
-import { renderLibrarySettings } from './sections/library';
-import { renderResetSection } from './sections/reset';
-import { renderSteamSyncSettings } from './SteamSyncSettings';
-import type { CollapsibleGroupElements, SettingsSectionContext } from './sections/types';
+import { renderMediaSettings } from './sections/library';
+import type { CollapsibleGroupElements, MediaTabScope, MediaTypeKey, SettingsSectionContext } from './sections/types';
+
+type SettingsSectionId =
+    | 'general'
+    | 'customization'
+    | 'media'
+    | 'integrations'
+    | 'about';
+
+interface SettingsSectionDefinition {
+    id: SettingsSectionId;
+    label: string;
+    description: string;
+    icon: string;
+    render: (container: HTMLElement) => void;
+}
 
 export class LorebaseSettingTab extends PluginSettingTab {
     plugin: LorebasePlugin;
     private detachSectionNav: (() => void) | null = null;
     private syncSectionNavActive: (() => void) | null = null;
+    private activeMediaTabs: Record<MediaTabScope, MediaTypeKey> = {
+        statusLabels: 'games',
+        mediaSettings: 'games',
+        integrationTemplates: 'games',
+    };
+    private activeSettingsSection: SettingsSectionId = 'general';
+    private openAccordionSections = new Set<SettingsSectionId>();
 
     constructor(app: App, plugin: LorebasePlugin) {
         super(app, plugin);
@@ -36,33 +61,202 @@ export class LorebaseSettingTab extends PluginSettingTab {
         containerEl.empty();
         containerEl.addClass('lorebase-settings');
 
-        new Setting(containerEl)
+        const topbar = containerEl.createDiv({ cls: 'lorebase-settings-topbar' });
+        new Setting(topbar)
             .setName(t('settingsTitle'))
             .setHeading()
             .settingEl.addClass('lorebase-settings-main-heading');
+        this.renderLayoutModeToggle(topbar);
         this.renderSupportBlock(containerEl);
 
-        const layoutEl = containerEl.createDiv({ cls: 'lorebase-settings-layout' });
-        const contentEl = layoutEl.createDiv({ cls: 'lorebase-settings-content' });
-        const navEl = layoutEl.createDiv({
-            cls: 'lorebase-settings-nav',
-            attr: { 'aria-label': 'Settings section navigation' },
+        const layoutMode = this.plugin.settings.settingsLayoutMode;
+        containerEl.toggleClass('is-tabs-layout', layoutMode === 'tabs');
+        containerEl.toggleClass('is-accordion-layout', layoutMode === 'accordion');
+
+        const layoutEl = containerEl.createDiv({
+            cls: `lorebase-settings-layout is-${layoutMode}`,
         });
+        const contentEl = layoutEl.createDiv({ cls: 'lorebase-settings-content' });
 
         const context = this.getSectionContext();
-        renderGeneralSettings(context, contentEl);
-        renderLibrarySettings(context, contentEl, t('settingsGames'), 'games', ICON_GAMES);
-        renderLibrarySettings(context, contentEl, t('settingsAnime'), 'anime', ICON_ANIME);
-        renderIntegrationsSection(context, contentEl);
-        renderSteamSyncSettings(context, contentEl);
-        renderComingSoonSection(contentEl);
-        renderExperimentSettings(context, contentEl);
-        renderResetSection(context, contentEl);
+        const sections = this.getSectionDefinitions(context);
+        if (layoutMode === 'accordion') {
+            this.renderAccordionSections(contentEl, sections);
+        } else {
+            this.renderTabbedSections(contentEl, sections);
+        }
 
-        const scrollHost = this.findScrollHost();
-        this.renderSectionNavigation(navEl, contentEl, scrollHost);
         this.restoreScrollState(scrollState);
-        window.requestAnimationFrame(() => this.syncSectionNavActive?.());
+    }
+
+    hide(): void {
+        this.openAccordionSections.clear();
+        super.hide();
+    }
+
+    private getSectionDefinitions(context: SettingsSectionContext): SettingsSectionDefinition[] {
+        return [
+            { id: 'general', label: t('settingsGeneral'), description: t('settingsSectionGeneralDesc'), icon: ICON_GENERAL, render: (container) => renderGeneralSettings(context, container) },
+            { id: 'customization', label: t('settingsBadges'), description: t('settingsSectionCustomizationDesc'), icon: ICON_CARD_CUSTOMIZATION, render: (container) => renderCardCustomizationSettings(context, container) },
+            { id: 'media', label: t('settingsMedia'), description: t('settingsSectionMediaDesc'), icon: ICON_MEDIA, render: (container) => renderMediaSettings(context, container) },
+            { id: 'integrations', label: t('settingsIntegrations'), description: t('settingsSectionIntegrationsDesc'), icon: ICON_INTEGRATIONS, render: (container) => renderIntegrationsSection(context, container) },
+            { id: 'about', label: t('settingsAbout'), description: t('settingsSectionAboutDesc'), icon: 'lucide:info', render: (container) => renderAboutSection(context, container) },
+        ];
+    }
+
+    private renderLayoutModeToggle(container: HTMLElement): void {
+        const control = container.createDiv({
+            cls: 'lorebase-settings-layout-toggle',
+            attr: {
+                role: 'group',
+                'aria-label': t('settingsLayoutMode'),
+            },
+        });
+        const modes: Array<{ mode: SettingsLayoutMode; icon: string; label: string }> = [
+            { mode: 'tabs', icon: 'layout-grid', label: t('settingsLayoutTabs') },
+            { mode: 'accordion', icon: 'list', label: t('settingsLayoutAccordion') },
+        ];
+
+        for (const option of modes) {
+            const active = this.plugin.settings.settingsLayoutMode === option.mode;
+            const button = control.createEl('button', {
+                cls: `lorebase-settings-layout-toggle-button ${active ? 'is-active' : ''}`,
+                attr: {
+                    type: 'button',
+                    title: option.label,
+                    'aria-label': option.label,
+                    'aria-pressed': String(active),
+                },
+            });
+            setIcon(button, option.icon);
+            button.addEventListener('click', () => {
+                if (this.plugin.settings.settingsLayoutMode === option.mode) return;
+                this.plugin.settings.settingsLayoutMode = option.mode;
+                if (option.mode === 'accordion') this.openAccordionSections.clear();
+                void this.plugin.saveSettings();
+                this.display();
+            });
+        }
+    }
+
+    private renderTabbedSections(
+        container: HTMLElement,
+        sections: SettingsSectionDefinition[]
+    ): void {
+        if (!sections.some((section) => section.id === this.activeSettingsSection)) {
+            this.activeSettingsSection = sections[0].id;
+        }
+
+        const tabs = container.createDiv({
+            cls: 'lorebase-settings-section-tabs',
+            attr: {
+                role: 'tablist',
+                'aria-label': t('settingsLayoutTabs'),
+            },
+        });
+        const panels = container.createDiv({ cls: 'lorebase-settings-section-panels' });
+        const buttons = new Map<SettingsSectionId, HTMLButtonElement>();
+        const panelMap = new Map<SettingsSectionId, HTMLElement>();
+
+        for (const section of sections) {
+            const panelId = `lorebase-settings-panel-${section.id}`;
+            const panel = panels.createDiv({
+                cls: 'lorebase-settings-section-panel',
+                attr: {
+                    id: panelId,
+                    role: 'tabpanel',
+                },
+            });
+            panelMap.set(section.id, panel);
+            section.render(panel);
+
+            const button = tabs.createEl('button', {
+                cls: 'lorebase-settings-section-tab',
+                attr: {
+                    type: 'button',
+                    role: 'tab',
+                    'aria-controls': panelId,
+                },
+            });
+            const icon = button.createSpan({ cls: 'lorebase-settings-section-tab-icon' });
+            this.renderSectionIcon(icon, section.icon);
+            icon.setAttribute('aria-hidden', 'true');
+            button.createSpan({ cls: 'lorebase-settings-section-tab-label', text: section.label });
+            buttons.set(section.id, button);
+        }
+
+        const selectSection = (id: SettingsSectionId, focus = false): void => {
+            this.activeSettingsSection = id;
+            buttons.forEach((button, key) => {
+                const active = key === id;
+                button.toggleClass('is-active', active);
+                button.setAttribute('aria-selected', String(active));
+                button.tabIndex = active ? 0 : -1;
+            });
+            panelMap.forEach((panel, key) => {
+                const active = key === id;
+                panel.toggleClass('is-active', active);
+                panel.toggleAttribute('hidden', !active);
+            });
+            if (focus) buttons.get(id)?.focus();
+        };
+
+        sections.forEach((section, index) => {
+            const button = buttons.get(section.id);
+            if (!button) return;
+            button.addEventListener('click', () => selectSection(section.id));
+            button.addEventListener('keydown', (event) => {
+                let nextIndex = index;
+                if (event.key === 'ArrowRight') nextIndex = (index + 1) % sections.length;
+                else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + sections.length) % sections.length;
+                else if (event.key === 'Home') nextIndex = 0;
+                else if (event.key === 'End') nextIndex = sections.length - 1;
+                else return;
+                event.preventDefault();
+                selectSection(sections[nextIndex].id, true);
+            });
+        });
+
+        selectSection(this.activeSettingsSection);
+    }
+
+    private renderAccordionSections(
+        container: HTMLElement,
+        sections: SettingsSectionDefinition[]
+    ): void {
+        const list = container.createDiv({ cls: 'lorebase-settings-accordion-list' });
+        for (const section of sections) {
+            const details = list.createEl('details', {
+                cls: `lorebase-settings-accordion-section is-${section.id}`,
+            });
+            if (this.openAccordionSections.has(section.id)) details.open = true;
+            const summary = details.createEl('summary', {
+                cls: 'lorebase-settings-accordion-summary',
+            });
+            const icon = summary.createSpan({
+                cls: 'lorebase-settings-accordion-icon',
+                attr: { 'aria-hidden': 'true' },
+            });
+            this.renderSectionIcon(icon, section.icon);
+            const text = summary.createDiv({ cls: 'lorebase-settings-accordion-text' });
+            text.createDiv({
+                cls: 'lorebase-settings-accordion-title',
+                text: section.label,
+            });
+            text.createDiv({
+                cls: 'lorebase-settings-accordion-description',
+                text: section.description,
+            });
+            const caret = summary.createSpan({ cls: 'lorebase-settings-accordion-caret' });
+            setIcon(caret, 'chevron-right');
+
+            const body = details.createDiv({ cls: 'lorebase-settings-accordion-body' });
+            section.render(body);
+            details.addEventListener('toggle', () => {
+                if (details.open) this.openAccordionSections.add(section.id);
+                else this.openAccordionSections.delete(section.id);
+            });
+        }
     }
 
     private getSectionContext(): SettingsSectionContext {
@@ -72,6 +266,10 @@ export class LorebaseSettingTab extends PluginSettingTab {
             display: () => this.display(),
             createSectionHeader: (container, icon, text) => this.createSectionHeader(container, icon, text),
             createCollapsibleGroup: (container, title, description, open) => this.createCollapsibleGroup(container, title, description, open),
+            getActiveMediaTab: (scope) => this.activeMediaTabs[scope],
+            setActiveMediaTab: (scope, media) => {
+                this.activeMediaTabs[scope] = media;
+            },
             applyAccentColor: (color) => this.applyAccentColor(color),
         };
     }
@@ -129,8 +327,17 @@ export class LorebaseSettingTab extends PluginSettingTab {
             .setHeading();
         heading.settingEl.addClass('lorebase-settings-section-title');
         heading.nameEl.empty();
-        heading.nameEl.createSpan({ cls: 'lorebase-settings-section-icon', text: icon });
+        const iconElement = heading.nameEl.createSpan({ cls: 'lorebase-settings-section-icon' });
+        this.renderSectionIcon(iconElement, icon);
         heading.nameEl.createSpan({ text });
+    }
+
+    private renderSectionIcon(container: HTMLElement, icon: string): void {
+        if (icon.startsWith('lucide:')) {
+            setIcon(container, icon.slice('lucide:'.length));
+            return;
+        }
+        container.setText(icon);
     }
 
     private createSupportIcon(brand: string): SVGElement {

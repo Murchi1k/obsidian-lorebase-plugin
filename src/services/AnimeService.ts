@@ -8,6 +8,7 @@ import { AnimeFormat, AnimeItem, AnimePart, AnimeStatus, AnimeStats, FilterState
 import { MetadataService } from './MetadataService';
 import { DEFAULT_COVER } from '../constants';
 import { filterAndSortMedia } from './media/filtering';
+import { getRandomItem, parseNumber, parseRelatedMedia, parseUserRating, parseYear, serializeRelatedMedia } from './media/parsers';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy } from './media/serviceUtils';
 
 export class AnimeService {
@@ -17,9 +18,9 @@ export class AnimeService {
     private cacheValid = false;
     private folderPath = 'Anime';
 
-    constructor(app: App) {
+    constructor(app: App, metadataService: MetadataService) {
         this.app = app;
-        this.metadataService = new MetadataService(app);
+        this.metadataService = metadataService;
     }
 
     setFolderPath(path: string): void {
@@ -59,20 +60,6 @@ export class AnimeService {
         return animeItems;
     }
 
-    private parseNumber(value: unknown): number | null {
-        if (value === null || value === undefined) return null;
-        const parsed = typeof value === 'number' ? value : parseFloat(String(value));
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    private parseUserRating(value: unknown): AnimeItem['userRating'] {
-        if (value === null || value === undefined) return null;
-        const parsed = typeof value === 'number' ? value : parseInt(String(value), 10);
-        if (!Number.isFinite(parsed)) return null;
-        if (parsed < 1 || parsed > 5) return null;
-        return parsed as AnimeItem['userRating'];
-    }
-
     private getStatusFromString(value: string): AnimeStatus | null {
         const normalized = value.trim().toLowerCase();
         return ['planned', 'watching', 'completed', 'dropped', 'paused'].includes(normalized)
@@ -107,9 +94,9 @@ export class AnimeService {
         if (!raw || typeof raw !== 'object') return null;
         const source = raw as Record<string, unknown>;
         const kind = this.getFormatFromString(this.readObjectValue(source, ['kind', 'format', 'type']), 'tv');
-        const seasonNumber = this.parseNumber(this.readObjectValue(source, ['seasonNumber', 'season', 'season_number']));
-        const episodeCurrent = this.parseNumber(this.readObjectValue(source, ['episodeCurrent', 'episode_current', 'current']));
-        const episodeTotal = this.parseNumber(this.readObjectValue(source, ['episodeTotal', 'episode_total', 'total']));
+        const seasonNumber = parseNumber(this.readObjectValue(source, ['seasonNumber', 'season', 'season_number']));
+        const episodeCurrent = parseNumber(this.readObjectValue(source, ['episodeCurrent', 'episode_current', 'current']));
+        const episodeTotal = parseNumber(this.readObjectValue(source, ['episodeTotal', 'episode_total', 'total']));
         const statusRaw = this.readObjectValue(source, ['status']);
         const status = typeof statusRaw === 'string' ? this.getStatusFromString(statusRaw) ?? 'planned' : 'planned';
         const defaultTitle = kind === 'tv' && seasonNumber ? `Season ${seasonNumber}` : kind.toUpperCase();
@@ -173,13 +160,6 @@ export class AnimeService {
         return parts.length > 0 && parts.every((part) => part.status === 'completed');
     }
 
-    private parseYear(value: unknown): number | null {
-        const parsed = this.parseNumber(value);
-        if (parsed === null) return null;
-        const rounded = Math.trunc(parsed);
-        return rounded > 0 ? rounded : null;
-    }
-
     private parseDate(value: unknown): number | null {
         if (value === null || value === undefined) return null;
 
@@ -212,7 +192,10 @@ export class AnimeService {
                 return null;
             }
 
-            const title = file.basename?.trim();
+            const frontmatterTitle = typeof metadata.title === 'string'
+                ? metadata.title.trim()
+                : (typeof metadata.name === 'string' ? metadata.name.trim() : '');
+            const title = frontmatterTitle || file.basename?.trim();
 
             const summaryText = typeof metadata.summary === 'string'
                 ? metadata.summary
@@ -247,14 +230,14 @@ export class AnimeService {
                 metadata.cm_poster
             );
             const tags = collectTags(metadata, cache?.tags as Array<{ tag: string }> | undefined);
-            const genres = collectFieldTags(metadata, ['genres']);
+            const genres = collectFieldTags(metadata, ['genres', 'genre']);
             const dateAdded = file.stat?.ctime ?? file.stat?.mtime ?? Date.now();
             const dateWatched = this.parseDate(metadata.dateWatched);
 
-            const seasonCurrent = this.parseNumber(metadata.season_current);
-            const seasonTotal = this.parseNumber(metadata.season_total);
-            const episodeCurrent = this.parseNumber(metadata.episode_current);
-            const episodeTotal = this.parseNumber(metadata.episode_total);
+            const seasonCurrent = parseNumber(metadata.season_current);
+            const seasonTotal = parseNumber(metadata.season_total);
+            const episodeCurrent = parseNumber(metadata.episode_current);
+            const episodeTotal = parseNumber(metadata.episode_total);
             const { parts, activePartId } = this.normalizeAnimeParts(metadata, {
                 format,
                 status,
@@ -270,10 +253,10 @@ export class AnimeService {
                 filePath: file.path,
                 displayName: title || 'Unknown',
                 nameLower: (title || 'unknown').toLowerCase(),
-                year: this.parseYear(metadata.year),
+                year: parseYear(metadata.year),
                 description: summaryText,
                 summary: summaryText,
-                userRating: this.parseUserRating(metadata.rating),
+                userRating: parseUserRating(metadata.rating),
                 favorite: isTruthy(metadata.favorite),
                 poster: typeof metadata.poster === 'string' ? metadata.poster : '',
                 imageUrl: verticalImageUrl || horizontalImageUrl || DEFAULT_COVER,
@@ -295,6 +278,7 @@ export class AnimeService {
                 integrationId,
                 parts,
                 activePartId,
+                relatedMedia: parseRelatedMedia(metadata.related_media),
             };
 
             return anime;
@@ -365,7 +349,9 @@ export class AnimeService {
         if ('sourceUrl' in updates) frontmatterUpdates.source_url = updates.sourceUrl;
         if ('integrationProvider' in updates) frontmatterUpdates.integration_provider = updates.integrationProvider;
         if ('integrationId' in updates) frontmatterUpdates.integration_id = updates.integrationId;
+        if ('genres' in updates) frontmatterUpdates.genres = updates.genres?.length ? updates.genres : null;
         if ('tags' in updates) frontmatterUpdates.tags = updates.tags?.length ? updates.tags : null;
+        if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia);
 
         await this.metadataService.updateMetadata(file, frontmatterUpdates);
     }
@@ -385,8 +371,7 @@ export class AnimeService {
     }
 
     getRandomAnime(items: AnimeItem[]): AnimeItem | null {
-        if (items.length === 0) return null;
-        return items[Math.floor(Math.random() * items.length)];
+        return getRandomItem(items);
     }
 
     calculateStats(anime: AnimeItem[]): AnimeStats {

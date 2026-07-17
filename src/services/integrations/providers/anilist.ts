@@ -1,10 +1,33 @@
 import type { AnimeFormat } from '../../../types';
-import { AnimeDetails, IntegrationAnimePart, SearchResult } from '../types';
+import { AnimeDetails, IntegrationAnimePart, IntegrationMangaPart, MangaDetails, SearchResult } from '../types';
 import { JsonFetcher, asObject, getArray, getObject, getString, mapAnimeFormat, mapStringList, pickAnimeTitle, stripHtml } from './common';
 
-export async function searchAniList(fetchJson: JsonFetcher, query: string): Promise<SearchResult[]> {
+interface SearchPageOptions {
+    page?: number;
+    pageSize?: number;
+}
+
+function withHasNext<T>(items: T[], hasNext: boolean): T[] {
+    Object.defineProperty(items, 'hasNext', {
+        value: hasNext,
+        enumerable: false,
+        configurable: true,
+    });
+    return items;
+}
+
+export async function searchAniList(
+    fetchJson: JsonFetcher,
+    query: string,
+    options: SearchPageOptions = {}
+): Promise<SearchResult[]> {
+    const pageNumber = Math.max(1, options.page ?? 1);
+    const pageSize = Math.max(1, options.pageSize ?? 10);
     const gql = `query ($search: String, $page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
+    pageInfo {
+      hasNextPage
+    }
     media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
       id
       title {
@@ -34,16 +57,17 @@ export async function searchAniList(fetchJson: JsonFetcher, query: string): Prom
         'POST',
         JSON.stringify({
             query: gql,
-            variables: { search: query, page: 1, perPage: 10 },
+            variables: { search: query, page: pageNumber, perPage: pageSize },
         })
     );
 
     const root = asObject(json);
     const data = getObject(root, 'data');
     const page = getObject(data, 'Page');
+    const pageInfo = getObject(page, 'pageInfo');
     const results = getArray(page, 'media');
 
-    return results.map((item) => {
+    const mapped = results.map((item) => {
         const record = asObject(item);
         const startDate = getObject(record, 'startDate');
         const year = getString(startDate, 'year');
@@ -55,9 +79,11 @@ export async function searchAniList(fetchJson: JsonFetcher, query: string): Prom
             year,
             format: mapAnimeFormat(getString(record, 'format')),
             image: getString(coverImage, 'large') || getString(coverImage, 'medium'),
-            provider: 'anilist',
+            provider: 'anilist' as const,
         };
     });
+
+    return withHasNext(mapped, Boolean(pageInfo?.hasNextPage));
 }
 
 export async function getAniListDetails(fetchJson: JsonFetcher, id: string): Promise<AnimeDetails | null> {
@@ -148,6 +174,7 @@ export async function getAniListDetails(fetchJson: JsonFetcher, id: string): Pro
     const parts = await getAniListRelatedParts(fetchJson, item);
 
     return {
+        kind: 'anime',
         name: pickAnimeTitle(item.title),
         description: stripHtml(getString(item, 'description')),
         image,
@@ -160,6 +187,166 @@ export async function getAniListDetails(fetchJson: JsonFetcher, id: string): Pro
         format: mapAnimeFormat(getString(item, 'format')),
         parts,
     };
+}
+
+export async function searchAniListManga(
+    fetchJson: JsonFetcher,
+    query: string,
+    options: SearchPageOptions = {}
+): Promise<SearchResult[]> {
+    const pageNumber = Math.max(1, options.page ?? 1);
+    const pageSize = Math.max(1, options.pageSize ?? 10);
+    const gql = `query ($search: String, $page: Int, $perPage: Int) {
+  Page(page: $page, perPage: $perPage) {
+    pageInfo {
+      hasNextPage
+    }
+    media(search: $search, type: MANGA, sort: SEARCH_MATCH) {
+      id
+      title {
+        userPreferred
+        romaji
+        english
+        native
+      }
+      startDate {
+        year
+      }
+      format
+      coverImage {
+        large
+        medium
+      }
+    }
+  }
+}`;
+
+    const json = await fetchJson(
+        'https://graphql.anilist.co',
+        {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        'POST',
+        JSON.stringify({
+            query: gql,
+            variables: { search: query, page: pageNumber, perPage: pageSize },
+        })
+    );
+
+    const root = asObject(json);
+    const data = getObject(root, 'data');
+    const page = getObject(data, 'Page');
+    const pageInfo = getObject(page, 'pageInfo');
+    const results = getArray(page, 'media');
+
+    const mapped = results.map((item) => {
+        const record = asObject(item);
+        const startDate = getObject(record, 'startDate');
+        const year = getString(startDate, 'year');
+        const coverImage = getObject(record, 'coverImage');
+        return {
+            id: getString(record, 'id'),
+            title: pickAnimeTitle(record?.title),
+            subtitle: year,
+            year,
+            format: getString(record, 'format') || 'Manga',
+            image: getString(coverImage, 'large') || getString(coverImage, 'medium'),
+            provider: 'anilist' as const,
+        };
+    });
+
+    return withHasNext(mapped, Boolean(pageInfo?.hasNextPage));
+}
+
+export async function getAniListMangaDetails(fetchJson: JsonFetcher, id: string): Promise<MangaDetails | null> {
+    const numericId = Number.parseInt(id, 10);
+    if (!Number.isFinite(numericId)) return null;
+
+    const gql = `query ($id: Int) {
+  Media(id: $id, type: MANGA) {
+    id
+    title {
+      userPreferred
+      romaji
+      english
+      native
+    }
+    description(asHtml: false)
+    genres
+    chapters
+    volumes
+    startDate {
+      year
+    }
+    averageScore
+    siteUrl
+    coverImage {
+      extraLarge
+      large
+    }
+  }
+}`;
+
+    const json = await fetchJson(
+        'https://graphql.anilist.co',
+        {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        'POST',
+        JSON.stringify({
+            query: gql,
+            variables: { id: numericId },
+        })
+    );
+
+    const root = asObject(json);
+    const data = getObject(root, 'data');
+    const item = getObject(data, 'Media');
+    if (!item) return null;
+
+    const scoreValue = item.averageScore;
+    const score = typeof scoreValue === 'number'
+        ? (scoreValue / 10).toFixed(1)
+        : '';
+    const tags = mapStringList(getArray(item, 'genres'), (entry) => entry);
+    const startDate = getObject(item, 'startDate');
+    const coverImage = getObject(item, 'coverImage');
+    const image = getString(coverImage, 'extraLarge') || getString(coverImage, 'large');
+    const chapters = getNumber(item, 'chapters');
+    const volumes = getNumber(item, 'volumes');
+
+    return {
+        kind: 'manga',
+        name: pickAnimeTitle(item.title),
+        description: stripHtml(getString(item, 'description')),
+        poster: image,
+        posterHorizontal: image,
+        authors: [],
+        artists: [],
+        genres: tags,
+        year: getString(startDate, 'year'),
+        chapters: chapters ? String(chapters) : '',
+        volumes: volumes ? String(volumes) : '',
+        rating: score,
+        url: getString(item, 'siteUrl'),
+        parts: buildMangaParts(volumes, chapters),
+    };
+}
+
+function buildMangaParts(volumes: number | null, chapters: number | null): IntegrationMangaPart[] {
+    if (!volumes || volumes <= 0) return [];
+    const perVolume = chapters && chapters > 0 ? Math.ceil(chapters / volumes) : null;
+    return Array.from({ length: Math.min(volumes, 200) }, (_, index) => ({
+        id: `volume-${index + 1}`,
+        kind: 'volume' as const,
+        title: `Volume ${index + 1}`,
+        volumeNumber: index + 1,
+        chapterCurrent: 0,
+        chapterTotal: perVolume,
+        status: 'planned' as const,
+    }));
 }
 
 async function getAniListRelatedParts(fetchJson: JsonFetcher, root: Record<string, unknown>): Promise<IntegrationAnimePart[]> {

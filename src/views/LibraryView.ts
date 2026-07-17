@@ -4,12 +4,15 @@
  */
 
 import { ItemView, WorkspaceLeaf, TFile, TAbstractFile } from 'obsidian';
-import { AnimeItem, GameItem, MediaItem, MediaStatus, MediaType, FilterState, LorebaseSettings, LorebasePluginInterface, ViewMode, SortField } from '../types';
+import { AnimeItem, BookItem, GameItem, MangaItem, MediaItem, MediaStatus, MediaType, FilterState, LorebaseSettings, LorebasePluginInterface, MovieItem, ReadingItem, SeriesItem, ViewMode, SortField } from '../types';
 import { GameService } from '../services/GameService';
 import { AnimeService } from '../services/AnimeService';
+import { VideoService } from '../services/VideoService';
+import { ReadingService } from '../services/ReadingService';
+import { MetadataService } from '../services/MetadataService';
 import { Toolbar, ToolbarCallbacks } from '../components/Toolbar';
 import { GameCard } from '../components/GameCard';
-import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, STATUS_CONFIG, RATING_EMOJI } from '../constants';
+import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, STATUS_CONFIG, RATING_EMOJI, DEFAULT_GAME_TAG_PRESETS } from '../constants';
 import { t, i18n } from '../localization';
 import { VirtualGrid } from './library/VirtualGrid';
 import { showMediaContextMenu } from './library/contextMenu';
@@ -61,6 +64,10 @@ export class LibraryView extends ItemView {
     private plugin: LorebasePluginInterface;
     private gameService: GameService;
     private animeService: AnimeService;
+    private movieService: VideoService;
+    private seriesService: VideoService;
+    private bookService: ReadingService;
+    private mangaService: ReadingService;
     private toolbar: Toolbar | null = null;
     private libraryContentEl: HTMLElement | null = null;
     private gridEl: HTMLElement | null = null;
@@ -109,13 +116,30 @@ export class LibraryView extends ItemView {
         this.plugin = plugin;
         const sharedGameService = this.plugin.getGameService();
         const sharedAnimeService = this.plugin.getAnimeService();
+        const sharedMovieService = this.plugin.getMovieService();
+        const sharedSeriesService = this.plugin.getSeriesService();
+        const sharedBookService = this.plugin.getBookService();
+        const sharedMangaService = this.plugin.getMangaService();
+        const sharedMetadataService = this.plugin.getMetadataService() ?? new MetadataService(this.app);
 
         this.gameService = sharedGameService instanceof GameService
             ? sharedGameService
-            : new GameService(this.app);
+            : new GameService(this.app, sharedMetadataService);
         this.animeService = sharedAnimeService instanceof AnimeService
             ? sharedAnimeService
-            : new AnimeService(this.app);
+            : new AnimeService(this.app, sharedMetadataService);
+        this.movieService = sharedMovieService instanceof VideoService
+            ? sharedMovieService
+            : new VideoService(this.app, 'movie', this.plugin.settings.movies.folderPath, sharedMetadataService);
+        this.seriesService = sharedSeriesService instanceof VideoService
+            ? sharedSeriesService
+            : new VideoService(this.app, 'series', this.plugin.settings.series.folderPath, sharedMetadataService);
+        this.bookService = sharedBookService instanceof ReadingService
+            ? sharedBookService
+            : new ReadingService(this.app, 'book', this.plugin.settings.books.folderPath, sharedMetadataService);
+        this.mangaService = sharedMangaService instanceof ReadingService
+            ? sharedMangaService
+            : new ReadingService(this.app, 'manga', this.plugin.settings.manga.folderPath, sharedMetadataService);
         this.layoutCalculator = new LayoutCalculator(() => (
             this.libraryContentEl?.clientWidth || this.contentEl.clientWidth
         ));
@@ -146,6 +170,10 @@ export class LibraryView extends ItemView {
             i18n.setLanguage(settings.language);
             this.gameService.setFolderPath(settings.games.folderPath);
             this.animeService.setFolderPath(settings.anime.folderPath);
+            this.movieService.setFolderPath(settings.movies.folderPath);
+            this.seriesService.setFolderPath(settings.series.folderPath);
+            this.bookService.setFolderPath(settings.books.folderPath);
+            this.mangaService.setFolderPath(settings.manga.folderPath);
             this.viewMode = activeSettings.orientation === 'horizontal' ? 'horizontal' : 'grid';
 
             // Use contentEl provided by ItemView
@@ -231,6 +259,7 @@ export class LibraryView extends ItemView {
 
         // Only process if it's a TFile (not a folder)
         if (!(file instanceof TFile)) return;
+        this.invalidateActiveServiceCache();
 
         // Check if this file is in our games list (O(1) lookup)
         const index = this.gameIndex.get(file.path);
@@ -247,13 +276,12 @@ export class LibraryView extends ItemView {
     private handleFileRename(file: TAbstractFile, oldPath: string): void {
         if (this.isDestroyed) return;
         if (!(file instanceof TFile)) return;
+        this.invalidateActiveServiceCache();
 
         const existingIndex = this.gameIndex.get(oldPath);
         const activeSettings = this.getActiveSettings();
         const isInLibraryFolder = file.path.startsWith(activeSettings.folderPath) && file.extension === 'md';
-        const parsedItem = this.mediaType === 'anime'
-            ? this.animeService.parseAnimeFromCache(file)
-            : this.gameService.parseGameFromCache(file);
+        const parsedItem = this.parseActiveItemFromCache(file);
 
         if (existingIndex !== undefined) {
             if (isInLibraryFolder && parsedItem) {
@@ -281,14 +309,13 @@ export class LibraryView extends ItemView {
     private handleMetadataChange(file: TFile): void {
         // Don't process if view is destroyed
         if (this.isDestroyed) return;
+        this.invalidateActiveServiceCache();
 
         // Check if this file is in our games list (O(1) lookup)
         const existingIndex = this.gameIndex.get(file.path);
         const activeSettings = this.getActiveSettings();
         const isInLibraryFolder = file.path.startsWith(activeSettings.folderPath) && file.extension === 'md';
-        const parsedItem = this.mediaType === 'anime'
-            ? this.animeService.parseAnimeFromCache(file)
-            : this.gameService.parseGameFromCache(file);
+        const parsedItem = this.parseActiveItemFromCache(file);
 
         if (existingIndex !== undefined) {
             if (this.shouldSuppressOptimisticMetadataRender(file.path)) {
@@ -323,6 +350,31 @@ export class LibraryView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!(file instanceof TFile)) return;
         this.handleMetadataChange(file);
+    }
+
+    private invalidateActiveServiceCache(): void {
+        if (this.mediaType === 'anime') {
+            this.animeService.invalidateCache();
+        } else if (this.mediaType === 'movie') {
+            this.movieService.invalidateCache();
+        } else if (this.mediaType === 'series') {
+            this.seriesService.invalidateCache();
+        } else if (this.mediaType === 'book') {
+            this.bookService.invalidateCache();
+        } else if (this.mediaType === 'manga') {
+            this.mangaService.invalidateCache();
+        } else {
+            this.gameService.invalidateCache();
+        }
+    }
+
+    private parseActiveItemFromCache(file: TFile): MediaItem | null {
+        if (this.mediaType === 'anime') return this.animeService.parseAnimeFromCache(file);
+        if (this.mediaType === 'movie') return this.movieService.parseFromCache(file);
+        if (this.mediaType === 'series') return this.seriesService.parseFromCache(file);
+        if (this.mediaType === 'book') return this.bookService.parseFromCache(file);
+        if (this.mediaType === 'manga') return this.mangaService.parseFromCache(file);
+        return this.gameService.parseGameFromCache(file);
     }
 
     /**
@@ -386,6 +438,14 @@ export class LibraryView extends ItemView {
         try {
             if (this.mediaType === 'anime') {
                 this.games = await this.animeService.loadAnime();
+            } else if (this.mediaType === 'movie') {
+                this.games = await this.movieService.loadItems();
+            } else if (this.mediaType === 'series') {
+                this.games = await this.seriesService.loadItems();
+            } else if (this.mediaType === 'book') {
+                this.games = await this.bookService.loadItems();
+            } else if (this.mediaType === 'manga') {
+                this.games = await this.mangaService.loadItems();
             } else {
                 this.games = await this.gameService.loadGames();
             }
@@ -429,20 +489,50 @@ export class LibraryView extends ItemView {
         try {
             const settings = this.getActiveSettings();
 
-            this.filteredGames = (this.mediaType === 'anime'
-                ? this.animeService.filterAndSort(
+            if (this.mediaType === 'anime') {
+                this.filteredGames = this.animeService.filterAndSort(
                     this.games as AnimeItem[],
                     this.filter,
                     settings.sortField,
                     settings.sortOrder
-                )
-                : this.gameService.filterAndSort(
+                );
+            } else if (this.mediaType === 'movie') {
+                this.filteredGames = this.movieService.filterAndSort(
+                    this.games as MovieItem[],
+                    this.filter,
+                    settings.sortField,
+                    settings.sortOrder
+                );
+            } else if (this.mediaType === 'series') {
+                this.filteredGames = this.seriesService.filterAndSort(
+                    this.games as SeriesItem[],
+                    this.filter,
+                    settings.sortField,
+                    settings.sortOrder
+                );
+            } else if (this.mediaType === 'book') {
+                this.filteredGames = this.bookService.filterAndSort(
+                    this.games as ReadingItem[],
+                    this.filter,
+                    settings.sortField,
+                    settings.sortOrder
+                );
+            } else if (this.mediaType === 'manga') {
+                this.filteredGames = this.mangaService.filterAndSort(
+                    this.games as ReadingItem[],
+                    this.filter,
+                    settings.sortField,
+                    settings.sortOrder
+                );
+            } else {
+                this.filteredGames = this.gameService.filterAndSort(
                     this.games as GameItem[],
                     this.filter,
                     settings.sortField,
                     settings.sortOrder,
                     settings.showAdultInAll
-                ));
+                );
+            }
 
             this.updateToolbarTags();
             this.render({ scrollMode });
@@ -485,7 +575,7 @@ export class LibraryView extends ItemView {
         if (this.filteredGames.length === 0) {
             this.libraryContentEl.createDiv({
                 cls: 'lorebase-empty',
-                text: t('noGamesFound')
+                text: this.getEmptyStateText()
             });
             this.scrollManager.apply(scrollMode, anchor);
             return;
@@ -544,6 +634,15 @@ export class LibraryView extends ItemView {
         }
 
         this.renderCardsInBatches(tasks, version, () => this.scrollManager.apply(scrollMode, anchor));
+    }
+
+    private getEmptyStateText(): string {
+        if (this.mediaType === 'anime') return t('noAnimeFound');
+        if (this.mediaType === 'movie') return t('noMoviesFound');
+        if (this.mediaType === 'series') return t('noSeriesFound');
+        if (this.mediaType === 'book') return t('noBooksFound');
+        if (this.mediaType === 'manga') return t('noMangaFound');
+        return t('noGamesFound');
     }
 
     /**
@@ -741,6 +840,7 @@ export class LibraryView extends ItemView {
             },
             layout.cardSize,
             layout.orientation,
+            activeSettings.cardStyle,
             activeSettings.sortField,
             this.getBadgeProfile(game.type),
             overlayProfile.layout,
@@ -754,6 +854,10 @@ export class LibraryView extends ItemView {
             this.getStatusLabelOverrides(game.type)
         );
         card.getElement().dataset.lorebaseFilePath = game.filePath;
+        card.getElement().toggleClass(
+            'lorebase-book-cover-effect',
+            (game.type === 'book' || game.type === 'manga') && Boolean(activeSettings.bookCoverEffect)
+        );
         return card;
     }
 
@@ -785,7 +889,8 @@ export class LibraryView extends ItemView {
                 && left.episodeCurrent === right.episodeCurrent
                 && left.episodeTotal === right.episodeTotal
                 && left.dateWatched === right.dateWatched
-                && left.sourceUrl === right.sourceUrl;
+                && left.sourceUrl === right.sourceUrl
+                && this.areRelatedMediaEquivalent(left.relatedMedia, right.relatedMedia);
         }
 
         if (left.type === 'game' && right.type === 'game') {
@@ -796,6 +901,66 @@ export class LibraryView extends ItemView {
                 && left.developer === right.developer;
         }
 
+        if (left.type === 'movie' && right.type === 'movie') {
+            const leftParts = left.parts ?? [];
+            const rightParts = right.parts ?? [];
+            return left.summary === right.summary
+                && left.sourceUrl === right.sourceUrl
+                && left.rating === right.rating
+                && left.releaseDate === right.releaseDate
+                && left.runtime === right.runtime
+                && left.director === right.director
+                && left.actors === right.actors
+                && left.activePartId === right.activePartId
+                && this.areVideoPartsEquivalent(leftParts, rightParts)
+                && this.areRelatedMediaEquivalent(left.relatedMedia, right.relatedMedia);
+        }
+
+        if (left.type === 'series' && right.type === 'series') {
+            const leftParts = left.parts ?? [];
+            const rightParts = right.parts ?? [];
+            return left.summary === right.summary
+                && left.sourceUrl === right.sourceUrl
+                && left.rating === right.rating
+                && left.releaseDate === right.releaseDate
+                && left.runtime === right.runtime
+                && left.director === right.director
+                && left.actors === right.actors
+                && left.activePartId === right.activePartId
+                && this.areVideoPartsEquivalent(leftParts, rightParts)
+                && left.seasons === right.seasons
+                && left.episodeCurrent === right.episodeCurrent
+                && left.episodeTotal === right.episodeTotal
+                && this.areStringArraysEquivalent(left.networks, right.networks)
+                && this.areStringArraysEquivalent(left.studios, right.studios)
+                && this.areRelatedMediaEquivalent(left.relatedMedia, right.relatedMedia);
+        }
+
+        if (left.type === 'book' && right.type === 'book') {
+            return left.summary === right.summary
+                && left.sourceUrl === right.sourceUrl
+                && left.publisher === right.publisher
+                && left.releaseDate === right.releaseDate
+                && left.pageCurrent === right.pageCurrent
+                && left.pageTotal === right.pageTotal
+                && this.areStringArraysEquivalent(left.authors, right.authors)
+                && this.areRelatedMediaEquivalent(left.relatedMedia, right.relatedMedia);
+        }
+
+        if (left.type === 'manga' && right.type === 'manga') {
+            return left.summary === right.summary
+                && left.sourceUrl === right.sourceUrl
+                && left.chapterCurrent === right.chapterCurrent
+                && left.chapterTotal === right.chapterTotal
+                && left.volumeCurrent === right.volumeCurrent
+                && left.volumeTotal === right.volumeTotal
+                && left.activePartId === right.activePartId
+                && this.areStringArraysEquivalent(left.authors, right.authors)
+                && this.areStringArraysEquivalent(left.artists, right.artists)
+                && this.areMangaPartsEquivalent(left.parts ?? [], right.parts ?? [])
+                && this.areRelatedMediaEquivalent(left.relatedMedia, right.relatedMedia);
+        }
+
         return true;
     }
 
@@ -804,6 +969,47 @@ export class LibraryView extends ItemView {
         const rightValues = right ?? [];
         if (leftValues.length !== rightValues.length) return false;
         return leftValues.every((value, index) => value === rightValues[index]);
+    }
+
+    private areVideoPartsEquivalent(left: NonNullable<MovieItem['parts']>, right: NonNullable<MovieItem['parts']>): boolean {
+        return left.length === right.length
+            && left.every((part, index) => {
+                const other = right[index];
+                return Boolean(other)
+                    && part.id === other.id
+                    && part.title === other.title
+                    && part.seasonNumber === other.seasonNumber
+                    && part.episodeCurrent === other.episodeCurrent
+                    && part.episodeTotal === other.episodeTotal
+                    && part.status === other.status;
+            });
+    }
+
+    private areMangaPartsEquivalent(left: NonNullable<MangaItem['parts']>, right: NonNullable<MangaItem['parts']>): boolean {
+        return left.length === right.length
+            && left.every((part, index) => {
+                const other = right[index];
+                return Boolean(other)
+                    && part.id === other.id
+                    && part.title === other.title
+                    && part.volumeNumber === other.volumeNumber
+                    && part.chapterCurrent === other.chapterCurrent
+                    && part.chapterTotal === other.chapterTotal
+                    && part.status === other.status;
+            });
+    }
+
+    private areRelatedMediaEquivalent(left: AnimeItem['relatedMedia'], right: AnimeItem['relatedMedia']): boolean {
+        const leftItems = left ?? [];
+        const rightItems = right ?? [];
+        if (leftItems.length !== rightItems.length) return false;
+        return leftItems.every((leftItem, index) => {
+            const rightItem = rightItems[index];
+            return Boolean(rightItem)
+                && leftItem.type === rightItem.type
+                && leftItem.path === rightItem.path
+                && leftItem.title === rightItem.title;
+        });
     }
 
     /**
@@ -844,6 +1050,14 @@ export class LibraryView extends ItemView {
                     if (this.isDestroyed) return;
                     if (item.type === 'anime') {
                         await this.animeService.deleteAnime(item);
+                    } else if (item.type === 'movie') {
+                        await this.movieService.deleteItem(item);
+                    } else if (item.type === 'series') {
+                        await this.seriesService.deleteItem(item);
+                    } else if (item.type === 'book') {
+                        await this.bookService.deleteItem(item);
+                    } else if (item.type === 'manga') {
+                        await this.mangaService.deleteItem(item);
                     } else {
                         await this.gameService.deleteGame(item);
                     }
@@ -856,6 +1070,20 @@ export class LibraryView extends ItemView {
             },
             updateGame: (gameItem, updates) => {
                 void this.gameService.updateGame(gameItem, updates);
+            },
+            updateVideo: (videoItem, updates) => {
+                if (videoItem.type === 'movie') {
+                    void this.movieService.updateItem(videoItem, updates);
+                } else {
+                    void this.seriesService.updateItem(videoItem, updates);
+                }
+            },
+            updateReading: (readingItem, updates) => {
+                if (readingItem.type === 'book') {
+                    void this.bookService.updateItem(readingItem, updates);
+                } else {
+                    void this.mangaService.updateItem(readingItem, updates);
+                }
             },
         });
     }
@@ -884,6 +1112,20 @@ export class LibraryView extends ItemView {
         if (changedFields.includes('userRating') && settings.sortField === 'rating') return true;
         if (changedFields.includes('status') && this.filter.statuses.length > 0) return true;
         if (changedFields.includes('favorite') && this.filter.favoriteOnly) return true;
+        if (changedFields.some((field) => (
+            field === 'episodeCurrent'
+            || field === 'episodeTotal'
+            || field === 'seasonCurrent'
+            || field === 'seasonTotal'
+            || field === 'pageCurrent'
+            || field === 'pageTotal'
+            || field === 'chapterCurrent'
+            || field === 'chapterTotal'
+            || field === 'volumeCurrent'
+            || field === 'volumeTotal'
+            || field === 'activePartId'
+            || field === 'parts'
+        ))) return true;
         return false;
     }
 
@@ -985,17 +1227,26 @@ export class LibraryView extends ItemView {
 
     private getRenderedStatusLabel(item: MediaItem): string {
         const overrides = this.getStatusLabelOverrides(item.type);
+        const isReadingMedia = item.type === 'book' || item.type === 'manga';
         const fallback: Record<string, string> = {
-            completed: item.type === 'anime' ? t('statusCompleted') : t('statusPlayed'),
+            completed: item.type === 'game' ? t('statusPlayed') : t('statusCompleted'),
             playing: t('statusPlaying'),
             dropped: t('statusDropped'),
             sandbox: t('statusSandbox'),
+            wishlist: t('statusWishlist'),
             not_started: t('statusNotStarted'),
-            planned: t('statusPlanned'),
-            watching: t('statusWatching'),
+            planned: isReadingMedia ? t('statusPlanToRead') : t('statusPlanned'),
+            watching: isReadingMedia ? t('statusReading') : t('statusWatching'),
             paused: t('statusPaused'),
         };
-        return overrides[item.status]?.trim() || fallback[item.status] || String(item.status);
+        const override = overrides[item.status]?.trim();
+        const isLegacyGameCompletedLabel = item.type !== 'game'
+            && item.status === 'completed'
+            && override === t('statusPlayed')
+            && t('statusPlayed') !== t('statusCompleted');
+        return !isLegacyGameCompletedLabel && override
+            ? override
+            : fallback[item.status] || String(item.status);
     }
 
     private createBadgeSvg(
@@ -1023,7 +1274,15 @@ export class LibraryView extends ItemView {
     private showRandomGame(): void {
         const randomGame = this.mediaType === 'anime'
             ? this.animeService.getRandomAnime(this.filteredGames as AnimeItem[])
-            : this.gameService.getRandomGame(this.filteredGames as GameItem[]);
+            : this.mediaType === 'movie'
+                ? this.movieService.getRandomItem(this.filteredGames as MovieItem[])
+                : this.mediaType === 'series'
+                    ? this.seriesService.getRandomItem(this.filteredGames as SeriesItem[])
+                    : this.mediaType === 'book'
+                        ? this.bookService.getRandomItem(this.filteredGames as ReadingItem[])
+                        : this.mediaType === 'manga'
+                            ? this.mangaService.getRandomItem(this.filteredGames as ReadingItem[])
+                            : this.gameService.getRandomGame(this.filteredGames as GameItem[]);
         if (randomGame) {
             if (!this.libraryContentEl) return;
             renderRandomCard({
@@ -1046,6 +1305,26 @@ export class LibraryView extends ItemView {
         if (this.mediaType === 'anime') {
             const stats = this.animeService.calculateStats(this.games as AnimeItem[]);
             this.plugin.showStatsModal(stats, 'anime');
+            return;
+        }
+        if (this.mediaType === 'movie') {
+            const stats = this.movieService.calculateStats(this.games as MovieItem[]);
+            this.plugin.showStatsModal(stats, 'movie');
+            return;
+        }
+        if (this.mediaType === 'series') {
+            const stats = this.seriesService.calculateStats(this.games as SeriesItem[]);
+            this.plugin.showStatsModal(stats, 'series');
+            return;
+        }
+        if (this.mediaType === 'book') {
+            const stats = this.bookService.calculateStats(this.games as ReadingItem[]);
+            this.plugin.showStatsModal(stats, 'book');
+            return;
+        }
+        if (this.mediaType === 'manga') {
+            const stats = this.mangaService.calculateStats(this.games as ReadingItem[]);
+            this.plugin.showStatsModal(stats, 'manga');
             return;
         }
         const stats = this.gameService.calculateStats(this.games as GameItem[]);
@@ -1087,15 +1366,17 @@ export class LibraryView extends ItemView {
     async refresh(): Promise<void> {
         this.cancelScheduledVisualRefresh();
 
-        // Removed unnecessary cache invalidation to improve performance
-        // this.gameService.invalidateCache();
-
         const settings = this.plugin.settings;
         this.syncMediaType();
         const activeSettings = this.getActiveSettings();
         // Update folder path from settings in case it changed
         this.gameService.setFolderPath(settings.games.folderPath);
         this.animeService.setFolderPath(settings.anime.folderPath);
+        this.movieService.setFolderPath(settings.movies.folderPath);
+        this.seriesService.setFolderPath(settings.series.folderPath);
+        this.bookService.setFolderPath(settings.books.folderPath);
+        this.mangaService.setFolderPath(settings.manga.folderPath);
+        this.invalidateActiveServiceCache();
         this.cachedLayout = null;
 
         // If 18+ is disabled and we are in adult mode, switch to all
@@ -1188,11 +1469,7 @@ export class LibraryView extends ItemView {
         this.applyViewMode();
         this.filter.adultOnly = false;
         this.filter.customOnly = false;
-        if (this.mediaType === 'anime') {
-            this.animeService.invalidateCache();
-        } else {
-            this.gameService.invalidateCache();
-        }
+        this.invalidateActiveServiceCache();
         this.filter.statuses = [];
         this.filter.tags = [];
         this.filter.genres = [];
@@ -1222,7 +1499,12 @@ export class LibraryView extends ItemView {
     }
 
     private getActiveSettings(): LorebaseSettings['games'] {
-        return this.mediaType === 'anime' ? this.plugin.settings.anime : this.plugin.settings.games;
+        if (this.mediaType === 'anime') return this.plugin.settings.anime;
+        if (this.mediaType === 'movie') return this.plugin.settings.movies;
+        if (this.mediaType === 'series') return this.plugin.settings.series;
+        if (this.mediaType === 'book') return this.plugin.settings.books;
+        if (this.mediaType === 'manga') return this.plugin.settings.manga;
+        return this.plugin.settings.games;
     }
 
     private getOverlayProfile(mediaType: MediaType): {
@@ -1243,6 +1525,58 @@ export class LibraryView extends ItemView {
                     : this.plugin.settings.animeDescriptionLines,
             };
         }
+        if (mediaType === 'movie') {
+            return {
+                layout: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.movieHorizontalOverlayTextLayout
+                    : this.plugin.settings.movieOverlayTextLayout,
+                visibility: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.movieHorizontalOverlayTextVisibility
+                    : this.plugin.settings.movieOverlayTextVisibility,
+                descriptionLines: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.movieHorizontalDescriptionLines
+                    : this.plugin.settings.movieDescriptionLines,
+            };
+        }
+        if (mediaType === 'series') {
+            return {
+                layout: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.seriesHorizontalOverlayTextLayout
+                    : this.plugin.settings.seriesOverlayTextLayout,
+                visibility: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.seriesHorizontalOverlayTextVisibility
+                    : this.plugin.settings.seriesOverlayTextVisibility,
+                descriptionLines: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.seriesHorizontalDescriptionLines
+                    : this.plugin.settings.seriesDescriptionLines,
+            };
+        }
+        if (mediaType === 'book') {
+            return {
+                layout: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.bookHorizontalOverlayTextLayout
+                    : this.plugin.settings.bookOverlayTextLayout,
+                visibility: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.bookHorizontalOverlayTextVisibility
+                    : this.plugin.settings.bookOverlayTextVisibility,
+                descriptionLines: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.bookHorizontalDescriptionLines
+                    : this.plugin.settings.bookDescriptionLines,
+            };
+        }
+        if (mediaType === 'manga') {
+            return {
+                layout: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.mangaHorizontalOverlayTextLayout
+                    : this.plugin.settings.mangaOverlayTextLayout,
+                visibility: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.mangaHorizontalOverlayTextVisibility
+                    : this.plugin.settings.mangaOverlayTextVisibility,
+                descriptionLines: this.viewMode === 'horizontal'
+                    ? this.plugin.settings.mangaHorizontalDescriptionLines
+                    : this.plugin.settings.mangaDescriptionLines,
+            };
+        }
         return {
             layout: this.viewMode === 'horizontal'
                 ? this.plugin.settings.horizontalOverlayTextLayout
@@ -1261,6 +1595,26 @@ export class LibraryView extends ItemView {
             return this.viewMode === 'horizontal'
                 ? this.plugin.settings.animeHorizontalBadges
                 : this.plugin.settings.animeBadges;
+        }
+        if (mediaType === 'movie') {
+            return this.viewMode === 'horizontal'
+                ? this.plugin.settings.movieHorizontalBadges
+                : this.plugin.settings.movieBadges;
+        }
+        if (mediaType === 'series') {
+            return this.viewMode === 'horizontal'
+                ? this.plugin.settings.seriesHorizontalBadges
+                : this.plugin.settings.seriesBadges;
+        }
+        if (mediaType === 'book') {
+            return this.viewMode === 'horizontal'
+                ? this.plugin.settings.bookHorizontalBadges
+                : this.plugin.settings.bookBadges;
+        }
+        if (mediaType === 'manga') {
+            return this.viewMode === 'horizontal'
+                ? this.plugin.settings.mangaHorizontalBadges
+                : this.plugin.settings.mangaBadges;
         }
         return this.viewMode === 'horizontal'
             ? this.plugin.settings.horizontalBadges
@@ -1310,7 +1664,15 @@ export class LibraryView extends ItemView {
     private getStatusLabelOverrides(mediaType: MediaType): Partial<Record<MediaStatus, string>> {
         return mediaType === 'anime'
             ? this.plugin.settings.statusLabels.anime
-            : this.plugin.settings.statusLabels.games;
+            : mediaType === 'movie'
+                ? this.plugin.settings.statusLabels.movies
+                : mediaType === 'series'
+                    ? this.plugin.settings.statusLabels.series
+                    : mediaType === 'book'
+                        ? this.plugin.settings.statusLabels.books
+                        : mediaType === 'manga'
+                            ? this.plugin.settings.statusLabels.manga
+                            : this.plugin.settings.statusLabels.games;
     }
 
     private getPlanPresetLabel(id: string, fallback: string): string {
@@ -1320,7 +1682,8 @@ export class LibraryView extends ItemView {
             'wait-early-access': t('planWaitEarlyAccess'),
             'next-playthrough': t('planNextInQueue'),
         };
-        return labels[id] ?? fallback;
+        const defaultPreset = DEFAULT_GAME_TAG_PRESETS.find((preset) => preset.id === id);
+        return defaultPreset && fallback === defaultPreset.label ? labels[id] ?? fallback : fallback;
     }
 
 }

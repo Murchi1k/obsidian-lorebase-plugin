@@ -7,6 +7,7 @@ import { App, TFile } from 'obsidian';
 
 export class MetadataService {
     private app: App;
+    private imagePathCache = new Map<string, string | null>();
 
     constructor(app: App) {
         this.app = app;
@@ -88,18 +89,27 @@ export class MetadataService {
 
         // Remove leading/trailing quotes
         cleanPath = cleanPath.replace(/^["']|["']$/g, '');
+        const cached = this.imagePathCache.get(cleanPath);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const cacheResult = (value: string | null): string | null => {
+            this.imagePathCache.set(cleanPath, value);
+            return value;
+        };
 
         // Try exact path first
         let file = this.app.vault.getAbstractFileByPath(cleanPath);
         if (file && file instanceof TFile) {
-            return this.app.vault.getResourcePath(file);
+            return cacheResult(this.app.vault.getResourcePath(file));
         }
 
         // Try with files/ prefix (common poster location)
         if (!cleanPath.startsWith('files/')) {
             file = this.app.vault.getAbstractFileByPath(`files/${cleanPath}`);
             if (file && file instanceof TFile) {
-                return this.app.vault.getResourcePath(file);
+                return cacheResult(this.app.vault.getResourcePath(file));
             }
         }
 
@@ -109,13 +119,13 @@ export class MetadataService {
             if (!cleanPath.toLowerCase().endsWith(ext)) {
                 file = this.app.vault.getAbstractFileByPath(cleanPath + ext);
                 if (file && file instanceof TFile) {
-                    return this.app.vault.getResourcePath(file);
+                    return cacheResult(this.app.vault.getResourcePath(file));
                 }
 
                 // Also try with files/ prefix
                 file = this.app.vault.getAbstractFileByPath(`files/${cleanPath}${ext}`);
                 if (file && file instanceof TFile) {
-                    return this.app.vault.getResourcePath(file);
+                    return cacheResult(this.app.vault.getResourcePath(file));
                 }
             }
         }
@@ -125,10 +135,10 @@ export class MetadataService {
         const allFiles = this.app.vault.getFiles();
         for (const f of allFiles) {
             if (f.basename === basename || f.name === basename) {
-                return this.app.vault.getResourcePath(f);
+                return cacheResult(this.app.vault.getResourcePath(f));
             }
         }
 
-        return null;
+        return cacheResult(null);
     }
 }

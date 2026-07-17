@@ -1,16 +1,36 @@
 import { GameDetails, SearchResult } from '../types';
 import { JsonFetcher, asObject, getArray, getObject, getString, mapStringList, stripHtml, toStringSafe } from './common';
 
-export async function searchRawg(fetchJson: JsonFetcher, query: string, apiKey: string): Promise<SearchResult[]> {
+interface SearchPageOptions {
+    page?: number;
+    pageSize?: number;
+}
+
+function withHasNext<T>(items: T[], hasNext: boolean): T[] {
+    Object.defineProperty(items, 'hasNext', {
+        value: hasNext,
+        enumerable: false,
+        configurable: true,
+    });
+    return items;
+}
+
+export async function searchRawg(
+    fetchJson: JsonFetcher,
+    query: string,
+    apiKey: string,
+    options: SearchPageOptions = {}
+): Promise<SearchResult[]> {
     const url = new URL('https://api.rawg.io/api/games');
     url.searchParams.set('search', query);
-    url.searchParams.set('page_size', '10');
+    url.searchParams.set('page', String(Math.max(1, options.page ?? 1)));
+    url.searchParams.set('page_size', String(Math.max(1, options.pageSize ?? 10)));
     url.searchParams.set('key', apiKey);
 
     const root = asObject(await fetchJson(url.toString()));
     const results = getArray(root, 'results');
 
-    return results.map((item) => {
+    const mapped = results.map((item) => {
         const record = asObject(item);
         const released = getString(record, 'released');
         return {
@@ -19,9 +39,11 @@ export async function searchRawg(fetchJson: JsonFetcher, query: string, apiKey: 
             subtitle: released ? released.slice(0, 4) : '',
             year: released ? released.slice(0, 4) : '',
             image: getString(record, 'background_image'),
-            provider: 'rawg',
+            provider: 'rawg' as const,
         };
     });
+
+    return withHasNext(mapped, Boolean(getString(root, 'next')));
 }
 
 export async function getRawgDetails(fetchJson: JsonFetcher, id: string, apiKey: string): Promise<GameDetails | null> {
@@ -43,6 +65,7 @@ export async function getRawgDetails(fetchJson: JsonFetcher, id: string, apiKey:
     const urlLink = slug ? `https://rawg.io/games/${slug}` : '';
 
     return {
+        kind: 'game',
         name: getString(item, 'name') || 'Unknown',
         description: stripHtml(getString(item, 'description_raw') || getString(item, 'description')),
         poster: getString(item, 'background_image'),

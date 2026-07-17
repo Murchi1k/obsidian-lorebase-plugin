@@ -1,6 +1,6 @@
 import { GameCard } from '../../components/GameCard';
 
-export type VirtualGridOrientation = 'vertical' | 'horizontal';
+type VirtualGridOrientation = 'vertical' | 'horizontal';
 
 type CreateCardFn<T> = (parent: HTMLElement, item: T) => GameCard;
 

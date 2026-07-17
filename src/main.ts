@@ -3,22 +3,27 @@
  * Games and anime tracker plugin for Obsidian
  */
 
-import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon } from 'obsidian';
-import { LorebaseSettings, MediaItem, GameStats, AnimeStats, MediaType } from './types';
-import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG } from './constants';
+import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon, TFile } from 'obsidian';
+import { LorebaseSettings, MediaItem, GameItem, GameStats, AnimeStats, VideoStats, ReadingStats, MediaType, RelatedMediaLink, ReadingItem } from './types';
+import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG, DEFAULT_COVER } from './constants';
 import { i18n, t } from './localization';
 import { LibraryView } from './views/LibraryView';
 import { LorebaseSettingTab } from './settings/SettingsTab';
 import { EditModal } from './modals/EditModal';
 import { AnimeEditModal } from './modals/AnimeEditModal';
+import { VideoEditModal } from './modals/VideoEditModal';
+import { ReadingEditModal } from './modals/ReadingEditModal';
 import { StatsModal } from './modals/StatsModal';
 import { DeleteModal } from './modals/DeleteModal';
 import { SteamSyncReviewModal } from './modals/SteamSyncReviewModal';
 import { GameService } from './services/GameService';
 import { AnimeService } from './services/AnimeService';
+import { VideoService } from './services/VideoService';
+import { ReadingService } from './services/ReadingService';
 import { ParticleService } from './services/ParticleService';
 import { IntegrationService } from './services/IntegrationService';
 import { SteamSyncService } from './services/SteamSyncService';
+import { MetadataService } from './services/MetadataService';
 import {
     mergeOverlayLayout,
     mergeOverlayVisibility,
@@ -26,6 +31,7 @@ import {
     normalizeTagPresets,
     parseBadges,
 } from './settings/settingsNormalization';
+import { parseRelatedMedia } from './services/media/parsers';
 
 // =============================================================================
 // LOREBASE PLUGIN
@@ -38,10 +44,15 @@ export default class LorebasePlugin extends Plugin {
     settings: LorebaseSettings = DEFAULT_SETTINGS;
     private gameService: GameService | null = null;
     private animeService: AnimeService | null = null;
+    private movieService: VideoService | null = null;
+    private seriesService: VideoService | null = null;
+    private bookService: ReadingService | null = null;
+    private mangaService: ReadingService | null = null;
     private mediaType: MediaType = 'game';
     private particleService: ParticleService | null = null;
     private integrationService: IntegrationService | null = null;
     private steamSyncService: SteamSyncService | null = null;
+    private metadataService: MetadataService | null = null;
 
     async onload(): Promise<void> {
         // Load settings
@@ -52,14 +63,19 @@ export default class LorebasePlugin extends Plugin {
         i18n.setLanguage(this.settings.language);
 
         // Initialize game service
-        this.gameService = new GameService(this.app);
+        this.metadataService = new MetadataService(this.app);
+        this.gameService = new GameService(this.app, this.metadataService);
         this.gameService.setFolderPath(this.settings.games.folderPath);
-        this.animeService = new AnimeService(this.app);
+        this.animeService = new AnimeService(this.app, this.metadataService);
         this.animeService.setFolderPath(this.settings.anime.folderPath);
+        this.movieService = new VideoService(this.app, 'movie', this.settings.movies.folderPath, this.metadataService);
+        this.seriesService = new VideoService(this.app, 'series', this.settings.series.folderPath, this.metadataService);
+        this.bookService = new ReadingService(this.app, 'book', this.settings.books.folderPath, this.metadataService);
+        this.mangaService = new ReadingService(this.app, 'manga', this.settings.manga.folderPath, this.metadataService);
         this.integrationService = new IntegrationService(this.app, () => this.settings, () => {
             void this.runSteamSync();
         });
-        this.steamSyncService = new SteamSyncService(this.app);
+        this.steamSyncService = new SteamSyncService(this.app, this.metadataService);
         addIcon(LOREBASE_ICON_ID, LOREBASE_ICON_SVG);
 
         // Register the library view
@@ -99,6 +115,38 @@ export default class LorebasePlugin extends Plugin {
         });
 
         this.addCommand({
+            id: 'add-movie',
+            name: t('commandAddMovie'),
+            callback: () => {
+                void this.integrationService?.addMovie();
+            }
+        });
+
+        this.addCommand({
+            id: 'add-series',
+            name: t('commandAddSeries'),
+            callback: () => {
+                void this.integrationService?.addSeries();
+            }
+        });
+
+        this.addCommand({
+            id: 'add-book',
+            name: t('commandAddBook'),
+            callback: () => {
+                void this.integrationService?.addBook();
+            }
+        });
+
+        this.addCommand({
+            id: 'add-manga',
+            name: t('commandAddManga'),
+            callback: () => {
+                void this.integrationService?.addManga();
+            }
+        });
+
+        this.addCommand({
             id: 'steam-sync',
             name: t('commandSteamSync'),
             callback: () => {
@@ -119,26 +167,21 @@ export default class LorebasePlugin extends Plugin {
     }
 
     onunload(): void {
-        // Clean up game service reference
-        if (this.gameService) {
-            this.gameService = null;
-        }
-        if (this.animeService) {
-            this.animeService = null;
-        }
+        this.gameService = null;
+        this.animeService = null;
+        this.movieService = null;
+        this.seriesService = null;
+        this.bookService = null;
+        this.mangaService = null;
 
         if (this.particleService) {
             this.particleService.destroy();
             this.particleService = null;
         }
 
-        if (this.integrationService) {
-            this.integrationService = null;
-        }
-
-        if (this.steamSyncService) {
-            this.steamSyncService = null;
-        }
+        this.integrationService = null;
+        this.steamSyncService = null;
+        this.metadataService = null;
     }
 
     /**
@@ -148,6 +191,10 @@ export default class LorebasePlugin extends Plugin {
         const loaded: unknown = await this.loadData();
         const sanitized = this.isSettingsRecord(loaded) ? { ...loaded } : {};
         this.settings = Object.assign({}, DEFAULT_SETTINGS, sanitized);
+        this.settings.settingsLayoutMode = sanitized.settingsLayoutMode === 'accordion'
+            ? 'accordion'
+            : 'tabs';
+        i18n.setLanguage(this.settings.language);
 
         // Ensure nested objects are merged properly
         if (sanitized?.games) {
@@ -156,8 +203,26 @@ export default class LorebasePlugin extends Plugin {
         if (sanitized?.anime) {
             this.settings.anime = Object.assign({}, DEFAULT_SETTINGS.anime, sanitized.anime);
         }
+        if (sanitized?.movies) {
+            this.settings.movies = Object.assign({}, DEFAULT_SETTINGS.movies, sanitized.movies);
+        }
+        if (sanitized?.series) {
+            this.settings.series = Object.assign({}, DEFAULT_SETTINGS.series, sanitized.series);
+        }
+        if (sanitized?.books) {
+            this.settings.books = Object.assign({}, DEFAULT_SETTINGS.books, sanitized.books);
+        }
+        if (sanitized?.manga) {
+            this.settings.manga = Object.assign({}, DEFAULT_SETTINGS.manga, sanitized.manga);
+        }
         if (sanitized?.enabledMedia) {
             this.settings.enabledMedia = Object.assign({}, DEFAULT_SETTINGS.enabledMedia, sanitized.enabledMedia);
+        }
+        this.settings.migrations = Object.assign({}, DEFAULT_SETTINGS.migrations, sanitized?.migrations ?? {});
+        if (!this.settings.migrations.animeProgressCardStyle && this.settings.anime.cardStyle === 'hover') {
+            this.settings.anime.cardStyle = 'progress';
+            this.settings.migrations.animeProgressCardStyle = true;
+            void this.saveData(this.settings);
         }
         this.settings.steamSync = Object.assign({}, DEFAULT_SETTINGS.steamSync, sanitized?.steamSync ?? {});
         this.settings.steamSync.fields = Object.assign(
@@ -168,106 +233,229 @@ export default class LorebasePlugin extends Plugin {
         if (this.settings.steamSync.statusWithPlaytime === 'playing' || this.settings.steamSync.statusWithPlaytime === 'completed') {
             this.settings.steamSync.statusWithPlaytime = DEFAULT_SETTINGS.steamSync.statusWithPlaytime;
         }
+        if (this.settings.steamSync.statusWishlist === 'not_started') {
+            this.settings.steamSync.statusWishlist = DEFAULT_SETTINGS.steamSync.statusWishlist;
+        }
         this.settings.statusLabels = {
             games: Object.assign({}, DEFAULT_SETTINGS.statusLabels.games, sanitized?.statusLabels?.games ?? {}),
             anime: Object.assign({}, DEFAULT_SETTINGS.statusLabels.anime, sanitized?.statusLabels?.anime ?? {}),
+            movies: Object.assign({}, DEFAULT_SETTINGS.statusLabels.movies, sanitized?.statusLabels?.movies ?? {}),
+            series: Object.assign({}, DEFAULT_SETTINGS.statusLabels.series, sanitized?.statusLabels?.series ?? {}),
+            books: Object.assign({}, DEFAULT_SETTINGS.statusLabels.books, sanitized?.statusLabels?.books ?? {}),
+            manga: Object.assign({}, DEFAULT_SETTINGS.statusLabels.manga, sanitized?.statusLabels?.manga ?? {}),
         };
+        const legacyCompletedLabel = t('statusPlayed').trim().toLowerCase();
+        for (const labels of [this.settings.statusLabels.movies, this.settings.statusLabels.series]) {
+            if (labels.completed?.trim().toLowerCase() === legacyCompletedLabel) {
+                delete labels.completed;
+            }
+        }
+        if (!Object.keys(this.settings.statusLabels.books).length && !sanitized?.statusLabels?.books) {
+            this.settings.statusLabels.books = {
+                planned: t('statusPlanToRead'),
+                watching: t('statusReading'),
+            };
+        }
+        if (!Object.keys(this.settings.statusLabels.manga).length && !sanitized?.statusLabels?.manga) {
+            this.settings.statusLabels.manga = {
+                planned: t('statusPlanToRead'),
+                watching: t('statusReading'),
+            };
+        }
         this.settings.tagPresets = {
             games: normalizeTagPresets(sanitized?.tagPresets?.games),
         };
 
-        this.settings.descriptionLines = normalizeDescriptionLines(
-            sanitized?.descriptionLines,
-            DEFAULT_SETTINGS.descriptionLines
-        );
-        this.settings.horizontalDescriptionLines = normalizeDescriptionLines(
-            sanitized?.horizontalDescriptionLines,
-            this.settings.descriptionLines
-        );
-        this.settings.animeDescriptionLines = normalizeDescriptionLines(
-            sanitized?.animeDescriptionLines,
-            this.settings.descriptionLines
-        );
-        this.settings.animeHorizontalDescriptionLines = normalizeDescriptionLines(
-            sanitized?.animeHorizontalDescriptionLines,
-            this.settings.horizontalDescriptionLines
-        );
+        type CustomizationProfile = {
+            descriptionKey: keyof LorebaseSettings;
+            descriptionFallbackKey?: keyof LorebaseSettings;
+            layoutKey: keyof LorebaseSettings;
+            layoutFallbackKey?: keyof LorebaseSettings;
+            visibilityKey: keyof LorebaseSettings;
+            visibilityFallbackKey?: keyof LorebaseSettings;
+            badgesKey: keyof LorebaseSettings;
+            badgesFallbackKey?: keyof LorebaseSettings;
+        };
+        const settingsRecord = this.settings as unknown as Record<string, unknown>;
+        const sanitizedRecord = sanitized as Record<string, unknown>;
+        const defaultsRecord = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
+        const mediaCustomization: Record<'game' | 'anime' | 'movie' | 'series' | 'book' | 'manga', Record<'vertical' | 'horizontal', CustomizationProfile>> = {
+            game: {
+                vertical: {
+                    descriptionKey: 'descriptionLines',
+                    layoutKey: 'overlayTextLayout',
+                    visibilityKey: 'overlayTextVisibility',
+                    badgesKey: 'badges',
+                },
+                horizontal: {
+                    descriptionKey: 'horizontalDescriptionLines',
+                    descriptionFallbackKey: 'descriptionLines',
+                    layoutKey: 'horizontalOverlayTextLayout',
+                    visibilityKey: 'horizontalOverlayTextVisibility',
+                    visibilityFallbackKey: 'overlayTextVisibility',
+                    badgesKey: 'horizontalBadges',
+                    badgesFallbackKey: 'badges',
+                },
+            },
+            anime: {
+                vertical: {
+                    descriptionKey: 'animeDescriptionLines',
+                    descriptionFallbackKey: 'descriptionLines',
+                    layoutKey: 'animeOverlayTextLayout',
+                    layoutFallbackKey: 'overlayTextLayout',
+                    visibilityKey: 'animeOverlayTextVisibility',
+                    visibilityFallbackKey: 'overlayTextVisibility',
+                    badgesKey: 'animeBadges',
+                    badgesFallbackKey: 'badges',
+                },
+                horizontal: {
+                    descriptionKey: 'animeHorizontalDescriptionLines',
+                    descriptionFallbackKey: 'horizontalDescriptionLines',
+                    layoutKey: 'animeHorizontalOverlayTextLayout',
+                    layoutFallbackKey: 'horizontalOverlayTextLayout',
+                    visibilityKey: 'animeHorizontalOverlayTextVisibility',
+                    visibilityFallbackKey: 'animeOverlayTextVisibility',
+                    badgesKey: 'animeHorizontalBadges',
+                    badgesFallbackKey: 'animeBadges',
+                },
+            },
+            movie: {
+                vertical: {
+                    descriptionKey: 'movieDescriptionLines',
+                    descriptionFallbackKey: 'descriptionLines',
+                    layoutKey: 'movieOverlayTextLayout',
+                    layoutFallbackKey: 'overlayTextLayout',
+                    visibilityKey: 'movieOverlayTextVisibility',
+                    visibilityFallbackKey: 'overlayTextVisibility',
+                    badgesKey: 'movieBadges',
+                    badgesFallbackKey: 'badges',
+                },
+                horizontal: {
+                    descriptionKey: 'movieHorizontalDescriptionLines',
+                    descriptionFallbackKey: 'horizontalDescriptionLines',
+                    layoutKey: 'movieHorizontalOverlayTextLayout',
+                    layoutFallbackKey: 'horizontalOverlayTextLayout',
+                    visibilityKey: 'movieHorizontalOverlayTextVisibility',
+                    visibilityFallbackKey: 'horizontalOverlayTextVisibility',
+                    badgesKey: 'movieHorizontalBadges',
+                    badgesFallbackKey: 'horizontalBadges',
+                },
+            },
+            series: {
+                vertical: {
+                    descriptionKey: 'seriesDescriptionLines',
+                    descriptionFallbackKey: 'descriptionLines',
+                    layoutKey: 'seriesOverlayTextLayout',
+                    layoutFallbackKey: 'overlayTextLayout',
+                    visibilityKey: 'seriesOverlayTextVisibility',
+                    visibilityFallbackKey: 'overlayTextVisibility',
+                    badgesKey: 'seriesBadges',
+                    badgesFallbackKey: 'badges',
+                },
+                horizontal: {
+                    descriptionKey: 'seriesHorizontalDescriptionLines',
+                    descriptionFallbackKey: 'horizontalDescriptionLines',
+                    layoutKey: 'seriesHorizontalOverlayTextLayout',
+                    layoutFallbackKey: 'horizontalOverlayTextLayout',
+                    visibilityKey: 'seriesHorizontalOverlayTextVisibility',
+                    visibilityFallbackKey: 'horizontalOverlayTextVisibility',
+                    badgesKey: 'seriesHorizontalBadges',
+                    badgesFallbackKey: 'horizontalBadges',
+                },
+            },
+            book: {
+                vertical: {
+                    descriptionKey: 'bookDescriptionLines',
+                    descriptionFallbackKey: 'descriptionLines',
+                    layoutKey: 'bookOverlayTextLayout',
+                    layoutFallbackKey: 'overlayTextLayout',
+                    visibilityKey: 'bookOverlayTextVisibility',
+                    visibilityFallbackKey: 'overlayTextVisibility',
+                    badgesKey: 'bookBadges',
+                    badgesFallbackKey: 'badges',
+                },
+                horizontal: {
+                    descriptionKey: 'bookHorizontalDescriptionLines',
+                    descriptionFallbackKey: 'horizontalDescriptionLines',
+                    layoutKey: 'bookHorizontalOverlayTextLayout',
+                    layoutFallbackKey: 'horizontalOverlayTextLayout',
+                    visibilityKey: 'bookHorizontalOverlayTextVisibility',
+                    visibilityFallbackKey: 'horizontalOverlayTextVisibility',
+                    badgesKey: 'bookHorizontalBadges',
+                    badgesFallbackKey: 'horizontalBadges',
+                },
+            },
+            manga: {
+                vertical: {
+                    descriptionKey: 'mangaDescriptionLines',
+                    descriptionFallbackKey: 'descriptionLines',
+                    layoutKey: 'mangaOverlayTextLayout',
+                    layoutFallbackKey: 'overlayTextLayout',
+                    visibilityKey: 'mangaOverlayTextVisibility',
+                    visibilityFallbackKey: 'overlayTextVisibility',
+                    badgesKey: 'mangaBadges',
+                    badgesFallbackKey: 'badges',
+                },
+                horizontal: {
+                    descriptionKey: 'mangaHorizontalDescriptionLines',
+                    descriptionFallbackKey: 'horizontalDescriptionLines',
+                    layoutKey: 'mangaHorizontalOverlayTextLayout',
+                    layoutFallbackKey: 'horizontalOverlayTextLayout',
+                    visibilityKey: 'mangaHorizontalOverlayTextVisibility',
+                    visibilityFallbackKey: 'horizontalOverlayTextVisibility',
+                    badgesKey: 'mangaHorizontalBadges',
+                    badgesFallbackKey: 'horizontalBadges',
+                },
+            },
+        };
+        const readSetting = <T>(key: keyof LorebaseSettings): T => settingsRecord[key as string] as T;
+        const readDefault = <T>(key: keyof LorebaseSettings): T => defaultsRecord[key as string] as T;
+        const readSanitized = <T>(key: keyof LorebaseSettings): T | undefined => sanitizedRecord[key as string] as T | undefined;
 
-        if (sanitized?.overlayTextLayout) {
-            this.settings.overlayTextLayout = mergeOverlayLayout(sanitized.overlayTextLayout, DEFAULT_SETTINGS.overlayTextLayout);
+        for (const media of ['game', 'anime', 'movie', 'series', 'book', 'manga'] as const) {
+            for (const orientation of ['vertical', 'horizontal'] as const) {
+                const profile = mediaCustomization[media][orientation];
+                settingsRecord[profile.descriptionKey as string] = normalizeDescriptionLines(
+                    readSanitized(profile.descriptionKey),
+                    profile.descriptionFallbackKey
+                        ? readSetting<number>(profile.descriptionFallbackKey)
+                        : readDefault<number>(profile.descriptionKey)
+                );
 
-            const approx = (a: number, b: number): boolean => Math.abs(a - b) < 0.11;
-            const legacyLooksLikeOldDefaults =
-                approx(this.settings.overlayTextLayout.title.x, 6)
-                && approx(this.settings.overlayTextLayout.title.y, 8)
-                && approx(this.settings.overlayTextLayout.year.x, 6)
-                && approx(this.settings.overlayTextLayout.year.y, 22)
-                && approx(this.settings.overlayTextLayout.description.x, 6)
-                && approx(this.settings.overlayTextLayout.description.y, 34);
+                const rawLayout = readSanitized<Partial<LorebaseSettings['overlayTextLayout']>>(profile.layoutKey);
+                settingsRecord[profile.layoutKey as string] = mergeOverlayLayout(
+                    rawLayout,
+                    rawLayout
+                        ? readDefault<LorebaseSettings['overlayTextLayout']>(profile.layoutKey)
+                        : profile.layoutFallbackKey
+                            ? readSetting<LorebaseSettings['overlayTextLayout']>(profile.layoutFallbackKey)
+                            : readDefault<LorebaseSettings['overlayTextLayout']>(profile.layoutKey)
+                );
 
-            if (legacyLooksLikeOldDefaults) {
-                this.settings.overlayTextLayout = mergeOverlayLayout(undefined, DEFAULT_SETTINGS.overlayTextLayout);
+                const rawVisibility = readSanitized<Partial<LorebaseSettings['overlayTextVisibility']>>(profile.visibilityKey);
+                settingsRecord[profile.visibilityKey as string] = mergeOverlayVisibility(
+                    rawVisibility,
+                    rawVisibility
+                        ? readDefault<LorebaseSettings['overlayTextVisibility']>(profile.visibilityKey)
+                        : profile.visibilityFallbackKey
+                            ? readSetting<LorebaseSettings['overlayTextVisibility']>(profile.visibilityFallbackKey)
+                            : readDefault<LorebaseSettings['overlayTextVisibility']>(profile.visibilityKey)
+                );
+
+                const rawBadges = readSanitized(profile.badgesKey);
+                settingsRecord[profile.badgesKey as string] = parseBadges(
+                    rawBadges,
+                    rawBadges
+                        ? readDefault<LorebaseSettings['badges']>(profile.badgesKey)
+                        : profile.badgesFallbackKey
+                            ? readSetting<LorebaseSettings['badges']>(profile.badgesFallbackKey)
+                            : readDefault<LorebaseSettings['badges']>(profile.badgesKey)
+                );
             }
-        } else {
-            this.settings.overlayTextLayout = mergeOverlayLayout(undefined, DEFAULT_SETTINGS.overlayTextLayout);
         }
-
-        this.settings.horizontalOverlayTextLayout = mergeOverlayLayout(
-            sanitized?.horizontalOverlayTextLayout,
-            DEFAULT_SETTINGS.horizontalOverlayTextLayout
-        );
-
-        this.settings.animeOverlayTextLayout = mergeOverlayLayout(
-            sanitized?.animeOverlayTextLayout,
-            sanitized?.animeOverlayTextLayout
-                ? DEFAULT_SETTINGS.animeOverlayTextLayout
-                : this.settings.overlayTextLayout
-        );
-        this.settings.animeHorizontalOverlayTextLayout = mergeOverlayLayout(
-            sanitized?.animeHorizontalOverlayTextLayout,
-            sanitized?.animeHorizontalOverlayTextLayout
-                ? DEFAULT_SETTINGS.animeHorizontalOverlayTextLayout
-                : this.settings.horizontalOverlayTextLayout
-        );
-
-        this.settings.overlayTextVisibility = mergeOverlayVisibility(
-            sanitized?.overlayTextVisibility,
-            DEFAULT_SETTINGS.overlayTextVisibility
-        );
-        this.settings.horizontalOverlayTextVisibility = mergeOverlayVisibility(
-            sanitized?.horizontalOverlayTextVisibility,
-            sanitized?.horizontalOverlayTextVisibility
-                ? DEFAULT_SETTINGS.horizontalOverlayTextVisibility
-                : this.settings.overlayTextVisibility
-        );
-        this.settings.animeOverlayTextVisibility = mergeOverlayVisibility(
-            sanitized?.animeOverlayTextVisibility,
-            sanitized?.animeOverlayTextVisibility
-                ? DEFAULT_SETTINGS.animeOverlayTextVisibility
-                : this.settings.overlayTextVisibility
-        );
-        this.settings.animeHorizontalOverlayTextVisibility = mergeOverlayVisibility(
-            sanitized?.animeHorizontalOverlayTextVisibility,
-            sanitized?.animeHorizontalOverlayTextVisibility
-                ? DEFAULT_SETTINGS.animeHorizontalOverlayTextVisibility
-                : this.settings.animeOverlayTextVisibility
-        );
         this.settings.overlayApplyToAllMedia = typeof sanitized?.overlayApplyToAllMedia === 'boolean'
             ? sanitized.overlayApplyToAllMedia
             : DEFAULT_SETTINGS.overlayApplyToAllMedia;
-        this.settings.badges = parseBadges(sanitized?.badges, DEFAULT_SETTINGS.badges);
-        this.settings.horizontalBadges = parseBadges(
-            sanitized?.horizontalBadges,
-            sanitized?.horizontalBadges ? DEFAULT_SETTINGS.horizontalBadges : this.settings.badges
-        );
-        this.settings.animeBadges = parseBadges(
-            sanitized?.animeBadges,
-            sanitized?.animeBadges ? DEFAULT_SETTINGS.animeBadges : this.settings.badges
-        );
-        this.settings.animeHorizontalBadges = parseBadges(
-            sanitized?.animeHorizontalBadges,
-            sanitized?.animeHorizontalBadges ? DEFAULT_SETTINGS.animeHorizontalBadges : this.settings.animeBadges
-        );
         // Migration guard: fix desync where anime badges were disabled via
         // "apply to all" but only game badges were re-enabled afterward.
         const animeBadgeDesync =
@@ -304,12 +492,26 @@ export default class LorebasePlugin extends Plugin {
                     defaultIntegrations.media,
                     sanitized.integrations.media
                 );
+                integrations.media.games = Object.assign({}, defaultIntegrations.media.games, sanitized.integrations.media.games ?? {});
+                integrations.media.anime = Object.assign({}, defaultIntegrations.media.anime, sanitized.integrations.media.anime ?? {});
+                integrations.media.movies = Object.assign({}, defaultIntegrations.media.movies, sanitized.integrations.media.movies ?? {});
+                integrations.media.series = Object.assign({}, defaultIntegrations.media.series, sanitized.integrations.media.series ?? {});
+                integrations.media.books = Object.assign({}, defaultIntegrations.media.books, sanitized.integrations.media.books ?? {});
+                integrations.media.manga = Object.assign({}, defaultIntegrations.media.manga, sanitized.integrations.media.manga ?? {});
             }
 
             // Backward compatibility: map removed anime provider "omdb" to "anilist".
             const animeProvider = String(integrations.media?.anime?.provider ?? '');
             if (animeProvider === 'omdb') {
                 integrations.media.anime.provider = 'anilist';
+            }
+            const booksProvider = String(integrations.media?.books?.provider ?? '');
+            if (!['hardcover', 'googlebooks'].includes(booksProvider)) {
+                integrations.media.books.provider = 'hardcover';
+            }
+            const mangaProvider = String(integrations.media?.manga?.provider ?? '');
+            if (!['anilist', 'shikimori', 'jikan', 'mangadex'].includes(mangaProvider)) {
+                integrations.media.manga.provider = 'anilist';
             }
         }
 
@@ -329,8 +531,15 @@ export default class LorebasePlugin extends Plugin {
         let changed = false;
 
         if (media.games?.template) {
-            const nextTemplate = this.insertTemplateFieldAfter(
-                media.games.template,
+            let nextTemplate = media.games.template;
+            if (!/^\s*name\s*:/m.test(nextTemplate)) {
+                nextTemplate = this.insertTemplateFieldAtFrontmatterTop(
+                    nextTemplate,
+                    'name: "{{VALUE:name}}"'
+                );
+            }
+            nextTemplate = this.insertTemplateFieldAfter(
+                nextTemplate,
                 'poster',
                 'poster_b: "{{VALUE:PosterHorizontal}}"',
                 ['poster_b:', '{{VALUE:PosterHorizontal}}']
@@ -355,6 +564,12 @@ export default class LorebasePlugin extends Plugin {
                 .split(/\r?\n/)
                 .filter((line) => !/^\s*name\s*:\s*["']?\{\{VALUE:name\}\}["']?\s*$/.test(line))
                 .join('\n');
+            if (!/^\s*title\s*:/m.test(nextTemplate)) {
+                nextTemplate = this.insertTemplateFieldAtFrontmatterTop(
+                    nextTemplate,
+                    'title: "{{VALUE:name}}"'
+                );
+            }
 
             nextTemplate = this.insertTemplateFieldAfter(
                 nextTemplate,
@@ -375,26 +590,7 @@ export default class LorebasePlugin extends Plugin {
                 ].join('\n'),
                 ['anime_parts:', '{{VALUE:animePartsYaml}}']
             );
-            nextTemplate = this.insertTemplateFieldAfter(
-                nextTemplate,
-                'favorite',
-                [
-                    'integration_provider: "{{VALUE:integrationProvider}}"',
-                    'integration_id: "{{VALUE:integrationId}}"',
-                ].join('\n'),
-                ['integration_provider:', '{{VALUE:integrationProvider}}', 'integration_id:', '{{VALUE:integrationId}}']
-            );
-            if (!nextTemplate.includes('integration_provider:')) {
-                nextTemplate = this.insertTemplateFieldAfter(
-                    nextTemplate,
-                    'url',
-                    [
-                        'integration_provider: "{{VALUE:integrationProvider}}"',
-                        'integration_id: "{{VALUE:integrationId}}"',
-                    ].join('\n'),
-                    ['integration_provider:', '{{VALUE:integrationProvider}}', 'integration_id:', '{{VALUE:integrationId}}']
-                );
-            }
+            nextTemplate = this.removeTemplateFields(nextTemplate, ['integration_provider', 'integration_id']);
             if (!nextTemplate.includes('anime_parts:')) {
                 nextTemplate = this.insertTemplateFieldAfter(
                     nextTemplate,
@@ -418,8 +614,12 @@ export default class LorebasePlugin extends Plugin {
             }
         }
 
-        if (media.anime?.templateFields?.includes('name')) {
-            media.anime.templateFields = media.anime.templateFields.filter((field) => field !== 'name');
+        if (media.games?.templateFields && media.games.templateFields[0] !== 'name') {
+            media.games.templateFields = ['name', ...media.games.templateFields.filter((field) => field !== 'name')];
+            changed = true;
+        }
+        if (media.anime?.templateFields && media.anime.templateFields[0] !== 'name') {
+            media.anime.templateFields = ['name', ...media.anime.templateFields.filter((field) => field !== 'name')];
             changed = true;
         }
         if (media.anime?.templateFields && !media.anime.templateFields.includes('animeParts')) {
@@ -428,14 +628,50 @@ export default class LorebasePlugin extends Plugin {
             media.anime.templateFields.splice(insertAt, 0, 'animeParts');
             changed = true;
         }
-        if (media.anime?.templateFields && !media.anime.templateFields.includes('integrationSource')) {
-            const favoriteIndex = media.anime.templateFields.indexOf('favorite');
-            const insertAt = favoriteIndex >= 0 ? favoriteIndex + 1 : media.anime.templateFields.length;
-            media.anime.templateFields.splice(insertAt, 0, 'integrationSource');
+        if (media.anime?.templateFields?.includes('integrationSource')) {
+            media.anime.templateFields = media.anime.templateFields.filter((field) => field !== 'integrationSource');
             changed = true;
+        }
+        if (media.series?.template) {
+            let nextTemplate = media.series.template;
+            nextTemplate = this.insertTemplateFieldAfter(
+                nextTemplate,
+                'year',
+                [
+                    'released: "{{VALUE:released}}"',
+                    'runtime: "{{VALUE:runtime}}"',
+                    'director: "{{VALUE:director}}"',
+                    'actors: "{{VALUE:actors}}"',
+                ].join('\n'),
+                ['released:', '{{VALUE:released}}', 'runtime:', '{{VALUE:runtime}}', 'director:', '{{VALUE:director}}', 'actors:', '{{VALUE:actors}}']
+            );
+            if (nextTemplate !== media.series.template) {
+                media.series.template = nextTemplate;
+                changed = true;
+            }
+        }
+        if (media.series?.templateFields) {
+            const wanted = ['released', 'runtime', 'director', 'actors'];
+            const missing = wanted.filter((field) => !media.series.templateFields?.includes(field));
+            if (missing.length) {
+                const yearIndex = media.series.templateFields.indexOf('year');
+                const insertAt = yearIndex >= 0 ? yearIndex + 1 : media.series.templateFields.length;
+                media.series.templateFields.splice(insertAt, 0, ...missing);
+                changed = true;
+            }
         }
 
         return changed;
+    }
+
+    private insertTemplateFieldAtFrontmatterTop(template: string, insertedLine: string): string {
+        const lines = template.split(/\r?\n/);
+        const startIndex = lines.findIndex((line) => line.trim() === '---');
+        if (startIndex === -1) {
+            return `${insertedLine}\n${template}`;
+        }
+        lines.splice(startIndex + 1, 0, insertedLine);
+        return lines.join('\n');
     }
 
     private insertTemplateFieldAfter(template: string, fieldName: string, insertedLine: string, duplicateMarkers: string[]): string {
@@ -446,6 +682,17 @@ export default class LorebasePlugin extends Plugin {
         const escapedField = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const fieldLine = new RegExp(`^(\\s*)${escapedField}\\s*:\\s*.*$`, 'm');
         return template.replace(fieldLine, (line: string, indent: string) => `${line}\n${indent}${insertedLine}`);
+    }
+
+    private removeTemplateFields(template: string, fieldNames: string[]): string {
+        const fields = new Set(fieldNames);
+        return template
+            .split(/\r?\n/)
+            .filter((line) => {
+                const match = line.match(/^\s*([^:#]+)\s*:/);
+                return !match || !fields.has(match[1].trim());
+            })
+            .join('\n');
     }
 
     /**
@@ -460,6 +707,18 @@ export default class LorebasePlugin extends Plugin {
         }
         if (this.animeService) {
             this.animeService.setFolderPath(this.settings.anime.folderPath);
+        }
+        if (this.movieService) {
+            this.movieService.setFolderPath(this.settings.movies.folderPath);
+        }
+        if (this.seriesService) {
+            this.seriesService.setFolderPath(this.settings.series.folderPath);
+        }
+        if (this.bookService) {
+            this.bookService.setFolderPath(this.settings.books.folderPath);
+        }
+        if (this.mangaService) {
+            this.mangaService.setFolderPath(this.settings.manga.folderPath);
         }
 
         // Update localization
@@ -547,13 +806,61 @@ export default class LorebasePlugin extends Plugin {
                     });
                     onSave();
                     return true;
+                },
+                this.collectRelatedMediaCandidates()
+            );
+            modal.open();
+            return;
+        }
+
+        if (item.type === 'movie' || item.type === 'series') {
+            const service = item.type === 'movie' ? this.movieService : this.seriesService;
+            const modal = new VideoEditModal(
+                this.app,
+                item,
+                async (updates) => {
+                    if (!service) return;
+                    await service.updateItem(item, updates);
+                    onSave();
+                },
+                () => {
+                    this.showDeleteModal(item, async () => {
+                        if (!service) return;
+                        await service.deleteItem(item);
+                        onSave();
+                    });
+                },
+                this.collectIncomingRelatedMedia(item.filePath),
+                this.collectRelatedMediaCandidates()
+            );
+            modal.open();
+            return;
+        }
+
+        if (item.type === 'book' || item.type === 'manga') {
+            const service = item.type === 'book' ? this.bookService : this.mangaService;
+            const readingItem = item as ReadingItem;
+            const modal = new ReadingEditModal(
+                this.app,
+                readingItem,
+                async (updates) => {
+                    if (!service) return;
+                    await service.updateItem(readingItem, updates);
+                    onSave();
+                },
+                () => {
+                    this.showDeleteModal(readingItem, async () => {
+                        if (!service) return;
+                        await service.deleteItem(readingItem);
+                        onSave();
+                    });
                 }
             );
             modal.open();
             return;
         }
 
-        const gameItem = item;
+        const gameItem = item as GameItem;
         const seriesOptions = this.gameService?.getSeriesList() ?? [];
         const modal = new EditModal(
             this.app,
@@ -577,10 +884,85 @@ export default class LorebasePlugin extends Plugin {
         modal.open();
     }
 
+    private collectRelatedMediaCandidates(): RelatedMediaLink[] {
+        const folders: Array<{ type: RelatedMediaLink['type']; folderPath: string }> = [
+            { type: 'anime', folderPath: this.settings.anime.folderPath },
+            { type: 'movie', folderPath: this.settings.movies.folderPath },
+            { type: 'series', folderPath: this.settings.series.folderPath },
+            { type: 'book', folderPath: this.settings.books.folderPath },
+            { type: 'manga', folderPath: this.settings.manga.folderPath },
+        ];
+        const candidates: RelatedMediaLink[] = [];
+        const seen = new Set<string>();
+        for (const file of this.app.vault.getMarkdownFiles()) {
+            const mediaType = folders.find((entry) => this.isFileInFolder(file.path, entry.folderPath))?.type;
+            if (!mediaType || seen.has(file.path)) continue;
+            candidates.push({
+                type: mediaType,
+                path: file.path,
+                title: this.getFileTitle(file),
+                imageUrl: this.getFileImage(file),
+            });
+            seen.add(file.path);
+        }
+        return candidates.sort((left, right) => left.title.localeCompare(right.title));
+    }
+
+    private collectIncomingRelatedMedia(targetPath: string): RelatedMediaLink[] {
+        const incoming: RelatedMediaLink[] = [];
+        const seen = new Set<string>();
+        const folders: Array<{ type: RelatedMediaLink['type']; folderPath: string }> = [
+            { type: 'anime', folderPath: this.settings.anime.folderPath },
+            { type: 'movie', folderPath: this.settings.movies.folderPath },
+            { type: 'series', folderPath: this.settings.series.folderPath },
+            { type: 'book', folderPath: this.settings.books.folderPath },
+            { type: 'manga', folderPath: this.settings.manga.folderPath },
+        ];
+        for (const file of this.app.vault.getMarkdownFiles()) {
+            const mediaType = folders.find((entry) => this.isFileInFolder(file.path, entry.folderPath))?.type;
+            if (!mediaType) continue;
+            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            const related = parseRelatedMedia(frontmatter?.related_media);
+            if (!related.some((entry) => entry.path === targetPath)) continue;
+            if (seen.has(file.path)) continue;
+            incoming.push({
+                type: mediaType,
+                path: file.path,
+                title: this.getFileTitle(file),
+                imageUrl: this.getFileImage(file),
+            });
+            seen.add(file.path);
+        }
+        return incoming.sort((left, right) => left.title.localeCompare(right.title));
+    }
+
+    private getFileTitle(file: TFile): string {
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const title = typeof frontmatter?.title === 'string' && frontmatter.title.trim()
+            ? frontmatter.title.trim()
+            : typeof frontmatter?.name === 'string' && frontmatter.name.trim()
+                ? frontmatter.name.trim()
+                : file.basename;
+        return title || file.path;
+    }
+
+    private getFileImage(file: TFile): string {
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const raw = frontmatter?.image ?? frontmatter?.poster ?? frontmatter?.image_b ?? frontmatter?.poster_b;
+        return this.metadataService?.getImageUrl(raw, frontmatter?.cm_poster) ?? DEFAULT_COVER;
+    }
+
+    private isFileInFolder(filePath: string, folderPath: string): boolean {
+        const normalizedFolder = folderPath.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        const normalizedFile = filePath.replace(/\\/g, '/');
+        if (!normalizedFolder) return true;
+        return normalizedFile.startsWith(`${normalizedFolder}/`);
+    }
+
     /**
      * Show statistics modal
      */
-    showStatsModal(stats: GameStats | AnimeStats, mediaType: MediaType): void {
+    showStatsModal(stats: GameStats | AnimeStats | VideoStats | ReadingStats, mediaType: MediaType): void {
         const modal = new StatsModal(this.app, stats, mediaType);
         modal.open();
     }
@@ -598,6 +980,22 @@ export default class LorebasePlugin extends Plugin {
             void this.integrationService?.addAnime();
             return;
         }
+        if (mediaType === 'movie') {
+            void this.integrationService?.addMovie();
+            return;
+        }
+        if (mediaType === 'series') {
+            void this.integrationService?.addSeries();
+            return;
+        }
+        if (mediaType === 'book') {
+            void this.integrationService?.addBook();
+            return;
+        }
+        if (mediaType === 'manga') {
+            void this.integrationService?.addManga();
+            return;
+        }
         void this.integrationService?.addGame();
     }
 
@@ -610,6 +1008,26 @@ export default class LorebasePlugin extends Plugin {
 
     getAnimeService(): AnimeService | null {
         return this.animeService;
+    }
+
+    getMetadataService(): MetadataService | null {
+        return this.metadataService;
+    }
+
+    getMovieService(): VideoService | null {
+        return this.movieService;
+    }
+
+    getSeriesService(): VideoService | null {
+        return this.seriesService;
+    }
+
+    getBookService(): ReadingService | null {
+        return this.bookService;
+    }
+
+    getMangaService(): ReadingService | null {
+        return this.mangaService;
     }
 
     getSteamSyncService(): SteamSyncService | null {
@@ -639,13 +1057,17 @@ export default class LorebasePlugin extends Plugin {
         const enabled: MediaType[] = [];
         if (this.settings.enabledMedia?.games) enabled.push('game');
         if (this.settings.enabledMedia?.anime) enabled.push('anime');
+        if (this.settings.enabledMedia?.movies) enabled.push('movie');
+        if (this.settings.enabledMedia?.series) enabled.push('series');
+        if (this.settings.enabledMedia?.books) enabled.push('book');
+        if (this.settings.enabledMedia?.manga) enabled.push('manga');
         return enabled;
     }
 
     private normalizeMediaType(): void {
         const enabled = this.getEnabledMedia();
         if (enabled.length === 0) {
-            this.settings.enabledMedia = { games: true, anime: false };
+            this.settings.enabledMedia = { games: true, anime: false, movies: false, series: false, books: false, manga: false };
             this.mediaType = 'game';
             return;
         }
@@ -682,7 +1104,7 @@ export default class LorebasePlugin extends Plugin {
 
         try {
             new Notice('Steam Sync: loading Steam games...');
-            const candidates = await this.steamSyncService.previewImport(this.settings.steamSync);
+            const candidates = await this.steamSyncService.previewImport(this.settings);
             for (const warning of this.steamSyncService.consumeWarnings()) {
                 new Notice(`Steam Sync: ${warning}`, 6000);
             }
@@ -745,58 +1167,37 @@ export default class LorebasePlugin extends Plugin {
 
         const menu = new Menu();
 
-        // Games
-        if (this.settings.enabledMedia.games) {
+        const options: Array<{ type: MediaType; enabled: boolean; label: string; icon: string }> = [
+            { type: 'game', enabled: this.settings.enabledMedia.games, label: t('contextGames'), icon: 'gamepad-2' },
+            { type: 'anime', enabled: this.settings.enabledMedia.anime, label: t('contextAnime'), icon: 'clapperboard' },
+            { type: 'movie', enabled: this.settings.enabledMedia.movies, label: t('settingsMovies'), icon: 'film' },
+            { type: 'series', enabled: this.settings.enabledMedia.series, label: t('settingsSeries'), icon: 'tv' },
+            { type: 'book', enabled: this.settings.enabledMedia.books, label: t('settingsBooks'), icon: 'book-open' },
+            { type: 'manga', enabled: this.settings.enabledMedia.manga, label: t('settingsManga'), icon: 'book-open-text' },
+        ];
+
+        for (const option of options) {
+            if (!option.enabled) continue;
             menu.addItem((item) => {
-            const isSelected = this.mediaType === 'game';
+                const isSelected = this.mediaType === option.type;
+                if (isSelected) {
+                    const titleEl = activeDocument.createDocumentFragment();
+                    const span = titleEl.createEl('span');
+                    span.setText(option.label);
+                    span.addClass('lorebase-menu-selected-title');
+                    item.setTitle(titleEl);
+                } else {
+                    item.setTitle(option.label);
+                }
 
-            // Set title with custom styling if selected
-            if (isSelected) {
-                const titleEl = activeDocument.createDocumentFragment();
-                const span = titleEl.createEl('span');
-                span.setText(t('contextGames'));
-                span.addClass('lorebase-menu-selected-title');
-                item.setTitle(titleEl);
-            } else {
-                item.setTitle(t('contextGames'));
-            }
-
-            item.setIcon('gamepad-2')
-                .onClick(() => {
-                    const changed = this.mediaType !== 'game';
-                    this.mediaType = 'game';
-                    void this.activateView();
-                    if (changed) {
+                item.setIcon(option.icon)
+                    .onClick(() => {
+                        const changed = this.mediaType !== option.type;
+                        if (!changed) return;
+                        this.mediaType = option.type;
+                        void this.activateView();
                         this.refreshViews();
-                    }
-                });
-            });
-        }
-
-        // Anime
-        if (this.settings.enabledMedia.anime) {
-            menu.addItem((item) => {
-            const isSelected = this.mediaType === 'anime';
-
-            if (isSelected) {
-                const titleEl = activeDocument.createDocumentFragment();
-                const span = titleEl.createEl('span');
-                span.setText(t('contextAnime'));
-                span.addClass('lorebase-menu-selected-title');
-                item.setTitle(titleEl);
-            } else {
-                item.setTitle(t('contextAnime'));
-            }
-
-            item.setIcon('clapperboard')
-                .onClick(() => {
-                    const changed = this.mediaType !== 'anime';
-                    this.mediaType = 'anime';
-                    void this.activateView();
-                    if (changed) {
-                        this.refreshViews();
-                    }
-                });
+                    });
             });
         }
 

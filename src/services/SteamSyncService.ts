@@ -1,4 +1,4 @@
-import { App, TFile, TFolder, requestUrl } from 'obsidian';
+import { App, TFile, requestUrl } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../constants';
 import type { GameStatus, LorebaseSettings, SteamSyncSettings } from '../types';
 import { ChoiceModal } from '../modals/IntegrationModals';
@@ -7,8 +7,16 @@ import { getSteamDetails } from './integrations/providers/steam';
 import { buildSimpleTemplate, getDefaultTemplateFields, renderTemplate, sanitizeFileName } from './integrations/templateUtils';
 import { extractYear } from './integrations/providers/common';
 import type { JsonFetcher } from './integrations/providers/common';
-import { getHowLongToBeatTimes } from './integrations/providers/howlongtobeat';
 import { localizeTemplateImages } from './integrations/imageStorage';
+import { MetadataService } from './MetadataService';
+import {
+    ensureFolder,
+    fetchHowLongToBeatValues,
+    fetchJson,
+    getJsonFetcher,
+    imageUrlExists,
+    shouldLoadHowLongToBeat,
+} from './integrations/shared';
 
 export interface SteamOwnedGame {
     appId: number;
@@ -51,15 +59,24 @@ export interface SteamImportCandidate {
     name: string;
     playtimeForever: number;
     source: 'owned' | 'wishlist' | 'owned_wishlist';
+    poster?: string;
+    posterHorizontal?: string;
 }
 
 export class SteamSyncService {
     private app: App;
+    private metadataService: MetadataService;
+    private jsonFetcher: JsonFetcher;
     private detailsCache = new Map<number, GameDetails | null>();
     private warnings: string[] = [];
 
-    constructor(app: App) {
+    constructor(app: App, metadataService: MetadataService) {
         this.app = app;
+        this.metadataService = metadataService;
+        this.jsonFetcher = getJsonFetcher((url, headers, method, body) => fetchJson(url, headers, method, body, {
+            rateLimitMessage: 'Steam request was rate limited.',
+            htmlJsonMessage: 'Steam returned HTML instead of JSON.',
+        }));
     }
 
     async getOwnedGames(steamId: string, apiKey?: string): Promise<SteamOwnedGame[]> {
@@ -75,7 +92,7 @@ export class SteamSyncService {
 
         let json: unknown;
         try {
-            json = await this.fetchJson(url.toString());
+            json = await this.jsonFetcher(url.toString());
         } catch (error) {
             if (!apiKey?.trim() && this.isStatusError(error, 401)) {
                 this.addWarning('Steam library requires an API Key for this profile. Wishlist can still be imported.');
@@ -150,11 +167,18 @@ export class SteamSyncService {
         return Array.from(byAppId.values()).sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    async enrichGame(appId: number): Promise<GameDetails | null> {
+    async enrichGame(appId: number, settings?: LorebaseSettings): Promise<GameDetails | null> {
+        const shouldUseSteamGridDb = Boolean(settings?.integrations?.providers.steamgriddb?.enabled && settings.integrations.providers.steamgriddb.apiKey?.trim());
         if (this.detailsCache.has(appId)) {
-            return this.detailsCache.get(appId) ?? null;
+            const cached = this.detailsCache.get(appId) ?? null;
+            if (!shouldUseSteamGridDb || cached?.poster) {
+                return cached;
+            }
         }
-        const details = await getSteamDetails(this.getJsonFetcher(), String(appId));
+        const details = await getSteamDetails(this.jsonFetcher, String(appId), {
+            imageExists: imageUrlExists,
+            steamGridDb: settings?.integrations?.providers.steamgriddb,
+        });
         this.detailsCache.set(appId, details);
         return details;
     }
@@ -164,10 +188,11 @@ export class SteamSyncService {
         return (await this.loadCandidates(settings)).length;
     }
 
-    async previewImport(settings: SteamSyncSettings): Promise<SteamImportCandidate[]> {
+    async previewImport(settings: LorebaseSettings | SteamSyncSettings): Promise<SteamImportCandidate[]> {
         this.clearWarnings();
-        const candidates = await this.loadCandidates(settings);
-        return this.enrichCandidateNames(candidates);
+        const steamSettings = this.getSteamSettings(settings);
+        const candidates = await this.loadCandidates(steamSettings);
+        return this.preparePreviewCandidates(candidates);
     }
 
     async sync(settings: LorebaseSettings, options: SteamSyncOptions = {}): Promise<SteamSyncResult> {
@@ -192,13 +217,13 @@ export class SteamSyncService {
         }
 
         const template = this.getGameTemplate(settings);
-        await this.ensureFolder(settings.games.folderPath);
+        await ensureFolder(this.app, settings.games.folderPath);
 
         for (const candidate of candidates) {
             try {
                 options.onProgress?.(`Importing ${candidate.name}...`);
                 const duplicate = this.findDuplicate(candidate, existingIndex);
-                const details = await this.enrichGame(candidate.appId) ?? this.buildFallbackDetails(candidate);
+                const details = await this.enrichGame(candidate.appId, settings) ?? this.buildFallbackDetails(candidate);
                 if (/^Steam App \d+$/.test(candidate.name) && details.name && details.name !== 'Unknown') {
                     candidate.name = details.name;
                 }
@@ -258,9 +283,9 @@ export class SteamSyncService {
                 continue;
             }
             try {
-                await this.app.fileManager.processFrontMatter(duplicate, (frontmatter: Record<string, unknown>) => {
-                    frontmatter.steamAppId = game.appId;
-                    frontmatter.playtime = game.playtimeForever;
+                await this.metadataService.updateMetadata(duplicate, {
+                    steamAppId: game.appId,
+                    playtime: game.playtimeForever,
                 });
                 result.updated++;
             } catch (error) {
@@ -326,31 +351,18 @@ export class SteamSyncService {
         this.warnings = [];
     }
 
-    private async enrichCandidateNames(candidates: SteamImportCandidate[]): Promise<SteamImportCandidate[]> {
-        const unknown = candidates.filter((candidate) => /^Steam App \d+$/.test(candidate.name));
-        const concurrency = 4;
-        let cursor = 0;
+    private getSteamSettings(settings: LorebaseSettings | SteamSyncSettings): SteamSyncSettings {
+        return this.isLorebaseSettings(settings) ? settings.steamSync : settings;
+    }
 
-        const worker = async (): Promise<void> => {
-            while (cursor < unknown.length) {
-                const candidate = unknown[cursor];
-                cursor++;
-                try {
-                    const details = await this.enrichGame(candidate.appId);
-                    if (details?.name && details.name !== 'Unknown') {
-                        candidate.name = details.name;
-                    }
-                } catch (error) {
-                    console.warn('[Steam Sync] Failed to resolve wishlist app name.', candidate.appId, error);
-                }
-            }
-        };
+    private isLorebaseSettings(settings: LorebaseSettings | SteamSyncSettings): settings is LorebaseSettings {
+        return 'steamSync' in settings;
+    }
 
-        await Promise.all(Array.from(
-            { length: Math.min(concurrency, unknown.length) },
-            () => worker()
-        ));
-
+    private preparePreviewCandidates(candidates: SteamImportCandidate[]): SteamImportCandidate[] {
+        for (const candidate of candidates) {
+            candidate.posterHorizontal = this.getSteamHeaderImage(candidate.appId);
+        }
         return candidates.sort((a, b) => a.name.localeCompare(b.name));
     }
 
@@ -359,7 +371,7 @@ export class SteamSyncService {
         url.searchParams.set('steamid', steamId);
 
         try {
-            const json = await this.fetchJson(url.toString());
+            const json = await this.jsonFetcher(url.toString());
             const response = this.asObject(this.asObject(json)?.response);
             const items = this.asArray(response?.items);
 
@@ -382,7 +394,7 @@ export class SteamSyncService {
 
     private async getWishlistPage(steamId: string, page: number): Promise<SteamWishlistGame[]> {
         const url = `https://store.steampowered.com/wishlist/profiles/${encodeURIComponent(steamId)}/wishlistdata/?p=${page}`;
-        const json = await this.fetchJson(url);
+        const json = await this.jsonFetcher(url);
         const root = this.asObject(json);
         if (!root) return [];
 
@@ -461,9 +473,10 @@ export class SteamSyncService {
 
     private buildFallbackDetails(candidate: SteamImportCandidate): GameDetails {
         return {
+            kind: 'game',
             name: candidate.name || `Steam App ${candidate.appId}`,
             description: '',
-            poster: this.getSteamLibraryPoster(candidate.appId),
+            poster: '',
             posterHorizontal: this.getSteamHeaderImage(candidate.appId),
             genres: [],
             platforms: [],
@@ -500,8 +513,11 @@ export class SteamSyncService {
         allSettings: LorebaseSettings
     ): Promise<Record<string, unknown>> {
         const details = game.details;
-        const hltb = this.shouldLoadHowLongToBeat(allSettings, this.getGameTemplate(allSettings))
-            ? await this.fetchHowLongToBeatValues(details.name || game.name, details.year)
+        const hltb = shouldLoadHowLongToBeat(
+            allSettings.integrations?.media.games ?? DEFAULT_SETTINGS.integrations!.media.games,
+            this.getGameTemplate(allSettings)
+        )
+            ? await fetchHowLongToBeatValues(this.jsonFetcher, details.name || game.name, details.year, '[Steam Sync]')
             : null;
         return {
             name: details.name || game.name,
@@ -544,15 +560,7 @@ export class SteamSyncService {
             updates.year = game.details.year || null;
         }
 
-        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-            for (const [key, value] of Object.entries(updates)) {
-                if (value === null || value === undefined || value === '') {
-                    delete frontmatter[key];
-                } else {
-                    frontmatter[key] = value;
-                }
-            }
-        });
+        await this.metadataService.updateMetadata(file, updates);
     }
 
     private indexExistingGames(folderPath: string): {
@@ -632,35 +640,6 @@ export class SteamSyncService {
         return buildSimpleTemplate('games', filtered);
     }
 
-    private shouldLoadHowLongToBeat(settings: LorebaseSettings, template: string): boolean {
-        const media = settings.integrations?.media.games ?? DEFAULT_SETTINGS.integrations!.media.games;
-        if (!media.templateEnabled || !media.howLongToBeatEnabled) return false;
-
-        const mode = media.templateMode ?? 'advanced';
-        if (mode === 'simple') {
-            return true;
-        }
-
-        return /\{\{VALUE:(main|main_plus_sides|perfectionist|completionist)\}\}/.test(template);
-    }
-
-    private async fetchHowLongToBeatValues(name: string, year?: string): Promise<{
-        main: string;
-        main_plus_sides: string;
-        perfectionist: string;
-    } | null> {
-        try {
-            return await getHowLongToBeatTimes(this.getJsonFetcher(), name, year);
-        } catch (error) {
-            console.warn('[Steam Sync] howlongtobeat failed', error);
-            return null;
-        }
-    }
-
-    private getJsonFetcher(): JsonFetcher {
-        return this.fetchJson.bind(this) as JsonFetcher;
-    }
-
     private injectFrontmatterFields(content: string, fields: Record<string, unknown>): string {
         const lines = content.split(/\r?\n/);
         if (lines[0]?.trim() !== '---') {
@@ -721,14 +700,6 @@ export class SteamSyncService {
         return candidate;
     }
 
-    private async ensureFolder(folderPath: string): Promise<void> {
-        if (!folderPath) return;
-        const existing = this.app.vault.getAbstractFileByPath(folderPath);
-        if (existing instanceof TFolder) return;
-        if (existing) return;
-        await this.app.vault.createFolder(folderPath);
-    }
-
     private async confirmDuplicateUpdate(count: number): Promise<boolean> {
         const modal = new ChoiceModal(
             this.app,
@@ -772,46 +743,8 @@ export class SteamSyncService {
         return match ? `steam-app:${match[1]}` : '';
     }
 
-    private getSteamLibraryPoster(appId: number): string {
-        return `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
-    }
-
     private getSteamHeaderImage(appId: number): string {
         return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
-    }
-
-    private async fetchJson(
-        url: string,
-        headers: Record<string, string> = {},
-        method: 'GET' | 'POST' = 'GET',
-        body?: string
-    ): Promise<unknown> {
-        let response: Awaited<ReturnType<typeof requestUrl>>;
-        try {
-            const options: { url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body?: string } = {
-                url,
-                method,
-                headers,
-            };
-            if (body !== undefined) {
-                options.body = body;
-            }
-            response = await requestUrl(options);
-        } catch (error) {
-            if (this.isStatusError(error, 429)) {
-                throw new Error('Steam request was rate limited.');
-            }
-            throw error;
-        }
-        try {
-            return response.json;
-        } catch (error) {
-            const text = response.text?.trim() ?? '';
-            if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
-                throw new Error('Steam returned HTML instead of JSON.');
-            }
-            throw error;
-        }
     }
 
     private async fetchText(url: string): Promise<string> {

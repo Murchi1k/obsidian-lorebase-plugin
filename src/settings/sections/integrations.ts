@@ -1,10 +1,23 @@
-import { Notice, Setting } from 'obsidian';
+import { Notice, Setting, setIcon } from 'obsidian';
 import { t, type TranslationKey } from '../../localization';
 import type { IntegrationTemplateSettings } from '../../types';
 import { IntegrationService } from '../../services/IntegrationService';
-import { ANIME_TEMPLATE_FIELDS, GAME_TEMPLATE_FIELDS, GAME_TEMPLATE_FIELDS_HLTB, ICON_INTEGRATIONS } from './constants';
+import { renderSteamSyncSettings } from '../SteamSyncSettings';
+import { ANIME_TEMPLATE_FIELDS, BOOK_TEMPLATE_FIELDS, GAME_TEMPLATE_FIELDS, GAME_TEMPLATE_FIELDS_HLTB, ICON_INTEGRATIONS, MANGA_TEMPLATE_FIELDS, MOVIE_TEMPLATE_FIELDS, SERIES_TEMPLATE_FIELDS } from './constants';
 import { addLorebaseDropdown } from './customDropdown';
-import type { SettingsSectionContext, TemplateFieldDef } from './types';
+import { createMediaTabs } from './mediaTabs';
+import type { MediaTypeKey, SettingsSectionContext, TemplateFieldDef } from './types';
+
+type ProviderSettingsId = 'rawg' | 'steam' | 'igdb' | 'anilist' | 'shikimori' | 'tmdb' | 'tvmaze' | 'omdb' | 'hardcover' | 'googlebooks' | 'jikan' | 'mangadex';
+
+interface ProviderSettingsDef {
+    id: ProviderSettingsId;
+    label: string;
+    detailLabel: string;
+    needsKey: boolean;
+    showKeyInput?: boolean;
+    needsClientSecret?: boolean;
+}
 
 function getTemplateFieldOrder(
     savedOrder: string[] | undefined,
@@ -194,16 +207,92 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
         true
     );
 
-    const renderProvider = (
-        id: 'rawg' | 'steam' | 'igdb' | 'anilist' | 'shikimori',
-        label: string,
-        needsKey: boolean,
-        needsClientSecret = false
-    ): void => {
-        const provider = integrations.providers[id];
+    const gameProviders: ProviderSettingsDef[] = [
+        { id: 'rawg', label: 'RAWG', detailLabel: t('settingsIntegrationsProviderRawg'), needsKey: true },
+        { id: 'steam', label: 'Steam', detailLabel: t('settingsIntegrationsProviderSteam'), needsKey: false },
+        { id: 'igdb', label: 'IGDB', detailLabel: t('settingsIntegrationsProviderIgdb'), needsKey: true, needsClientSecret: true }
+    ];
+    const animeProviders: ProviderSettingsDef[] = [
+        { id: 'anilist', label: 'AniList', detailLabel: t('settingsIntegrationsProviderAnilist'), needsKey: false },
+        { id: 'shikimori', label: 'Shikimori', detailLabel: t('settingsIntegrationsProviderShikimori'), needsKey: false }
+    ];
+    const bookProviders: ProviderSettingsDef[] = [
+        { id: 'hardcover', label: 'Hardcover', detailLabel: t('settingsIntegrationsProviderHardcover'), needsKey: true },
+        { id: 'googlebooks', label: 'Google Books', detailLabel: t('settingsIntegrationsProviderGooglebooks'), needsKey: true, showKeyInput: true },
+    ];
+    const mangaProviders: ProviderSettingsDef[] = [
+        { id: 'anilist', label: 'AniList', detailLabel: t('settingsIntegrationsProviderAnilist'), needsKey: false },
+        { id: 'shikimori', label: 'Shikimori', detailLabel: t('settingsIntegrationsProviderShikimori'), needsKey: false },
+        { id: 'jikan', label: 'Jikan', detailLabel: t('settingsIntegrationsProviderJikan'), needsKey: false },
+        { id: 'mangadex', label: 'MangaDex', detailLabel: t('settingsIntegrationsProviderMangadex'), needsKey: false },
+    ];
+    const videoProviders: ProviderSettingsDef[] = [
+        { id: 'tmdb', label: 'TMDB', detailLabel: t('settingsIntegrationsProviderTmdb'), needsKey: true },
+        { id: 'tvmaze', label: 'TVmaze', detailLabel: t('settingsIntegrationsProviderTvmaze'), needsKey: false, showKeyInput: false },
+        { id: 'omdb', label: 'OMDb', detailLabel: t('settingsIntegrationsProviderOmdb'), needsKey: true },
+    ];
+    const allProviders = [...gameProviders, ...animeProviders, ...bookProviders, ...mangaProviders, ...videoProviders];
+    let selectedProviderId: ProviderSettingsId | null = null;
 
-        const setting = new Setting(providersGroup.body)
-            .setName(label)
+    const providerPicker = providersGroup.body.createDiv({ cls: 'lorebase-provider-picker' });
+    const providerDetails = providersGroup.body.createDiv({ cls: 'lorebase-provider-details' });
+    const chipButtons = new Map<ProviderSettingsId, HTMLButtonElement>();
+
+    const clearSelectedProvider = (): void => {
+        if (selectedProviderId === null) return;
+        selectedProviderId = null;
+        renderSelectedProvider();
+    };
+
+    const renderProviderGroup = (title: string, icon: string, providers: ProviderSettingsDef[]): void => {
+        const groupEl = providerPicker.createDiv({ cls: 'lorebase-provider-chip-group' });
+        const titleEl = groupEl.createDiv({ cls: 'lorebase-provider-chip-title' });
+        const iconEl = titleEl.createSpan({ cls: 'lorebase-provider-chip-title-icon' });
+        setIcon(iconEl, icon);
+        titleEl.createSpan({ text: title });
+        const chipsEl = groupEl.createDiv({ cls: 'lorebase-provider-chips' });
+
+        for (const provider of providers) {
+            const chip = chipsEl.createEl('button', {
+                cls: 'lorebase-provider-chip',
+                text: provider.label,
+                attr: {
+                    type: 'button',
+                    'aria-pressed': 'false'
+                }
+            });
+            chipButtons.set(provider.id, chip);
+            chip.addEventListener('click', (event) => {
+                event.stopPropagation();
+                selectedProviderId = selectedProviderId === provider.id ? null : provider.id;
+                renderSelectedProvider();
+            });
+        }
+    };
+
+    const syncProviderChips = (): void => {
+        for (const [id, chip] of chipButtons) {
+            const isActive = selectedProviderId !== null && id === selectedProviderId;
+            chip.toggleClass('is-active', isActive);
+            chip.setAttr('aria-pressed', String(isActive));
+        }
+    };
+
+    const renderSelectedProvider = (): void => {
+        syncProviderChips();
+        providerDetails.empty();
+        providerDetails.toggleClass('is-visible', selectedProviderId !== null);
+        if (selectedProviderId === null) return;
+
+        const definition = allProviders.find((provider) => provider.id === selectedProviderId);
+        if (!definition) return;
+
+        const { id, detailLabel, needsKey, showKeyInput = needsKey, needsClientSecret = false } = definition;
+        const provider = integrations.providers[id];
+        providerDetails.toggleClass('is-igdb-provider', showKeyInput);
+
+        const setting = new Setting(providerDetails)
+            .setName(detailLabel)
             .setDesc(needsKey ? t('settingsIntegrationsProviderKeyRequired') : t('settingsIntegrationsProviderKeyOptional'))
             .addToggle(toggle => {
                 toggle
@@ -214,7 +303,8 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                     });
             });
         setting.settingEl.addClass('lorebase-provider-setting');
-        if (needsClientSecret) {
+        setting.settingEl.addClass('lorebase-provider-detail-card');
+        if (showKeyInput) {
             setting.settingEl.addClass('is-igdb-provider');
         }
 
@@ -223,31 +313,32 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                 .setButtonText(t('settingsIntegrationsProviderTest'))
                 .onClick(() => {
                     void (async (): Promise<void> => {
-                    const result = await integrationService.testProvider(id);
-                    if (result.ok) {
-                        new Notice(t('noticeProviderTestSuccess'));
-                        return;
-                    }
-                    if (result.reason === 'missing_key') {
-                        new Notice(t('noticeMissingApiKey'));
-                        return;
-                    }
-                    if (result.reason === 'disabled') {
-                        new Notice(t('noticeProviderDisabled'));
-                        return;
-                    }
-                    new Notice(t('noticeProviderTestFail'));
+                        const result = await integrationService.testProvider(id);
+                        if (result.ok) {
+                            new Notice(t('noticeProviderTestSuccess'));
+                            return;
+                        }
+                        if (result.reason === 'missing_key') {
+                            new Notice(t('noticeMissingApiKey'));
+                            return;
+                        }
+                        if (result.reason === 'disabled') {
+                            new Notice(t('noticeProviderDisabled'));
+                            return;
+                        }
+                        new Notice(t('noticeProviderTestFail'));
                     })();
                 });
         });
 
-        if (needsKey) {
+        if (showKeyInput) {
             setting.settingEl.addClass('has-key');
+            setting.settingEl.addClass('is-key-open');
             const keyRow = setting.settingEl.createDiv({ cls: 'lorebase-provider-key-row' });
             const keyInput = keyRow.createEl('input', {
                 cls: 'lorebase-provider-key-input',
                 attr: {
-                    type: 'text',
+                    type: 'password',
                     placeholder: needsClientSecret
                         ? t('settingsIntegrationsProviderClientIdPlaceholder')
                         : t('settingsIntegrationsProviderKeyPlaceholder')
@@ -259,15 +350,14 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                 void context.plugin.saveSettings();
             });
 
-            let secretInput: HTMLInputElement | null = null;
             if (needsClientSecret) {
-                secretInput = keyRow.createEl('input', {
+                const secretInput = keyRow.createEl('input', {
                     cls: 'lorebase-provider-key-input',
                     attr: { type: 'password', placeholder: t('settingsIntegrationsProviderClientSecretPlaceholder') }
                 });
                 secretInput.value = provider.clientSecret ?? '';
                 secretInput.addEventListener('input', () => {
-                    provider.clientSecret = secretInput?.value.trim() ?? '';
+                    provider.clientSecret = secretInput.value.trim();
                     void context.plugin.saveSettings();
                 });
 
@@ -297,33 +387,90 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                         rel: 'noopener'
                     }
                 });
+            } else if (id === 'rawg' || id === 'tmdb' || id === 'tvmaze' || id === 'omdb' || id === 'hardcover' || id === 'googlebooks') {
+                const help = keyRow.createDiv({ cls: 'lorebase-provider-help' });
+                help.createDiv({
+                    cls: 'lorebase-provider-help-title',
+                    text: id === 'rawg'
+                        ? t('settingsIntegrationsProviderRawgHelpTitle')
+                        : id === 'tmdb'
+                            ? t('settingsIntegrationsProviderTmdbHelpTitle')
+                        : id === 'tvmaze'
+                            ? t('settingsIntegrationsProviderTvmazeHelpTitle')
+                        : id === 'hardcover'
+                            ? t('settingsIntegrationsProviderHardcoverHelpTitle')
+                        : id === 'googlebooks'
+                            ? t('settingsIntegrationsProviderGooglebooksHelpTitle')
+                            : t('settingsIntegrationsProviderOmdbHelpTitle'),
+                });
+                help.createDiv({
+                    cls: 'lorebase-provider-help-text',
+                    text: id === 'rawg'
+                        ? t('settingsIntegrationsProviderRawgHelpText')
+                        : id === 'tmdb'
+                            ? t('settingsIntegrationsProviderTmdbHelpText')
+                        : id === 'tvmaze'
+                            ? t('settingsIntegrationsProviderTvmazeHelpText')
+                        : id === 'hardcover'
+                            ? t('settingsIntegrationsProviderHardcoverHelpText')
+                        : id === 'googlebooks'
+                            ? t('settingsIntegrationsProviderGooglebooksHelpText')
+                            : t('settingsIntegrationsProviderOmdbHelpText'),
+                });
+                const links = help.createDiv({ cls: 'lorebase-provider-help-links' });
+                links.createEl('a', {
+                    text: id === 'rawg'
+                        ? t('settingsIntegrationsProviderRawgLink')
+                        : id === 'tmdb'
+                            ? t('settingsIntegrationsProviderTmdbLink')
+                        : id === 'tvmaze'
+                            ? t('settingsIntegrationsProviderTvmazeLink')
+                        : id === 'hardcover'
+                            ? t('settingsIntegrationsProviderHardcoverLink')
+                        : id === 'googlebooks'
+                            ? t('settingsIntegrationsProviderGooglebooksLink')
+                            : t('settingsIntegrationsProviderOmdbLink'),
+                    attr: {
+                        href: id === 'rawg'
+                            ? 'https://rawg.io/apidocs'
+                            : id === 'tmdb'
+                                ? 'https://developer.themoviedb.org/docs/getting-started'
+                            : id === 'tvmaze'
+                                ? 'https://www.tvmaze.com/api'
+                            : id === 'hardcover'
+                                ? 'https://hardcover.app/account/api'
+                            : id === 'googlebooks'
+                                ? 'https://developers.google.com/books/docs/v1/using'
+                                : 'https://www.omdbapi.com/apikey.aspx',
+                        target: '_blank',
+                        rel: 'noopener',
+                    },
+                });
             }
-
-            setting.addExtraButton(button => {
-                button
-                    .setIcon('chevron-down')
-                    .setTooltip(needsClientSecret
-                        ? t('settingsIntegrationsProviderClientIdPlaceholder')
-                        : t('settingsIntegrationsProviderKeyPlaceholder'))
-                    .onClick(() => {
-                        const isOpen = setting.settingEl.hasClass('is-key-open');
-                        if (isOpen) {
-                            setting.settingEl.removeClass('is-key-open');
-                        } else {
-                            setting.settingEl.addClass('is-key-open');
-                            keyInput.focus();
-                            keyInput.select();
-                        }
-                    });
-            });
         }
     };
 
-    renderProvider('rawg', t('settingsIntegrationsProviderRawg'), true);
-    renderProvider('steam', t('settingsIntegrationsProviderSteam'), false);
-    renderProvider('igdb', t('settingsIntegrationsProviderIgdb'), true, true);
-    renderProvider('anilist', t('settingsIntegrationsProviderAnilist'), false);
-    renderProvider('shikimori', t('settingsIntegrationsProviderShikimori'), false);
+    renderProviderGroup(t('settingsGames'), 'gamepad-2', gameProviders);
+    renderProviderGroup(t('settingsAnime'), 'clapperboard', animeProviders);
+    renderProviderGroup(t('settingsMoviesSeries'), 'film', videoProviders);
+    renderProviderGroup(t('settingsBooks'), 'book-open', bookProviders);
+    renderProviderGroup(t('settingsManga'), 'book-open-text', mangaProviders);
+
+    providersGroup.body.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.closest('button, input, textarea, select, a, .lorebase-provider-detail-card')) return;
+        clearSelectedProvider();
+    });
+
+    const steamSyncGroup = context.createCollapsibleGroup(
+        container,
+        t('commandSteamSync'),
+        t('settingsIntegrationsSteamSyncDesc'),
+        false
+    );
+    steamSyncGroup.root.addClass('lorebase-integration-steam-sync-group');
+    renderSteamSyncSettings(context, steamSyncGroup.body, { embedded: true });
 
     const templatesGroup = context.createCollapsibleGroup(
         container,
@@ -331,23 +478,35 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
         undefined,
         true
     );
+    templatesGroup.root.addClass('lorebase-integration-templates-group');
+    const templateTabsHost = templatesGroup.body.createDiv({ cls: 'lorebase-integration-template-tabs' });
+    const templatePanels = templatesGroup.body.createDiv({ cls: 'lorebase-integration-template-panels' });
+    const templatePanelMap = new Map<MediaTypeKey, HTMLElement>();
+
+    const selectTemplateMedia = (media: MediaTypeKey): void => {
+        context.setActiveMediaTab('integrationTemplates', media);
+        templatePanelMap.forEach((panel, key) => {
+            const active = key === media;
+            panel.toggleClass('is-active', active);
+            panel.toggleAttribute('hidden', !active);
+        });
+    };
 
     const renderTemplateSettings = (
-        key: 'games' | 'anime',
+        key: MediaTypeKey,
         titleKey: TranslationKey,
         descKey: TranslationKey,
         fields: TemplateFieldDef[]
     ): void => {
         const media = integrations.media[key];
 
-        const section = context.createCollapsibleGroup(
-            templatesGroup.body,
-            t(titleKey),
-            t(descKey),
-            key === 'games'
-        );
+        const panel = templatePanels.createDiv({
+            cls: `lorebase-integration-template-panel is-${key}`,
+            attr: { role: 'tabpanel' },
+        });
+        templatePanelMap.set(key, panel);
 
-        new Setting(section.body)
+        new Setting(panel)
             .setName(t(titleKey))
             .setDesc(t(descKey))
             .addToggle(toggle => {
@@ -363,7 +522,7 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
         if (!media.templateEnabled) return;
 
         const mode = media.templateMode ?? 'advanced';
-        const templateModeSetting = new Setting(section.body)
+        const templateModeSetting = new Setting(panel)
             .setName(t('settingsIntegrationsTemplateMode'))
             .setDesc(t('settingsIntegrationsTemplateModeDesc'));
         addLorebaseDropdown<'simple' | 'advanced'>(
@@ -381,7 +540,7 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
         );
 
         if (key === 'games') {
-            new Setting(section.body)
+            new Setting(panel)
                 .setName(t('settingsIntegrationsHowLongToBeat'))
                 .setDesc(t('settingsIntegrationsHowLongToBeatDesc'))
                 .addToggle(toggle => {
@@ -396,17 +555,89 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
                             context.display();
                         });
                 });
+
+            const steamGridDb = integrations.providers.steamgriddb;
+            let steamGridDbPanelOpen = false;
+            let steamGridDbChevron: HTMLElement | null = null;
+            let steamGridDbApiPanel: HTMLElement | null = null;
+            const syncSteamGridDbPanel = (): void => {
+                steamGridDbApiPanel?.toggleClass('is-open', steamGridDbPanelOpen);
+                steamGridDbApiPanel?.toggleClass('is-hidden', !steamGridDbPanelOpen);
+                steamGridDbChevron?.toggleClass('is-open', steamGridDbPanelOpen);
+            };
+
+            const steamGridDbSetting = new Setting(panel)
+                .setName(t('settingsIntegrationsSteamGridDb'))
+                .setDesc(t('settingsIntegrationsSteamGridDbDesc'))
+                .addButton(button => {
+                    button
+                        .setIcon('chevron-down')
+                        .setTooltip(t('settingsIntegrationsSteamGridDbApiKey'))
+                        .onClick(() => {
+                            steamGridDbPanelOpen = !steamGridDbPanelOpen;
+                            syncSteamGridDbPanel();
+                        });
+                    steamGridDbChevron = button.buttonEl;
+                    steamGridDbChevron.addClass('lorebase-steamgriddb-chevron');
+                })
+                .addToggle(toggle => {
+                    toggle
+                        .setValue(steamGridDb.enabled)
+                        .onChange(async (value) => {
+                            steamGridDb.enabled = value;
+                            await context.plugin.saveSettings();
+                        });
+                });
+            steamGridDbSetting.settingEl.addClass('lorebase-steamgriddb-setting');
+
+            steamGridDbApiPanel = panel.createDiv({ cls: 'lorebase-steamgriddb-api-panel is-hidden' });
+            steamGridDbApiPanel.createDiv({
+                cls: 'lorebase-steamgriddb-api-title',
+                text: t('settingsIntegrationsSteamGridDbApiKey'),
+            });
+            const keyInput = steamGridDbApiPanel.createEl('input', {
+                cls: 'lorebase-provider-key-input',
+                attr: {
+                    type: 'password',
+                    placeholder: t('settingsIntegrationsSteamGridDbApiKey'),
+                },
+            });
+            keyInput.value = steamGridDb.apiKey ?? '';
+            keyInput.addEventListener('input', () => {
+                steamGridDb.apiKey = keyInput.value.trim();
+                void context.plugin.saveSettings();
+            });
+
+            const help = steamGridDbApiPanel.createDiv({ cls: 'lorebase-provider-help' });
+            help.createDiv({
+                cls: 'lorebase-provider-help-title',
+                text: t('settingsIntegrationsSteamGridDbHelpTitle'),
+            });
+            help.createDiv({
+                cls: 'lorebase-provider-help-text',
+                text: t('settingsIntegrationsSteamGridDbHelpText'),
+            });
+            const links = help.createDiv({ cls: 'lorebase-provider-help-links' });
+            links.createEl('a', {
+                text: t('settingsIntegrationsSteamGridDbLink'),
+                attr: {
+                    href: 'https://www.steamgriddb.com/profile/preferences/api',
+                    target: '_blank',
+                    rel: 'noopener',
+                },
+            });
+            syncSteamGridDbPanel();
         }
 
         if ((media.templateMode ?? 'advanced') === 'simple') {
             const visibleFields = key === 'games'
                 ? getGameTemplateFields(Boolean(media.howLongToBeatEnabled))
                 : fields;
-            renderSimpleTemplateFieldEditor(context, section.body, media, visibleFields);
+            renderSimpleTemplateFieldEditor(context, panel, media, visibleFields);
             return;
         }
 
-        new Setting(section.body)
+        new Setting(panel)
             .setName(t('settingsIntegrationsTemplateContent'))
             .setDesc(t('settingsIntegrationsTemplateDesc'))
             .addTextArea(text => {
@@ -422,4 +653,23 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
 
     renderTemplateSettings('games', 'settingsIntegrationsGamesTemplate', 'settingsIntegrationsGamesTemplateDesc', getGameTemplateFields(Boolean(integrations.media.games.howLongToBeatEnabled)));
     renderTemplateSettings('anime', 'settingsIntegrationsAnimeTemplate', 'settingsIntegrationsAnimeTemplateDesc', ANIME_TEMPLATE_FIELDS);
+    renderTemplateSettings('movies', 'settingsIntegrationsMoviesTemplate', 'settingsIntegrationsMoviesTemplateDesc', MOVIE_TEMPLATE_FIELDS);
+    renderTemplateSettings('series', 'settingsIntegrationsSeriesTemplate', 'settingsIntegrationsSeriesTemplateDesc', SERIES_TEMPLATE_FIELDS);
+    renderTemplateSettings('books', 'settingsIntegrationsBooksTemplate', 'settingsIntegrationsBooksTemplateDesc', BOOK_TEMPLATE_FIELDS);
+    renderTemplateSettings('manga', 'settingsIntegrationsMangaTemplate', 'settingsIntegrationsMangaTemplateDesc', MANGA_TEMPLATE_FIELDS);
+    createMediaTabs(
+        templateTabsHost,
+        [
+            { value: 'games', label: t('settingsGames'), icon: 'gamepad-2' },
+            { value: 'anime', label: t('settingsAnime'), icon: 'clapperboard' },
+            { value: 'movies', label: t('settingsMovies'), icon: 'film' },
+            { value: 'series', label: t('settingsSeries'), icon: 'tv' },
+            { value: 'books', label: t('settingsBooks'), icon: 'book-open' },
+            { value: 'manga', label: t('settingsManga'), icon: 'book-open-text' },
+        ],
+        context.getActiveMediaTab('integrationTemplates'),
+        t('settingsIntegrationTemplateTabs'),
+        selectTemplateMedia
+    );
+    selectTemplateMedia(context.getActiveMediaTab('integrationTemplates'));
 }

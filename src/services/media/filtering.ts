@@ -4,6 +4,7 @@ import { compareNames, hasAllValues } from './serviceUtils';
 export interface FilterableMediaItem {
     displayName: string;
     nameLower: string;
+    gameSeries?: string;
     year: number | null;
     userRating: UserRating;
     favorite: boolean;
@@ -59,7 +60,7 @@ export function filterAndSortMedia<T extends FilterableMediaItem>(
     return sortMediaItemsSafe(result, sortField, sortOrder, getCompletedDate);
 }
 
-export function sortMediaItemsSafe<T extends FilterableMediaItem>(
+function sortMediaItemsSafe<T extends FilterableMediaItem>(
     items: T[],
     field: SortField,
     order: SortOrder,
@@ -87,6 +88,25 @@ export function sortMediaItemsSafe<T extends FilterableMediaItem>(
                 case 'name':
                     comparison = compareNames(String(a.nameLower || '').toLowerCase(), String(b.nameLower || '').toLowerCase());
                     break;
+                case 'series': {
+                    const aSeries = String(a.gameSeries || '').trim();
+                    const bSeries = String(b.gameSeries || '').trim();
+
+                    if (!aSeries && bSeries) {
+                        comparison = order === 'asc' ? 1 : -1;
+                    } else if (aSeries && !bSeries) {
+                        comparison = order === 'asc' ? -1 : 1;
+                    } else {
+                        comparison = compareNames(aSeries, bSeries);
+                        if (comparison === 0) {
+                            comparison = (Number(a.year) || 0) - (Number(b.year) || 0);
+                        }
+                        if (comparison === 0) {
+                            comparison = compareNames(String(a.nameLower || ''), String(b.nameLower || ''));
+                        }
+                    }
+                    break;
+                }
                 case 'year':
                     comparison = (Number(a.year) || 0) - (Number(b.year) || 0);
                     break;

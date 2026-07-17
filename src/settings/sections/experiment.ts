@@ -1,14 +1,11 @@
 import { Notice, Setting } from 'obsidian';
 import { t } from '../../localization';
 import { localizeExistingNoteImages } from '../../services/integrations/imageStorage';
-import { ICON_EXPERIMENT } from './constants';
 import type { SettingsSectionContext } from './types';
 
-export function renderExperimentSettings(context: SettingsSectionContext, container: HTMLElement): void {
+export function renderLocalImageSettings(context: SettingsSectionContext, container: HTMLElement): void {
     const integrations = context.plugin.settings.integrations;
     if (!integrations) return;
-
-    context.createSectionHeader(container, ICON_EXPERIMENT, t('settingsExperiment'));
 
     const imageStorage = integrations.imageStorage;
     const imageStorageGroup = context.createCollapsibleGroup(

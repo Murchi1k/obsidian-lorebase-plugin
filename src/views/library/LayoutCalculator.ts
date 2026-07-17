@@ -4,6 +4,7 @@ import { CardSize, LorebaseSettings, ViewMode } from '../../types';
 
 export type EffectiveLayout = {
     cardSize: CardSize;
+    cardStyle: LorebaseSettings['games']['cardStyle'];
     columns: number;
     orientation: LorebaseSettings['games']['orientation'];
     dimensions: CardDimensionOverrides | null;
@@ -12,6 +13,7 @@ export type EffectiveLayout = {
 
 const GRID_GAP_PX = 16;
 const GRID_PADDING_PX = 16;
+const PROGRESS_FOOTER_HEIGHT_PX = 48;
 const PRESET_VERTICAL_MIN_WIDTH: Record<CardSize, number> = {
     small: 180,
     medium: 220,
@@ -34,6 +36,7 @@ export class LayoutCalculator {
 
         return {
             cardSize,
+            cardStyle: settings.cardStyle,
             columns: maxColumns,
             orientation,
             dimensions,
@@ -77,7 +80,10 @@ export class LayoutCalculator {
             ? imageRatio
             : 2 / 3;
 
-        return Math.max(staticHeight, Math.ceil(cardWidth / ratio));
+        const imageHeight = Math.max(staticHeight, Math.ceil(cardWidth / ratio));
+        return layout.cardStyle === 'progress'
+            ? imageHeight + PROGRESS_FOOTER_HEIGHT_PX
+            : imageHeight;
     }
 
     private resolveCustomCardDimensions(
