@@ -1151,6 +1151,11 @@ export class IntegrationService {
     }
 
     private hasFrontmatter(content: string): boolean {
-        return content.trimStart().startsWith('---');
+        for (let index = 0; index < content.length; index++) {
+            const char = content[index];
+            if (char === ' ' || char === '\n' || char === '\r' || char === '\t') continue;
+            return content[index] === '-' && content[index + 1] === '-' && content[index + 2] === '-';
+        }
+        return false;
     }
 }
