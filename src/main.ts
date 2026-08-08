@@ -1176,7 +1176,7 @@ export default class LorebasePlugin extends Plugin {
         }
         this.aniListSyncInFlight = true;
         try {
-            new Notice('AniList Sync: syncing anime list...');
+            new Notice('AniList Sync: syncing anime and manga lists...');
             const username = this.settings.anilistSync.username.trim()
                 || await this.aniListSyncService.testConnection(this.settings.anilistSync);
             if (!this.settings.anilistSync.username.trim()) {
@@ -1186,6 +1186,7 @@ export default class LorebasePlugin extends Plugin {
             const result = await this.aniListSyncService.sync(this.settings);
             await this.saveSettings();
             this.animeService?.invalidateCache();
+            this.mangaService?.invalidateCache();
             this.refreshViews();
             new Notice(`AniList Sync complete: ${result.imported} imported, ${result.updatedLocal} updated locally, ${result.pushed} pushed, ${result.failed} failed.`);
         } catch (error) {
