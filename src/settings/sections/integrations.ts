@@ -3,6 +3,7 @@ import { t, type TranslationKey } from '../../localization';
 import type { IntegrationTemplateSettings } from '../../types';
 import { IntegrationService } from '../../services/IntegrationService';
 import { renderSteamSyncSettings } from '../SteamSyncSettings';
+import { renderAniListSyncSettings } from '../AniListSyncSettings';
 import { ANIME_TEMPLATE_FIELDS, BOOK_TEMPLATE_FIELDS, GAME_TEMPLATE_FIELDS, GAME_TEMPLATE_FIELDS_HLTB, ICON_INTEGRATIONS, MANGA_TEMPLATE_FIELDS, MOVIE_TEMPLATE_FIELDS, SERIES_TEMPLATE_FIELDS } from './constants';
 import { addLorebaseDropdown } from './customDropdown';
 import { createMediaTabs } from './mediaTabs';
@@ -471,6 +472,15 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
     );
     steamSyncGroup.root.addClass('lorebase-integration-steam-sync-group');
     renderSteamSyncSettings(context, steamSyncGroup.body, { embedded: true });
+
+    const aniListSyncGroup = context.createCollapsibleGroup(
+        container,
+        'AniList Sync',
+        'Synchronize anime and manga lists in both directions.',
+        false
+    );
+    aniListSyncGroup.root.addClass('lorebase-integration-anilist-sync-group');
+    renderAniListSyncSettings(context, aniListSyncGroup.body, { embedded: true });
 
     const templatesGroup = context.createCollapsibleGroup(
         container,

@@ -554,6 +554,8 @@ export interface LorebaseSettings {
     integrations?: IntegrationsSettings;
     /** Steam library and wishlist import settings */
     steamSync: SteamSyncSettings;
+    /** AniList authenticated anime list synchronization settings */
+    anilistSync: AniListSyncSettings;
 }
 
 /** Provider settings */
@@ -626,6 +628,24 @@ export interface SteamSyncSettings {
     autoSyncPlaytimeOnStartup: boolean;
 }
 
+/** AniList authenticated anime list synchronization settings */
+export interface AniListSyncSettings {
+    clientId: string;
+    clientSecret: string;
+    accessToken: string;
+    username: string;
+    autoSyncOnStartup: boolean;
+    lastSynced: Record<string, AniListSyncSnapshot>;
+}
+
+export interface AniListSyncSnapshot {
+    entryId?: number;
+    status: string;
+    progress: number;
+    score: number;
+    volumeProgress: number;
+}
+
 /** Interface for the main plugin class (decourples circular dependency) */
 export interface LorebasePluginInterface {
     settings: LorebaseSettings;
@@ -636,6 +656,9 @@ export interface LorebasePluginInterface {
     showDeleteModal(game: MediaItem, onConfirm: () => Promise<void>): void;
     addMediaItem(mediaType: MediaType): void;
     runSteamSync(): Promise<void>;
+    runAniListSync(): Promise<void>;
+    authorizeAniList(): Promise<void>;
+    runAniListImport(): Promise<void>;
     refreshViews(): void;
     getGameService(): GameService | null;
     getAnimeService(): AnimeService | null;

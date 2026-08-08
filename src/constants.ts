@@ -608,6 +608,14 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         },
         autoSyncPlaytimeOnStartup: false,
     },
+    anilistSync: {
+        clientId: '',
+        clientSecret: '',
+        accessToken: '',
+        username: '',
+        autoSyncOnStartup: false,
+        lastSynced: {},
+    },
 };
 
 // =============================================================================

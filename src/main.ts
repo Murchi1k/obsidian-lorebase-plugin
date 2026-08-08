@@ -16,6 +16,7 @@ import { ReadingEditModal } from './modals/ReadingEditModal';
 import { StatsModal } from './modals/StatsModal';
 import { DeleteModal } from './modals/DeleteModal';
 import { SteamSyncReviewModal } from './modals/SteamSyncReviewModal';
+import { AniListImportReviewModal } from './modals/AniListImportReviewModal';
 import { GameService } from './services/GameService';
 import { AnimeService } from './services/AnimeService';
 import { VideoService } from './services/VideoService';
@@ -23,6 +24,7 @@ import { ReadingService } from './services/ReadingService';
 import { ParticleService } from './services/ParticleService';
 import { IntegrationService } from './services/IntegrationService';
 import { SteamSyncService } from './services/SteamSyncService';
+import { AniListSyncService } from './services/AniListSyncService';
 import { MetadataService } from './services/MetadataService';
 import {
     mergeOverlayLayout,
@@ -53,6 +55,8 @@ export default class LorebasePlugin extends Plugin {
     private particleService: ParticleService | null = null;
     private integrationService: IntegrationService | null = null;
     private steamSyncService: SteamSyncService | null = null;
+    private aniListSyncService: AniListSyncService | null = null;
+    private aniListSyncInFlight = false;
     private metadataService: MetadataService | null = null;
 
     async onload(): Promise<void> {
@@ -77,6 +81,7 @@ export default class LorebasePlugin extends Plugin {
             void this.runSteamSync();
         });
         this.steamSyncService = new SteamSyncService(this.app, this.metadataService);
+        this.aniListSyncService = new AniListSyncService(this.app, this.metadataService);
         addIcon(LOREBASE_ICON_ID, LOREBASE_ICON_SVG);
 
         // Register the library view
@@ -155,6 +160,22 @@ export default class LorebasePlugin extends Plugin {
             }
         });
 
+        this.addCommand({
+            id: 'anilist-sync',
+            name: 'AniList Sync',
+            callback: () => {
+                void this.runAniListSync();
+            }
+        });
+
+        this.addCommand({
+            id: 'anilist-import',
+            name: 'AniList Import',
+            callback: () => {
+                void this.runAniListImport();
+            }
+        });
+
         // Register settings tab
         this.addSettingTab(new LorebaseSettingTab(this.app, this));
 
@@ -164,6 +185,9 @@ export default class LorebasePlugin extends Plugin {
 
         if (this.settings.steamSync.autoSyncPlaytimeOnStartup && this.settings.steamSync.steamId) {
             void this.runSteamPlaytimeSync();
+        }
+        if (this.settings.anilistSync.autoSyncOnStartup && this.settings.anilistSync.accessToken) {
+            void this.runAniListSync();
         }
     }
 
@@ -182,6 +206,7 @@ export default class LorebasePlugin extends Plugin {
 
         this.integrationService = null;
         this.steamSyncService = null;
+        this.aniListSyncService = null;
         this.metadataService = null;
     }
 
@@ -231,6 +256,7 @@ export default class LorebasePlugin extends Plugin {
             DEFAULT_SETTINGS.steamSync.fields,
             sanitized?.steamSync?.fields ?? {}
         );
+        this.settings.anilistSync = Object.assign({}, DEFAULT_SETTINGS.anilistSync, sanitized?.anilistSync ?? {});
         if (this.settings.steamSync.statusWithPlaytime === 'playing' || this.settings.steamSync.statusWithPlaytime === 'completed') {
             this.settings.steamSync.statusWithPlaytime = DEFAULT_SETTINGS.steamSync.statusWithPlaytime;
         }
@@ -1143,6 +1169,87 @@ export default class LorebasePlugin extends Plugin {
         }
     }
 
+    async runAniListSync(): Promise<void> {
+        if (!this.aniListSyncService || this.aniListSyncInFlight) {
+            if (this.aniListSyncInFlight) new Notice('AniList Sync: a sync is already running.');
+            return;
+        }
+        this.aniListSyncInFlight = true;
+        try {
+            new Notice('AniList Sync: syncing anime and manga lists...');
+            const username = this.settings.anilistSync.username.trim()
+                || await this.aniListSyncService.testConnection(this.settings.anilistSync);
+            if (!this.settings.anilistSync.username.trim()) {
+                this.settings.anilistSync.username = username;
+                await this.saveSettings();
+            }
+            const result = await this.aniListSyncService.sync(this.settings);
+            await this.saveSettings();
+            this.animeService?.invalidateCache();
+            this.mangaService?.invalidateCache();
+            this.refreshViews();
+            new Notice(`AniList Sync complete: ${result.imported} imported, ${result.updatedLocal} updated locally, ${result.pushed} pushed, ${result.failed} failed.`);
+        } catch (error) {
+            console.error('[AniList Sync] Sync failed:', error);
+            const message = error instanceof Error ? `: ${error.message}` : '';
+            new Notice(`AniList Sync failed${message}`);
+        } finally {
+            this.aniListSyncInFlight = false;
+        }
+    }
+
+    async runAniListImport(): Promise<void> {
+        if (!this.aniListSyncService || this.aniListSyncInFlight) {
+            if (this.aniListSyncInFlight) new Notice('AniList: another operation is already running.');
+            return;
+        }
+        this.aniListSyncInFlight = true;
+        try {
+            new Notice('AniList Import: loading anime and manga...');
+            const candidates = await this.aniListSyncService.previewImport(this.settings);
+            if (!candidates.length) {
+                new Notice('AniList Import: no entries found.');
+                return;
+            }
+            const selected = await new AniListImportReviewModal(this.app, candidates).openAndGetValue();
+            if (!selected || selected.size === 0) {
+                new Notice('AniList Import: cancelled.');
+                return;
+            }
+            const result = await this.aniListSyncService.importSelected(this.settings, selected);
+            await this.saveSettings();
+            this.animeService?.invalidateCache();
+            this.refreshViews();
+            new Notice(`AniList Import complete: ${result.imported} imported, ${result.updatedLocal} updated, ${result.failed} failed.`);
+        } catch (error) {
+            console.error('[AniList Import] Import failed:', error);
+            new Notice(`AniList Import failed${error instanceof Error ? `: ${error.message}` : ''}`);
+        } finally {
+            this.aniListSyncInFlight = false;
+        }
+    }
+
+    async authorizeAniList(): Promise<void> {
+        if (!this.aniListSyncService) return;
+        const settings = this.settings.anilistSync;
+        if (!settings.clientId.trim()) {
+            new Notice('AniList Sync: enter your Client ID first.');
+            return;
+        }
+
+        window.open(this.aniListSyncService.getAuthorizationUrl(settings.clientId), '_blank', 'noopener');
+        const tokenOrUrl = window.prompt('After approving Lorebase on AniList, paste the access token or full redirected URL here:');
+        if (!tokenOrUrl) return;
+        try {
+            this.aniListSyncService.captureImplicitToken(settings, tokenOrUrl);
+            await this.saveSettings();
+            new Notice('AniList authorization completed. You can now test the connection.');
+        } catch (error) {
+            const message = error instanceof Error ? `: ${error.message}` : '';
+            new Notice(`AniList authorization failed${message}`);
+        }
+    }
+
     private async runSteamPlaytimeSync(): Promise<void> {
         if (!this.steamSyncService) return;
 
@@ -1156,6 +1263,10 @@ export default class LorebasePlugin extends Plugin {
         } catch (error) {
             console.warn('[Steam Sync] Playtime auto-sync failed:', error);
         }
+    }
+
+    getAniListSyncService(): AniListSyncService | null {
+        return this.aniListSyncService;
     }
 
     /**
