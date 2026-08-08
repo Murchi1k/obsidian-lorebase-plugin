@@ -16,6 +16,7 @@ import { ReadingEditModal } from './modals/ReadingEditModal';
 import { StatsModal } from './modals/StatsModal';
 import { DeleteModal } from './modals/DeleteModal';
 import { SteamSyncReviewModal } from './modals/SteamSyncReviewModal';
+import { AniListImportReviewModal } from './modals/AniListImportReviewModal';
 import { GameService } from './services/GameService';
 import { AnimeService } from './services/AnimeService';
 import { VideoService } from './services/VideoService';
@@ -55,6 +56,7 @@ export default class LorebasePlugin extends Plugin {
     private integrationService: IntegrationService | null = null;
     private steamSyncService: SteamSyncService | null = null;
     private aniListSyncService: AniListSyncService | null = null;
+    private aniListSyncInFlight = false;
     private metadataService: MetadataService | null = null;
 
     async onload(): Promise<void> {
@@ -163,6 +165,14 @@ export default class LorebasePlugin extends Plugin {
             name: 'AniList Sync',
             callback: () => {
                 void this.runAniListSync();
+            }
+        });
+
+        this.addCommand({
+            id: 'anilist-import',
+            name: 'AniList Import',
+            callback: () => {
+                void this.runAniListImport();
             }
         });
 
@@ -1160,7 +1170,11 @@ export default class LorebasePlugin extends Plugin {
     }
 
     async runAniListSync(): Promise<void> {
-        if (!this.aniListSyncService) return;
+        if (!this.aniListSyncService || this.aniListSyncInFlight) {
+            if (this.aniListSyncInFlight) new Notice('AniList Sync: a sync is already running.');
+            return;
+        }
+        this.aniListSyncInFlight = true;
         try {
             new Notice('AniList Sync: syncing anime list...');
             const username = this.settings.anilistSync.username.trim()
@@ -1170,6 +1184,7 @@ export default class LorebasePlugin extends Plugin {
                 await this.saveSettings();
             }
             const result = await this.aniListSyncService.sync(this.settings);
+            await this.saveSettings();
             this.animeService?.invalidateCache();
             this.refreshViews();
             new Notice(`AniList Sync complete: ${result.imported} imported, ${result.updatedLocal} updated locally, ${result.pushed} pushed, ${result.failed} failed.`);
@@ -1177,6 +1192,39 @@ export default class LorebasePlugin extends Plugin {
             console.error('[AniList Sync] Sync failed:', error);
             const message = error instanceof Error ? `: ${error.message}` : '';
             new Notice(`AniList Sync failed${message}`);
+        } finally {
+            this.aniListSyncInFlight = false;
+        }
+    }
+
+    async runAniListImport(): Promise<void> {
+        if (!this.aniListSyncService || this.aniListSyncInFlight) {
+            if (this.aniListSyncInFlight) new Notice('AniList: another operation is already running.');
+            return;
+        }
+        this.aniListSyncInFlight = true;
+        try {
+            new Notice('AniList Import: loading anime and manga...');
+            const candidates = await this.aniListSyncService.previewImport(this.settings);
+            if (!candidates.length) {
+                new Notice('AniList Import: no entries found.');
+                return;
+            }
+            const selected = await new AniListImportReviewModal(this.app, candidates).openAndGetValue();
+            if (!selected || selected.size === 0) {
+                new Notice('AniList Import: cancelled.');
+                return;
+            }
+            const result = await this.aniListSyncService.importSelected(this.settings, selected);
+            await this.saveSettings();
+            this.animeService?.invalidateCache();
+            this.refreshViews();
+            new Notice(`AniList Import complete: ${result.imported} imported, ${result.updatedLocal} updated, ${result.failed} failed.`);
+        } catch (error) {
+            console.error('[AniList Import] Import failed:', error);
+            new Notice(`AniList Import failed${error instanceof Error ? `: ${error.message}` : ''}`);
+        } finally {
+            this.aniListSyncInFlight = false;
         }
     }
 

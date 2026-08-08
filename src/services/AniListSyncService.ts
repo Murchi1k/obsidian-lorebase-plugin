@@ -1,5 +1,5 @@
 import { App, TFile, TFolder, requestUrl } from 'obsidian';
-import type { AniListSyncSettings, AnimeItem, AnimeStatus, LorebaseSettings, MangaItem, ReadingStatus } from '../types';
+import type { AniListSyncSettings, AniListSyncSnapshot, AnimeItem, AnimeStatus, LorebaseSettings, MangaItem, ReadingStatus } from '../types';
 import { MetadataService } from './MetadataService';
 import { getAllMarkdownFiles } from './media/serviceUtils';
 
@@ -11,6 +11,7 @@ type AniListEntry = {
     status: string;
     score: number;
     progress: number;
+    progressVolumes?: number;
     startedAt?: { year?: number; month?: number; day?: number } | null;
     completedAt?: { year?: number; month?: number; day?: number } | null;
     media: {
@@ -33,6 +34,16 @@ export interface AniListSyncResult {
     pushed: number;
     skipped: number;
     failed: number;
+}
+
+export interface AniListImportCandidate {
+    key: string;
+    kind: 'anime' | 'manga';
+    title: string;
+    status: string;
+    progress: number;
+    image: string;
+    linked: boolean;
 }
 
 export class AniListSyncService {
@@ -98,8 +109,78 @@ export class AniListSyncService {
         return body.access_token;
     }
 
+    async previewImport(settings: LorebaseSettings): Promise<AniListImportCandidate[]> {
+        this.requireCredentials(settings.anilistSync);
+        const username = settings.anilistSync.username.trim() || (await this.testConnection(settings.anilistSync));
+        const anime = await this.fetchEntries(username, settings.anilistSync.accessToken, 'ANIME');
+        const manga = await this.fetchEntries(username, settings.anilistSync.accessToken, 'MANGA');
+        const animeIds = this.linkedIds(settings.anime.folderPath, 'anime');
+        const mangaIds = this.linkedIds(settings.manga.folderPath, 'manga');
+        return [
+            ...anime.map((entry) => this.toImportCandidate(entry, 'anime', animeIds)),
+            ...manga.map((entry) => this.toImportCandidate(entry, 'manga', mangaIds)),
+        ].sort((left, right) => left.title.localeCompare(right.title));
+    }
+
+    async importSelected(settings: LorebaseSettings, selectedKeys: Set<string>): Promise<AniListSyncResult> {
+        this.requireCredentials(settings.anilistSync);
+        settings.anilistSync.lastSynced ??= {};
+        const username = settings.anilistSync.username.trim() || (await this.testConnection(settings.anilistSync));
+        const anime = await this.fetchEntries(username, settings.anilistSync.accessToken, 'ANIME');
+        const manga = await this.fetchEntries(username, settings.anilistSync.accessToken, 'MANGA');
+        const result: AniListSyncResult = { imported: 0, updatedLocal: 0, pushed: 0, skipped: 0, failed: 0 };
+        await this.importSelectedKind(settings, anime, 'anime', selectedKeys, result);
+        await this.importSelectedKind(settings, manga, 'manga', selectedKeys, result);
+        return result;
+    }
+
+    private async importSelectedKind(
+        settings: LorebaseSettings,
+        entries: AniListEntry[],
+        kind: 'anime' | 'manga',
+        selectedKeys: Set<string>,
+        result: AniListSyncResult
+    ): Promise<void> {
+        const folderPath = kind === 'anime' ? settings.anime.folderPath : settings.manga.folderPath;
+        const folder = this.app.vault.getAbstractFileByPath(folderPath);
+        const localItems = folder instanceof TFolder
+            ? getAllMarkdownFiles(folder)
+                .map((file) => kind === 'anime' ? this.readLinkedAnime(file) : this.readLinkedManga(file))
+                .filter((item): item is AnimeItem | MangaItem => Boolean(item))
+            : [];
+        const byId = new Map(localItems.map((item) => [item.integrationId as string, item]));
+        for (const entry of entries) {
+            const key = `${kind}:${entry.media.id}`;
+            if (!selectedKeys.has(key)) continue;
+            try {
+                const local = byId.get(String(entry.media.id));
+                if (kind === 'anime') {
+                    if (local && local.type === 'anime') {
+                        await this.updateLocalFromEntry(local, entry);
+                        result.updatedLocal++;
+                    } else if (await this.createLocalFromEntry(settings, entry)) {
+                        result.imported++;
+                    }
+                    settings.anilistSync.lastSynced[key] = this.snapshotFromEntry(entry);
+                } else {
+                    if (local && local.type === 'manga') {
+                        await this.updateLocalMangaFromEntry(local, entry);
+                        result.updatedLocal++;
+                    } else if (await this.createLocalMangaFromEntry(settings, entry)) {
+                        result.imported++;
+                    }
+                    settings.anilistSync.lastSynced[key] = this.snapshotFromEntry(entry, true);
+                }
+            } catch (error) {
+                result.failed++;
+                console.error('[AniList Sync] Failed to import selected entry', key, error);
+            }
+        }
+    }
+
     async sync(settings: LorebaseSettings): Promise<AniListSyncResult> {
         this.requireCredentials(settings.anilistSync);
+        settings.anilistSync.lastSynced ??= {};
 
         const username = settings.anilistSync.username.trim() || (await this.testConnection(settings.anilistSync));
         const entries = await this.fetchEntries(username, settings.anilistSync.accessToken, 'ANIME');
@@ -124,11 +205,22 @@ export class AniListSyncService {
             try {
                 const local = byAniListId.get(id);
                 if (local) {
-                    await this.updateLocalFromEntry(local, entry);
-                    result.updatedLocal++;
+                    const action = await this.reconcileAnime(settings.anilistSync, local, entry);
+                    if (action === 'updated') result.updatedLocal++;
+                    if (action === 'pushed') result.pushed++;
                 } else {
+                    const key = this.snapshotKey('anime', id);
+                    if (settings.anilistSync.lastSynced[key]) {
+                        await this.deleteRemoteEntry(settings.anilistSync.accessToken, settings.anilistSync.lastSynced[key].entryId || entry.id);
+                        delete settings.anilistSync.lastSynced[key];
+                        result.pushed++;
+                        continue;
+                    }
                     const imported = await this.createLocalFromEntry(settings, entry);
-                    if (imported) result.imported++;
+                    if (imported) {
+                        settings.anilistSync.lastSynced[this.snapshotKey('anime', id)] = this.snapshotFromEntry(entry);
+                        result.imported++;
+                    }
                     else result.skipped++;
                 }
             } catch (error) {
@@ -137,18 +229,42 @@ export class AniListSyncService {
             }
         }
 
-        // Push only notes that are explicitly linked to AniList. Unlinked notes are never guessed or overwritten.
+        // Reconcile linked local notes that AniList no longer returns.
         for (const item of localItems) {
-            if (item.integrationProvider !== 'anilist' || !item.integrationId || !remoteIds.has(item.integrationId)) {
-                result.skipped++;
+            if (item.integrationProvider !== 'anilist' || !item.integrationId || remoteIds.has(item.integrationId)) {
                 continue;
             }
             try {
-                await this.pushLocalItem(settings.anilistSync.accessToken, item);
-                result.pushed++;
+                const key = this.snapshotKey('anime', item.integrationId);
+                const previous = settings.anilistSync.lastSynced[key];
+                if (previous && this.sameSnapshot(this.snapshotFromAnime(item), previous)) {
+                    await this.deleteLocalFile(item.filePath);
+                    delete settings.anilistSync.lastSynced[key];
+                    result.updatedLocal++;
+                } else {
+                    const entryId = await this.pushLocalItem(settings.anilistSync.accessToken, item);
+                    settings.anilistSync.lastSynced[key] = this.snapshotFromAnime(item, entryId);
+                    result.pushed++;
+                }
             } catch (error) {
                 result.failed++;
                 console.error('[AniList Sync] Failed to push entry', item.filePath, error);
+            }
+        }
+
+        for (const key of Object.keys(settings.anilistSync.lastSynced)) {
+            if (!key.startsWith('anime:')) continue;
+            const id = key.slice('anime:'.length);
+            if (localItems.some((item) => item.integrationId === id)) continue;
+            const remote = entries.find((entry) => String(entry.media.id) === id);
+            if (!remote) continue;
+            try {
+                await this.deleteRemoteEntry(settings.anilistSync.accessToken, settings.anilistSync.lastSynced[key]?.entryId || remote.id);
+                delete settings.anilistSync.lastSynced[key];
+                result.pushed++;
+            } catch (error) {
+                result.failed++;
+                console.error('[AniList Sync] Failed to delete remote anime entry', id, error);
             }
         }
 
@@ -167,7 +283,7 @@ export class AniListSyncService {
   MediaListCollection(userName: $userName, type: $type) {
     lists {
       entries {
-        id status score progress startedAt { year month day } completedAt { year month day }
+        id status score progress progressVolumes startedAt { year month day } completedAt { year month day }
         media { id title { userPreferred romaji english } description(asHtml: false) episodes format startDate { year } coverImage { large extraLarge } siteUrl }
       }
     }
@@ -197,11 +313,22 @@ export class AniListSyncService {
             try {
                 const local = byAniListId.get(id);
                 if (local) {
-                    await this.updateLocalMangaFromEntry(local, entry);
-                    result.updatedLocal++;
+                    const action = await this.reconcileManga(settings.anilistSync, local, entry);
+                    if (action === 'updated') result.updatedLocal++;
+                    if (action === 'pushed') result.pushed++;
                 } else {
+                    const key = this.snapshotKey('manga', id);
+                    if (settings.anilistSync.lastSynced[key]) {
+                        await this.deleteRemoteEntry(settings.anilistSync.accessToken, settings.anilistSync.lastSynced[key].entryId || entry.id);
+                        delete settings.anilistSync.lastSynced[key];
+                        result.pushed++;
+                        continue;
+                    }
                     const imported = await this.createLocalMangaFromEntry(settings, entry);
-                    if (imported) result.imported++;
+                    if (imported) {
+                        settings.anilistSync.lastSynced[this.snapshotKey('manga', id)] = this.snapshotFromEntry(entry, true);
+                        result.imported++;
+                    }
                     else result.skipped++;
                 }
             } catch (error) {
@@ -211,19 +338,103 @@ export class AniListSyncService {
         }
 
         for (const item of localItems) {
-            if (!item.integrationId || !remoteIds.has(item.integrationId)) {
-                result.skipped++;
+            if (!item.integrationId || remoteIds.has(item.integrationId)) {
                 continue;
             }
             try {
-                await this.pushLocalMangaItem(settings.anilistSync.accessToken, item);
-                result.pushed++;
+                const key = this.snapshotKey('manga', item.integrationId);
+                const previous = settings.anilistSync.lastSynced[key];
+                if (previous && this.sameSnapshot(this.snapshotFromManga(item), previous)) {
+                    await this.deleteLocalFile(item.filePath);
+                    delete settings.anilistSync.lastSynced[key];
+                    result.updatedLocal++;
+                } else {
+                    const entryId = await this.pushLocalMangaItem(settings.anilistSync.accessToken, item);
+                    settings.anilistSync.lastSynced[key] = this.snapshotFromManga(item, entryId);
+                    result.pushed++;
+                }
             } catch (error) {
                 result.failed++;
                 console.error('[AniList Sync] Failed to push manga entry', item.filePath, error);
             }
         }
+        for (const key of Object.keys(settings.anilistSync.lastSynced)) {
+            if (!key.startsWith('manga:')) continue;
+            const id = key.slice('manga:'.length);
+            if (localItems.some((item) => item.integrationId === id)) continue;
+            const remote = entries.find((entry) => String(entry.media.id) === id);
+            if (!remote) continue;
+            try {
+                await this.deleteRemoteEntry(settings.anilistSync.accessToken, settings.anilistSync.lastSynced[key]?.entryId || remote.id);
+                delete settings.anilistSync.lastSynced[key];
+                result.pushed++;
+            } catch (error) {
+                result.failed++;
+                console.error('[AniList Sync] Failed to delete remote manga entry', id, error);
+            }
+        }
         return result;
+    }
+
+    private async reconcileAnime(settings: AniListSyncSettings, local: AnimeItem, entry: AniListEntry): Promise<'updated' | 'pushed' | 'unchanged'> {
+        const key = this.snapshotKey('anime', String(entry.media.id));
+        return this.reconcileLinkedItem(
+            settings,
+            key,
+            this.snapshotFromAnime(local),
+            this.snapshotFromEntry(entry),
+            async () => this.updateLocalFromEntry(local, entry),
+            async () => this.pushLocalItem(settings.accessToken, local),
+            (entryId) => this.snapshotFromAnime(local, entryId)
+        );
+    }
+
+    private async reconcileManga(settings: AniListSyncSettings, local: MangaItem, entry: AniListEntry): Promise<'updated' | 'pushed' | 'unchanged'> {
+        const key = this.snapshotKey('manga', String(entry.media.id));
+        return this.reconcileLinkedItem(
+            settings,
+            key,
+            this.snapshotFromManga(local),
+            this.snapshotFromEntry(entry, true),
+            async () => this.updateLocalMangaFromEntry(local, entry),
+            async () => this.pushLocalMangaItem(settings.accessToken, local),
+            (entryId) => this.snapshotFromManga(local, entryId)
+        );
+    }
+
+    private async reconcileLinkedItem(
+        settings: AniListSyncSettings,
+        key: string,
+        localState: AniListSyncSnapshot,
+        remoteState: AniListSyncSnapshot,
+        updateLocal: () => Promise<void>,
+        pushRemote: () => Promise<number>,
+        readLocalState: (entryId?: number) => AniListSyncSnapshot
+    ): Promise<'updated' | 'pushed' | 'unchanged'> {
+        const previous = settings.lastSynced[key];
+        if (!previous) {
+            await updateLocal();
+            settings.lastSynced[key] = remoteState;
+            return 'updated';
+        }
+
+        const localChanged = !this.sameSnapshot(localState, previous);
+        const remoteChanged = !this.sameSnapshot(remoteState, previous);
+        if (remoteChanged && !localChanged) {
+            await updateLocal();
+            settings.lastSynced[key] = remoteState;
+            return 'updated';
+        }
+
+        if (localChanged) {
+            // If both sides changed, the local note wins. The next sync then has a stable baseline.
+            const entryId = await pushRemote();
+            settings.lastSynced[key] = readLocalState(entryId);
+            return 'pushed';
+        }
+
+        settings.lastSynced[key] = remoteState;
+        return 'unchanged';
     }
 
     private async updateLocalFromEntry(item: AnimeItem, entry: AniListEntry): Promise<void> {
@@ -283,11 +494,13 @@ url: ${this.yaml(media.siteUrl || `https://anilist.co/anime/${media.id}`)}
         item.status = status;
         item.chapterCurrent = entry.progress;
         item.chapterTotal = entry.media.chapters ?? null;
+        item.volumeCurrent = entry.progressVolumes ?? null;
         item.userRating = userRating as MangaItem['userRating'];
         await this.metadataService.updateMetadata(file, {
             status,
             chapter_current: entry.progress,
             chapter_total: entry.media.chapters ?? null,
+            volume_current: entry.progressVolumes ?? null,
             volume_total: entry.media.volumes ?? null,
             rating: userRating,
             integration_provider: 'anilist',
@@ -309,6 +522,7 @@ plot: ${this.yaml(media.description || '')}
 year: ${media.startDate?.year ?? ''}
 chapter_current: ${entry.progress}
 chapter_total: ${media.chapters ?? ''}
+volume_current: ${entry.progressVolumes ?? ''}
 volume_total: ${media.volumes ?? ''}
 rating: ${this.toLocalRating(entry.score) ?? ''}
 status: ${this.toLocalStatus(entry.status)}
@@ -322,28 +536,41 @@ url: ${this.yaml(media.siteUrl || `https://anilist.co/manga/${media.id}`)}
         return true;
     }
 
-    private async pushLocalItem(token: string, item: AnimeItem): Promise<void> {
+    private async pushLocalItem(token: string, item: AnimeItem): Promise<number> {
         const mutation = `mutation ($mediaId: Int, $status: MediaListStatus, $score: Float, $progress: Int) {
   SaveMediaListEntry(mediaId: $mediaId, status: $status, score: $score, progress: $progress) { id }
 }`;
-        await this.graphql(mutation, {
+        const result = await this.graphql<{ SaveMediaListEntry?: { id?: number } }>(mutation, {
             mediaId: Number(item.integrationId),
             status: this.toAniListStatus(item.status),
             score: item.userRating ? item.userRating * 20 : 0,
             progress: Math.max(0, Math.trunc(item.episodeCurrent ?? 0)),
         }, token);
+        return Number(result.SaveMediaListEntry?.id) || 0;
     }
 
-    private async pushLocalMangaItem(token: string, item: MangaItem): Promise<void> {
-        const mutation = `mutation ($mediaId: Int, $status: MediaListStatus, $score: Float, $progress: Int) {
-  SaveMediaListEntry(mediaId: $mediaId, status: $status, score: $score, progress: $progress) { id }
+    private async pushLocalMangaItem(token: string, item: MangaItem): Promise<number> {
+        const mutation = `mutation ($mediaId: Int, $status: MediaListStatus, $score: Float, $progress: Int, $progressVolumes: Int) {
+  SaveMediaListEntry(mediaId: $mediaId, status: $status, score: $score, progress: $progress, progressVolumes: $progressVolumes) { id }
 }`;
-        await this.graphql(mutation, {
+        const result = await this.graphql<{ SaveMediaListEntry?: { id?: number } }>(mutation, {
             mediaId: Number(item.integrationId),
             status: this.toAniListStatus(item.status),
             score: item.userRating ? item.userRating * 20 : 0,
             progress: Math.max(0, Math.trunc(item.chapterCurrent ?? 0)),
+            progressVolumes: Math.max(0, Math.trunc(item.volumeCurrent ?? 0)),
         }, token);
+        return Number(result.SaveMediaListEntry?.id) || 0;
+    }
+
+    private async deleteRemoteEntry(token: string, entryId: number): Promise<void> {
+        if (!entryId) throw new Error('AniList list entry ID is missing.');
+        await this.graphql(`mutation ($id: Int) { DeleteMediaListEntry(id: $id) }`, { id: entryId }, token);
+    }
+
+    private async deleteLocalFile(filePath: string): Promise<void> {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (file instanceof TFile) await this.app.vault.delete(file);
     }
 
     private readLinkedAnime(file: TFile): AnimeItem | null {
@@ -395,16 +622,37 @@ url: ${this.yaml(media.siteUrl || `https://anilist.co/manga/${media.id}`)}
     }
 
     private async graphql<T>(query: string, variables: Record<string, unknown>, token: string): Promise<T> {
-        const response = await requestUrl({
-            url: ANILIST_ENDPOINT,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ query, variables }),
-        });
-        const body = response.json as { data?: T; errors?: Array<{ message?: string }> };
-        if (body.errors?.length) throw new Error(body.errors.map((error) => error.message || 'AniList API error').join('; '));
-        if (!body.data) throw new Error('AniList returned no data.');
-        return body.data;
+        const maxAttempts = 3;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const response = await requestUrl({
+                    url: ANILIST_ENDPOINT,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ query, variables }),
+                });
+                if (response.status === 429) throw new Error('AniList rate limit reached (429).');
+                const body = response.json as { data?: T; errors?: Array<{ message?: string }> };
+                if (body.errors?.length) throw new Error(body.errors.map((error) => error.message || 'AniList API error').join('; '));
+                if (!body.data) throw new Error('AniList returned no data.');
+                return body.data;
+            } catch (error) {
+                if (!this.isRateLimitError(error)) throw error;
+                if (attempt === maxAttempts - 1) {
+                    throw new Error('AniList is rate limiting requests. Please wait a minute before syncing again.');
+                }
+                await this.wait((attempt + 1) * 2000);
+            }
+        }
+        throw new Error('AniList request failed.');
+    }
+
+    private isRateLimitError(error: unknown): boolean {
+        return error instanceof Error && /(?:status\s*:?\s*429|429|rate limit|too many requests)/i.test(error.message);
+    }
+
+    private async wait(milliseconds: number): Promise<void> {
+        await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
     }
 
     private requireCredentials(settings: AniListSyncSettings): void {
@@ -467,6 +715,72 @@ url: ${this.yaml(media.siteUrl || `https://anilist.co/manga/${media.id}`)}
             current = current ? `${current}/${part}` : part;
             if (!this.app.vault.getAbstractFileByPath(current)) await this.app.vault.createFolder(current);
         }
+    }
+
+    private snapshotKey(kind: 'anime' | 'manga', id: string): string {
+        return `${kind}:${id}`;
+    }
+
+    private linkedIds(folderPath: string, kind: 'anime' | 'manga'): Set<string> {
+        const folder = this.app.vault.getAbstractFileByPath(folderPath);
+        if (!(folder instanceof TFolder)) return new Set();
+        return new Set(
+            getAllMarkdownFiles(folder)
+                .map((file) => kind === 'anime' ? this.readLinkedAnime(file) : this.readLinkedManga(file))
+                .filter((item): item is AnimeItem | MangaItem => Boolean(item))
+                .map((item) => item.integrationId as string)
+        );
+    }
+
+    private toImportCandidate(entry: AniListEntry, kind: 'anime' | 'manga', linkedIds: Set<string>): AniListImportCandidate {
+        return {
+            key: `${kind}:${entry.media.id}`,
+            kind,
+            title: this.titleFor(entry.media) || `AniList ${entry.media.id}`,
+            status: this.toLocalStatus(entry.status),
+            progress: entry.progress,
+            image: entry.media.coverImage?.large || entry.media.coverImage?.extraLarge || '',
+            linked: linkedIds.has(String(entry.media.id)),
+        };
+    }
+
+    private snapshotFromEntry(entry: AniListEntry, includeVolumes = false): AniListSyncSnapshot {
+        const localStatus = this.toLocalStatus(entry.status);
+        const localRating = this.toLocalRating(entry.score);
+        return {
+            entryId: entry.id,
+            status: this.toAniListStatus(localStatus),
+            progress: Math.max(0, Math.trunc(entry.progress || 0)),
+            score: localRating ? localRating * 20 : 0,
+            volumeProgress: includeVolumes ? Math.max(0, Math.trunc(entry.progressVolumes || 0)) : 0,
+        };
+    }
+
+    private snapshotFromAnime(item: AnimeItem, entryId?: number): AniListSyncSnapshot {
+        return {
+            entryId,
+            status: this.toAniListStatus(item.status),
+            progress: Math.max(0, Math.trunc(item.episodeCurrent ?? 0)),
+            score: item.userRating ? item.userRating * 20 : 0,
+            volumeProgress: 0,
+        };
+    }
+
+    private snapshotFromManga(item: MangaItem, entryId?: number): AniListSyncSnapshot {
+        return {
+            entryId,
+            status: this.toAniListStatus(item.status as AnimeStatus),
+            progress: Math.max(0, Math.trunc(item.chapterCurrent ?? 0)),
+            score: item.userRating ? item.userRating * 20 : 0,
+            volumeProgress: Math.max(0, Math.trunc(item.volumeCurrent ?? 0)),
+        };
+    }
+
+    private sameSnapshot(left: AniListSyncSnapshot, right: AniListSyncSnapshot): boolean {
+        return left.status === right.status
+            && left.progress === right.progress
+            && left.score === right.score
+            && left.volumeProgress === right.volumeProgress;
     }
 
     private sanitizeFileName(value: string): string {

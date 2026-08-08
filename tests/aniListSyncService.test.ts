@@ -130,10 +130,10 @@ describe('AniListSyncService', () => {
         const fixture = makeApp();
         let listRequest = 0;
         __setRequestUrlMock(async (options) => {
-            const body = JSON.parse(String(typeof options === 'string' ? '{}' : options.body ?? '{}')) as { query?: string };
+            const body = JSON.parse(String(typeof options === 'string' ? '{}' : options.body ?? '{}')) as { query?: string; variables?: { type?: string } };
             if (body.query?.includes('Viewer')) return { json: { data: { Viewer: { name: 'tester' } } } };
             listRequest++;
-            const isManga = body.query?.includes('MediaListCollection') && listRequest === 2;
+            const isManga = body.variables?.type === 'MANGA';
             return {
                 json: {
                     data: {
@@ -162,7 +162,9 @@ describe('AniListSyncService', () => {
             };
         });
 
-        const result = await new AniListSyncService(fixture.app, new MetadataService(fixture.app)).sync(makeSettings());
+        const settings = makeSettings();
+        const service = new AniListSyncService(fixture.app, new MetadataService(fixture.app));
+        const result = await service.sync(settings);
 
         expect(result.imported).toBe(2);
         expect(fixture.created.get('Anime/Anime Item.md')).toContain('integration_id: "100"');
@@ -189,7 +191,7 @@ describe('AniListSyncService', () => {
                 return { json: { data: { SaveMediaListEntry: { id: mutationCount } } } };
             }
             listRequest++;
-            const isManga = listRequest === 2;
+            const isManga = listRequest % 2 === 0;
             return {
                 json: {
                     data: {
@@ -216,12 +218,47 @@ describe('AniListSyncService', () => {
             };
         });
 
-        const result = await new AniListSyncService(fixture.app, new MetadataService(fixture.app)).sync(makeSettings());
+        const settings = makeSettings();
+        const service = new AniListSyncService(fixture.app, new MetadataService(fixture.app));
+        const result = await service.sync(settings);
 
         expect(result.updatedLocal).toBe(2);
-        expect(result.pushed).toBe(2);
-        expect(mutationCount).toBe(2);
+        expect(result.pushed).toBe(0);
+        expect(mutationCount).toBe(0);
         expect(fixture.frontmatter.get(anime.path)?.status).toBe('completed');
         expect(fixture.frontmatter.get(manga.path)?.chapter_current).toBe(12);
+
+        fixture.frontmatter.set(anime.path, { ...fixture.frontmatter.get(anime.path), status: 'watching', episode_current: 3 });
+        fixture.frontmatter.set(manga.path, { ...fixture.frontmatter.get(manga.path), status: 'planned', chapter_current: 2 });
+        const secondResult = await service.sync(settings);
+
+        expect(secondResult.pushed).toBe(2);
+        expect(mutationCount).toBe(2);
+    });
+
+    it('propagates a deleted local note to AniList instead of re-importing it', async () => {
+        const fixture = makeApp();
+        const settings = makeSettings();
+        settings.anilistSync.lastSynced = {
+            'anime:100': { entryId: 9001, status: 'COMPLETED', progress: 24, score: 100, volumeProgress: 0 },
+        };
+        let deletedEntryId = 0;
+        __setRequestUrlMock(async (options) => {
+            const body = JSON.parse(String(typeof options === 'string' ? '{}' : options.body ?? '{}')) as { query?: string; variables?: { type?: string; id?: number } };
+            if (body.query?.includes('DeleteMediaListEntry')) {
+                deletedEntryId = body.variables?.id ?? 0;
+                return { json: { data: { DeleteMediaListEntry: true } } };
+            }
+            if (body.variables?.type === 'ANIME') {
+                return { json: { data: { MediaListCollection: { lists: [{ entries: [{ id: 9001, status: 'COMPLETED', score: 100, progress: 24, media: { id: 100, title: { userPreferred: 'Deleted Anime' }, episodes: 24, format: 'TV', coverImage: {}, siteUrl: 'https://anilist.co/anime/100' } }] }] } } } };
+            }
+            return { json: { data: { MediaListCollection: { lists: [] } } } };
+        });
+
+        await new AniListSyncService(fixture.app, new MetadataService(fixture.app)).sync(settings);
+
+        expect(deletedEntryId).toBe(9001);
+        expect(settings.anilistSync.lastSynced['anime:100']).toBeUndefined();
+        expect(fixture.created.size).toBe(0);
     });
 });

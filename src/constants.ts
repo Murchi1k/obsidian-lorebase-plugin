@@ -614,6 +614,7 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         accessToken: '',
         username: '',
         autoSyncOnStartup: false,
+        lastSynced: {},
     },
 };
 

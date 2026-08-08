@@ -635,6 +635,15 @@ export interface AniListSyncSettings {
     accessToken: string;
     username: string;
     autoSyncOnStartup: boolean;
+    lastSynced: Record<string, AniListSyncSnapshot>;
+}
+
+export interface AniListSyncSnapshot {
+    entryId?: number;
+    status: string;
+    progress: number;
+    score: number;
+    volumeProgress: number;
 }
 
 /** Interface for the main plugin class (decourples circular dependency) */
@@ -649,6 +658,7 @@ export interface LorebasePluginInterface {
     runSteamSync(): Promise<void>;
     runAniListSync(): Promise<void>;
     authorizeAniList(): Promise<void>;
+    runAniListImport(): Promise<void>;
     refreshViews(): void;
     getGameService(): GameService | null;
     getAnimeService(): AnimeService | null;

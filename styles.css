@@ -6105,6 +6105,17 @@
     color: var(--text-normal);
 }
 
+.lorebase-anilist-sync-info,
+.lorebase-steam-sync-info {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: var(--background-secondary);
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
 .lorebase-steam-sync-panel-icon,
 .lorebase-steam-sync-card-icon {
     display: inline-flex;
