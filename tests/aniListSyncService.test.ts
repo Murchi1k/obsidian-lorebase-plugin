@@ -243,9 +243,11 @@ describe('AniListSyncService', () => {
             'anime:100': { entryId: 9001, status: 'COMPLETED', progress: 24, score: 100, volumeProgress: 0 },
         };
         let deletedEntryId = 0;
+        let deleteQuery = '';
         __setRequestUrlMock(async (options) => {
             const body = JSON.parse(String(typeof options === 'string' ? '{}' : options.body ?? '{}')) as { query?: string; variables?: { type?: string; id?: number } };
             if (body.query?.includes('DeleteMediaListEntry')) {
+                deleteQuery = body.query;
                 deletedEntryId = body.variables?.id ?? 0;
                 return { json: { data: { DeleteMediaListEntry: true } } };
             }
@@ -258,6 +260,7 @@ describe('AniListSyncService', () => {
         await new AniListSyncService(fixture.app, new MetadataService(fixture.app)).sync(settings);
 
         expect(deletedEntryId).toBe(9001);
+        expect(deleteQuery).toContain('{ deleted }');
         expect(settings.anilistSync.lastSynced['anime:100']).toBeUndefined();
         expect(fixture.created.size).toBe(0);
     });

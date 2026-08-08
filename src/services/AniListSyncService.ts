@@ -565,7 +565,7 @@ url: ${this.yaml(media.siteUrl || `https://anilist.co/manga/${media.id}`)}
 
     private async deleteRemoteEntry(token: string, entryId: number): Promise<void> {
         if (!entryId) throw new Error('AniList list entry ID is missing.');
-        await this.graphql(`mutation ($id: Int) { DeleteMediaListEntry(id: $id) }`, { id: entryId }, token);
+        await this.graphql(`mutation ($id: Int) { DeleteMediaListEntry(id: $id) { deleted } }`, { id: entryId }, token);
     }
 
     private async deleteLocalFile(filePath: string): Promise<void> {
