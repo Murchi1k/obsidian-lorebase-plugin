@@ -472,6 +472,100 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
     steamSyncGroup.root.addClass('lorebase-integration-steam-sync-group');
     renderSteamSyncSettings(context, steamSyncGroup.body, { embedded: true });
 
+    const aniListSyncGroup = context.createCollapsibleGroup(
+        container,
+        'AniList Sync',
+        'Synchronize your AniList anime list with linked Lorebase notes.',
+        false
+    );
+    const aniListSettings = context.plugin.settings.anilistSync;
+    const aniListHelp = aniListSyncGroup.body.createDiv({ cls: 'lorebase-provider-help' });
+    aniListHelp.createDiv({
+        cls: 'lorebase-provider-help-text',
+        text: 'Manual PIN/token flow: create an AniList OAuth application, set the redirect URL exactly to https://anilist.co/api/v2/oauth/pin, then use the button below. Approve Lorebase, copy the access_token from the redirected URL, and paste it into the Access token field. Do not use the authorization-code/token exchange flow.'
+    });
+
+    new Setting(aniListSyncGroup.body)
+        .setName('Client ID')
+        .setDesc('Used to identify your AniList OAuth application.')
+        .addText((text) => {
+            text.setValue(aniListSettings.clientId).setPlaceholder('AniList Client ID').onChange(async (value) => {
+                aniListSettings.clientId = value.trim();
+                await context.plugin.saveSettings();
+            });
+        });
+
+    new Setting(aniListSyncGroup.body)
+        .setName('Access token')
+        .setDesc('Required for reading and updating your AniList list.')
+        .addText((text) => {
+            text.inputEl.type = 'password';
+            text.setValue(aniListSettings.accessToken).setPlaceholder('AniList access token').onChange(async (value) => {
+                aniListSettings.accessToken = value.trim();
+                await context.plugin.saveSettings();
+            });
+        });
+
+    new Setting(aniListSyncGroup.body)
+        .setName('Client secret')
+        .setDesc('Not needed for the manual PIN/token flow.')
+        .addText((text) => {
+            text.inputEl.type = 'password';
+            text.setValue(aniListSettings.clientSecret).setPlaceholder('AniList Client Secret').onChange(async (value) => {
+                aniListSettings.clientSecret = value.trim();
+                await context.plugin.saveSettings();
+            });
+        });
+
+    new Setting(aniListSyncGroup.body)
+        .setName('Username')
+        .setDesc('Optional; it is detected automatically when left blank.')
+        .addText((text) => {
+            text.setValue(aniListSettings.username).setPlaceholder('AniList username').onChange(async (value) => {
+                aniListSettings.username = value.trim();
+                await context.plugin.saveSettings();
+            });
+        });
+
+    new Setting(aniListSyncGroup.body)
+        .setName('Sync on startup')
+        .setDesc('Run AniList synchronization when Obsidian opens the plugin.')
+        .addToggle((toggle) => {
+            toggle.setValue(aniListSettings.autoSyncOnStartup).onChange(async (value) => {
+                aniListSettings.autoSyncOnStartup = value;
+                await context.plugin.saveSettings();
+            });
+        });
+
+    new Setting(aniListSyncGroup.body)
+        .addButton((button) => {
+            button.setButtonText('Get token with AniList PIN').setCta().onClick(() => {
+                void context.plugin.authorizeAniList();
+            });
+        })
+        .addButton((button) => {
+            button.setButtonText('Test connection').onClick(() => {
+                void (async (): Promise<void> => {
+                    try {
+                        const username = await context.plugin.getAniListSyncService()?.testConnection(aniListSettings);
+                        if (username && !aniListSettings.username) {
+                            aniListSettings.username = username;
+                            await context.plugin.saveSettings();
+                        }
+                        new Notice(`AniList connection works${username ? `: ${username}` : ''}`);
+                    } catch (error) {
+                        const message = error instanceof Error ? `: ${error.message}` : '';
+                        new Notice(`AniList connection failed${message}`);
+                    }
+                })();
+            });
+        })
+        .addButton((button) => {
+            button.setButtonText('Sync now').setCta().onClick(() => {
+                void context.plugin.runAniListSync();
+            });
+        });
+
     const templatesGroup = context.createCollapsibleGroup(
         container,
         t('settingsIntegrationsTemplates'),
