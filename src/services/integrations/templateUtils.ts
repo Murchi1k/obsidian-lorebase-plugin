@@ -556,18 +556,18 @@ export function renderTemplate(template: string, values: Record<string, unknown>
     }
 
     // Arrays
-    if (Array.isArray(value)) {
+    if (Array.isArray(filteredValue)) {
       // List
       const listItemMatch = detectionLine.match(/^(\s*)-\s*"?\{\{VALUE:[A-Za-z0-9_]+\}\}"?\s*$/);
       if (listItemMatch) {
         const indent = listItemMatch[1];
-        if (!value.length) {
+        if (!filteredValue.length) {
           output.push(`${indent}[]`);
           continue;
         }
-        for (const item of value) {
-          const filteredItem = applyFilters(item, filters)
-          output.push(`${indent}- "${escapeYaml(filteredItem)}"`);
+
+        for (const item of filteredValue) {
+          output.push(`${indent}- "${escapeYaml(item)}"`);
         }
         continue;
       }
@@ -577,15 +577,14 @@ export function renderTemplate(template: string, values: Record<string, unknown>
       if (keyMatch) {
         const indent = keyMatch[1];
         const keyName = keyMatch[2].trim();
-        if (!value.length) {
+        if (!filteredValue.length) {
           output.push(`${indent}${keyName}: []`);
           continue;
         }
         output.push(`${indent}${keyName}:`);
         const childIndent = `${indent}  `;
-        for (const item of value) {
-          const filteredItem = applyFilters(item, filters)
-          output.push(`${childIndent}- "${escapeYaml(filteredItem)}"`);
+        for (const item of filteredValue) {
+          output.push(`${childIndent}- "${escapeYaml(item)}"`);
         }
         continue;
       }
