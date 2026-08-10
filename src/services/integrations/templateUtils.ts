@@ -470,7 +470,7 @@ export function buildSimpleTemplate(kind: MediaKind, fields: string[]): string {
   return orderedLines.join('\n');
 }
 
-// WARNING: mine
+
 function applyFilters(value: unknown, filters: string[]): unknown {
 
   if (Array.isArray(value)) {
@@ -493,14 +493,11 @@ function applyFilters(value: unknown, filters: string[]): unknown {
 }
 
 
-
 export function renderTemplate(template: string, values: Record<string, unknown>): string {
   const lines = template.split(/\r?\n/);
   const output: string[] = [];
   const placeholderRegex = /\{\{VALUE:([A-Za-z0-9_]+)\}\}/g;
   const filterRegex = /\{\{VALUE:([A-Za-z0-9_]+)((?:\|[A-Za-z0-9_]+)*)\}\}/;
-
-
 
   for (const line of lines) {
 
@@ -530,15 +527,13 @@ export function renderTemplate(template: string, values: Record<string, unknown>
 
     const filteredValue = applyFilters(value, filters);
 
-    console.log(filteredValue)
-
-    // String 
+    // Strings
     if (typeof value === 'string' && value.includes('\n') && detectionLine.trim() === `{{VALUE:${key}}}`) {
       output.push(String(filteredValue));
       continue;
     }
 
-    // Number
+    // Numbers
     if (NUMERIC_HLTB_TEMPLATE_FIELDS.has(key) && typeof value === 'number' && Number.isFinite(value)) {
       const numericKeyMatch = detectionLine.match(
         /^(\s*[^:]+:\s*)"?\{\{VALUE:[A-Za-z0-9_]+\}\}"?\s*$/
@@ -549,7 +544,7 @@ export function renderTemplate(template: string, values: Record<string, unknown>
       }
     }
 
-    // Date String
+    // Dates
     if (key === 'released' && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
       const dateKeyMatch = detectionLine.match(
         /^(\s*[^:]+:\s*)"?\{\{VALUE:released\}\}"?\s*$/
@@ -560,7 +555,7 @@ export function renderTemplate(template: string, values: Record<string, unknown>
       }
     }
 
-    // Array
+    // Arrays
     if (Array.isArray(value)) {
       // List
       const listItemMatch = detectionLine.match(/^(\s*)-\s*"?\{\{VALUE:[A-Za-z0-9_]+\}\}"?\s*$/);
@@ -577,7 +572,7 @@ export function renderTemplate(template: string, values: Record<string, unknown>
         continue;
       }
 
-      // Property
+      // Properties
       const keyMatch = detectionLine.match(/^(\s*)([^:]+):\s*"?\{\{VALUE:[A-Za-z0-9_]+\}\}"?\s*$/);
       if (keyMatch) {
         const indent = keyMatch[1];
