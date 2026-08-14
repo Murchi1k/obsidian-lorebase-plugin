@@ -372,8 +372,8 @@ export class GameService {
             const cache = this.app.metadataCache.getFileCache(file);
             const metadata = cache?.frontmatter || {};
 
-            const rawType = typeof metadata.type === 'string' ? metadata.type.toLowerCase() : '';
-            if (rawType === 'anime') {
+            const rawType = typeof metadata.type === 'string' ? metadata.type.trim().toLowerCase() : '';
+            if (rawType && rawType !== 'game') {
                 return null;
             }
 
