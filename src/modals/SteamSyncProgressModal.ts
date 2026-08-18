@@ -75,6 +75,26 @@ const TEXT: Record<Language, Record<ProgressTextKey, string>> = {
         pending: 'Очікує',
         processing: 'Обробка',
     },
+    'zh-CN': {
+        title: 'Steam 同步进度',
+        running: '正在导入。当前游戏处理完成后可以暂停或取消。',
+        paused: '已暂停，不会开始新的游戏请求。',
+        cancelling: '将在当前游戏处理完成后取消…',
+        cancelled: '导入已取消。',
+        blocked: '由于 Steam 暂停请求，导入已停止。',
+        complete: '导入完成。',
+        failed: 'Steam 同步失败。',
+        pause: '暂停',
+        resume: '继续',
+        cancel: '取消',
+        close: '关闭',
+        created: '已创建',
+        updated: '已更新',
+        skipped: '已跳过',
+        errors: '错误',
+        pending: '等待中',
+        processing: '处理中',
+    },
 };
 
 export class SteamSyncProgressModal extends Modal {

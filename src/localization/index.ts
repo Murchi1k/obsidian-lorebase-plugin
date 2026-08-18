@@ -4,6 +4,7 @@
  */
 
 import { Language } from '../types';
+import { ZH_CN } from './zh-cn';
 
 // =============================================================================
 // TRANSLATION KEYS TYPE
@@ -40,6 +41,7 @@ export type TranslationKey =
     | 'settingsSizeSmall' | 'settingsSizeMedium' | 'settingsSizeLarge'
     | 'settingsOrientation' | 'settingsOrientationVertical' | 'settingsOrientationHorizontal'
     | 'settingsColor' | 'settingsLanguage' | 'settingsReset'
+    | 'settingsCardClick' | 'settingsCardClickDesc' | 'settingsCardClickOpenNote' | 'settingsCardClickEditItem'
     | 'settingsShowAddModeChoice' | 'settingsShowAddModeChoiceDesc'
     | 'settingsMediaGames' | 'settingsMediaAnime' | 'settingsMediaMovies' | 'settingsMediaSeries' | 'settingsMediaBooks' | 'settingsMediaManga'
     | 'settingsParticle' | 'settingsParticleNone' | 'settingsParticleSakura' | 'settingsParticleSnow' | 'settingsParticleIntensity'
@@ -148,7 +150,7 @@ export type TranslationKey =
     // Ratings
     | 'ratingAwesome' | 'ratingGood' | 'ratingOkay' | 'ratingWeak' | 'ratingBad'
     // Misc
-    | 'year' | 'yearNotSpecified' | 'noDescription' | 'noSeries'
+    | 'year' | 'yearNotSpecified' | 'noDescription' | 'noSeries' | 'noDate' | 'viewNew'
     | 'randomGame' | 'noGamesFound' | 'noAnimeFound' | 'noMoviesFound' | 'noSeriesFound' | 'noBooksFound' | 'noMangaFound'
     // Context menu
     | 'contextChangeStatus' | 'contextChangeRating' | 'contextAddFavorite'
@@ -326,6 +328,10 @@ const EN: Record<TranslationKey, string> = {
     settingsShowAddModeChoiceDesc: 'Choose between provider search and manual creation when pressing plus. Disable to open provider search directly.',
     settingsLanguage: 'Language',
     settingsReset: 'Reset settings',
+    settingsCardClick: 'Card click',
+    settingsCardClickDesc: 'Choose what a normal click on a library card does.',
+    settingsCardClickOpenNote: 'Open note',
+    settingsCardClickEditItem: 'Edit item',
     settingsMediaGames: 'Show games',
     settingsMediaAnime: 'Show anime',
     settingsMediaMovies: 'Show movies',
@@ -625,6 +631,8 @@ const EN: Record<TranslationKey, string> = {
     yearNotSpecified: 'Year N/A',
     noDescription: 'No description',
     noSeries: 'No series',
+    noDate: 'No date',
+    viewNew: 'New view',
     randomGame: 'Random game',
     noGamesFound: 'No games found',
     noAnimeFound: 'No anime found',
@@ -988,6 +996,10 @@ const RU: Record<TranslationKey, string> = {
     settingsShowAddModeChoiceDesc: 'При нажатии на плюс выбирать между поиском через провайдер и ручным созданием. Если выключено, сразу открывается поиск.',
     settingsLanguage: 'Язык',
     settingsReset: 'Сбросить настройки',
+    settingsCardClick: 'Клик по карточке',
+    settingsCardClickDesc: 'Что делать при обычном клике по карточке в библиотеке.',
+    settingsCardClickOpenNote: 'Открывать заметку',
+    settingsCardClickEditItem: 'Открывать редактирование',
     settingsMediaGames: 'Показывать игры',
     settingsMediaAnime: 'Показывать аниме',
     settingsMediaMovies: 'Показывать фильмы',
@@ -1287,6 +1299,8 @@ const RU: Record<TranslationKey, string> = {
     yearNotSpecified: 'Год не указан',
     noDescription: 'Нет описания',
     noSeries: 'Без серии',
+    noDate: 'Без даты',
+    viewNew: 'Новый вид',
     randomGame: 'Случайная игра',
     noGamesFound: 'Игр не найдено',
     noAnimeFound: 'Аниме не найдено',
@@ -1651,6 +1665,10 @@ const UK: Record<TranslationKey, string> = {
     settingsShowAddModeChoiceDesc: 'Під час натискання плюса вибирати між пошуком через провайдер і ручним створенням. Вимкніть, щоб одразу відкривати пошук.',
     settingsLanguage: 'Мова',
     settingsReset: 'Скинути налаштування',
+    settingsCardClick: 'Клік по картці',
+    settingsCardClickDesc: 'Що робити при звичайному кліку по картці в бібліотеці.',
+    settingsCardClickOpenNote: 'Відкривати нотатку',
+    settingsCardClickEditItem: 'Відкривати редагування',
     settingsMediaGames: 'Показувати ігри',
     settingsMediaAnime: 'Показувати аніме',
     settingsMediaMovies: 'Показувати фільми',
@@ -1949,6 +1967,8 @@ const UK: Record<TranslationKey, string> = {
     yearNotSpecified: 'Рік не вказано',
     noDescription: 'Опису немає',
     noSeries: 'Без серії',
+    noDate: 'Без дати',
+    viewNew: 'Новий вигляд',
     randomGame: 'Випадкова гра',
     noGamesFound: 'Ігри не знайдені',
     noAnimeFound: 'Аніме не знайдено',
@@ -2224,6 +2244,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     en: EN,
     ru: RU,
     uk: UK,
+    'zh-CN': ZH_CN,
 };
 
 // =============================================================================
@@ -2248,6 +2269,17 @@ class Localization {
      */
     getLanguage(): Language {
         return this.currentLanguage;
+    }
+
+    /** Locale used for dates, sorting, and other locale-aware formatting. */
+    getLocale(): string {
+        const locales: Record<Language, string> = {
+            en: 'en-US',
+            ru: 'ru-RU',
+            uk: 'uk-UA',
+            'zh-CN': 'zh-CN',
+        };
+        return locales[this.currentLanguage];
     }
 
     /**

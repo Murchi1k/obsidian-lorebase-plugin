@@ -104,6 +104,30 @@ const TEXT: Record<Language, NoteImportReviewText> = {
         source: 'Джерело',
         target: 'Куди',
     },
+    'zh-CN': {
+        title: '将笔记导入 LOREBASE',
+        subtitleCopy: '检查即将复制到所选 LOREBASE 文件夹的笔记。',
+        subtitleReplace: '替换模式会更新所选笔记，并将其移动到 LOREBASE 文件夹。',
+        search: '搜索笔记…',
+        all: '全部',
+        changed: '有更改',
+        warnings: '警告',
+        selected: '已选择',
+        shown: '当前显示',
+        total: '总计',
+        selectAll: '全选',
+        clear: '清除',
+        cancel: '取消',
+        applyCopy: '创建副本',
+        applyReplace: '替换并移动',
+        notImportable: '无法导入',
+        empty: '没有符合当前筛选条件的笔记。',
+        renamed: '已重命名',
+        kept: '已保留',
+        removed: '已移除',
+        source: '来源',
+        target: '目标',
+    },
 };
 
 export class NoteImportReviewModal extends Modal {
@@ -409,6 +433,12 @@ export class NoteImportReviewModal extends Modal {
                 findSource: '\u0417\u043d\u0430\u0439\u0442\u0438 \u0434\u0436\u0435\u0440\u0435\u043b\u043e',
                 changeSource: '\u0417\u043c\u0456\u043d\u0438\u0442\u0438 \u0434\u0436\u0435\u0440\u0435\u043b\u043e',
                 noSource: '\u0414\u0436\u0435\u0440\u0435\u043b\u043e \u043d\u0435 \u0432\u0438\u0431\u0440\u0430\u043d\u043e',
+            },
+            'zh-CN': {
+                mediaType: '媒体类型',
+                findSource: '查找数据源',
+                changeSource: '更换数据源',
+                noSource: '未选择数据源',
             },
         };
         return (values[this.language] ?? values.en)[key];

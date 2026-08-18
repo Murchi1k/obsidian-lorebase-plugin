@@ -21,6 +21,12 @@ const COMMAND_TRANSLATIONS: Record<Language, Partial<Record<TranslationKey, stri
         commandSteamSync: 'Синхронізація Steam',
         commandImportNotes: 'Імпортувати нотатки в LOREBASE',
     },
+    'zh-CN': {
+        commandOpenGamesLibrary: '打开游戏库',
+        commandAddGame: '添加游戏',
+        commandSteamSync: 'Steam 同步',
+        commandImportNotes: '将笔记导入 LOREBASE',
+    },
 };
 
 describe('command localization', () => {
@@ -28,7 +34,7 @@ describe('command localization', () => {
         i18n.setLanguage('en');
     });
 
-    for (const language of ['en', 'ru', 'uk'] as const) {
+    for (const language of ['en', 'ru', 'uk', 'zh-CN'] as const) {
         it(`uses ${language} command names`, () => {
             i18n.setLanguage(language);
 
@@ -37,4 +43,9 @@ describe('command localization', () => {
             }
         });
     }
+
+    it('uses the Simplified Chinese locale for dates', () => {
+        i18n.setLanguage('zh-CN');
+        expect(i18n.getLocale()).toBe('zh-CN');
+    });
 });

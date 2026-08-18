@@ -248,7 +248,13 @@ export function groupMediaItems(
 ): Array<{ key: string; label: string; items: MediaItem[]; missing: boolean }> {
     if (mode === 'none') return [];
     const groups = new Map<string, { label: string; timestamp: number; items: MediaItem[]; missing: boolean }>();
-    const missingLabel = locale.startsWith('ru') ? 'Без даты' : locale.startsWith('uk') ? 'Без дати' : 'No date';
+    const missingLabel = locale.startsWith('ru')
+        ? 'Без даты'
+        : locale.startsWith('uk')
+            ? 'Без дати'
+            : locale.startsWith('zh')
+                ? '无日期'
+                : 'No date';
 
     for (const item of items) {
         let key = '';
@@ -258,7 +264,13 @@ export function groupMediaItems(
         if (mode === 'series') {
             const series = item.type === 'game' ? item.gameSeries.trim() : '';
             key = series || '__missing__';
-            label = series || (locale.startsWith('ru') ? 'Без серии' : locale.startsWith('uk') ? 'Без серії' : 'No series');
+            label = series || (locale.startsWith('ru')
+                ? 'Без серии'
+                : locale.startsWith('uk')
+                    ? 'Без серії'
+                    : locale.startsWith('zh')
+                        ? '无系列'
+                        : 'No series');
             missing = !series;
         } else {
             const dateValue = parseDateValue(item.finished ?? (item.type === 'game' ? item.dateCompleted : null));
