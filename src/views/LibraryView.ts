@@ -746,7 +746,7 @@ export class LibraryView extends ItemView {
         if (!this.libraryContentEl) return;
         const layout = this.getEffectiveLayout();
         const renderedLayout = { ...layout, columns: this.getRenderedColumns(layout) };
-        const locale = i18n.getLanguage() === 'uk' ? 'uk-UA' : i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         const groups = groupMediaItems(
             this.filteredGames,
             this.viewState.group.mode,
@@ -1611,7 +1611,7 @@ export class LibraryView extends ItemView {
     private formatFinishedDate(value: string | null | undefined): string | null {
         const timestamp = this.getFinishedTimestamp(value);
         if (!timestamp) return null;
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         const options: Intl.DateTimeFormatOptions = this.getCompletionDateBadgeFormat(this.mediaType) === 'full'
             ? { month: 'short', day: 'numeric', year: 'numeric' }
             : { month: 'short', day: 'numeric' };
@@ -1941,7 +1941,7 @@ export class LibraryView extends ItemView {
     }
 
     private uniqueSavedViewName(name: string, existing: string[]): string {
-        const base = name.trim() || (i18n.getLanguage() === 'ru' ? 'Новый вид' : 'New view');
+        const base = name.trim() || t('viewNew');
         const used = new Set(existing.map((entry) => entry.toLocaleLowerCase()));
         if (!used.has(base.toLocaleLowerCase())) return base;
         let index = 2;

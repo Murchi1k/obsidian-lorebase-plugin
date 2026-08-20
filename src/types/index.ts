@@ -227,7 +227,7 @@ export interface SavedLibraryView {
 export type ViewMode = 'grid' | 'horizontal';
 
 /** Supported languages */
-export type Language = 'en' | 'ru' | 'uk';
+export type Language = 'en' | 'ru' | 'uk' | 'zh-CN';
 
 /** Particle effect options */
 export type ParticleEffect = 'none' | 'sakura' | 'snow';

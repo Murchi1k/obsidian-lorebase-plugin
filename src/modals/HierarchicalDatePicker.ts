@@ -114,10 +114,14 @@ export class HierarchicalDatePicker {
 
     syncInput(value: string = this.getValue()): void {
         const selected = parseIsoDate(value);
-        const isDayFirst = i18n.getLanguage() === 'ru' || i18n.getLanguage() === 'uk';
-        this.input.placeholder = isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
+        const language = i18n.getLanguage();
+        const isDayFirst = language === 'ru' || language === 'uk';
+        const isYearFirst = language === 'zh-CN';
+        this.input.placeholder = isYearFirst ? '年-月-日' : isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
         this.input.value = selected
-            ? isDayFirst
+            ? isYearFirst
+                ? `${selected.year}-${String(selected.month).padStart(2, '0')}-${String(selected.day).padStart(2, '0')}`
+                : isDayFirst
                 ? `${String(selected.day).padStart(2, '0')}.${String(selected.month).padStart(2, '0')}.${selected.year}`
                 : `${String(selected.month).padStart(2, '0')}/${String(selected.day).padStart(2, '0')}/${selected.year}`
             : '';

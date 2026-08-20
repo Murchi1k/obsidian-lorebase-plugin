@@ -77,6 +77,24 @@ const STEAM_REVIEW_TEXT: Record<Language, Record<SteamReviewTextKey, string>> = 
         libraryWishlist: 'бібліотека + бажане',
         hours: 'год',
     },
+    'zh-CN': {
+        title: 'Steam 同步',
+        subtitle: '默认不选择任何游戏。请只选择要在 LOREBASE 中创建或更新的游戏。',
+        searchPlaceholder: '搜索游戏…',
+        played: '玩过',
+        wishlist: '愿望单',
+        all: '全部',
+        clear: '清除',
+        selected: '已选择',
+        shown: '当前显示',
+        total: '总计',
+        empty: '没有符合当前搜索条件的游戏。',
+        cancel: '取消',
+        import: '导入',
+        library: '游戏库',
+        libraryWishlist: '游戏库 + 愿望单',
+        hours: '小时',
+    },
 };
 
 export class SteamSyncReviewModal extends Modal {

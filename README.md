@@ -429,7 +429,7 @@ Right-click any card to:
 
 | Setting | Description | Options |
 |---|---|---|
-| **Language** | Interface language | English, Russian, Ukrainian |
+| **Language** | Interface language | English, Russian, Ukrainian, Simplified Chinese |
 | **Accent Color** | Theme accent | 10 presets + custom hex |
 | **Particle Effect** | Ambient particles | None, Sakura, Snow |
 | **Particle Intensity** | Number of particles | 20–150 |
@@ -732,6 +732,7 @@ Lorebase is optimized for large collections:
 | 🇬🇧 English | ✅ Full |
 | 🇷🇺 Russian | ✅ Full |
 | 🇺🇦 Ukrainian | 🧪 Beta |
+| 🇨🇳 Simplified Chinese | 🧪 Beta |
 
 All core UI elements, status labels, settings descriptions, and error messages are translated, including all media types and providers.
 

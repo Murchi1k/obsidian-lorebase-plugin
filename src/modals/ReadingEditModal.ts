@@ -1011,7 +1011,7 @@ export class ReadingEditModal extends Modal {
 
     private formatHumanDate(timestamp: number): string {
         if (!Number.isFinite(timestamp)) return t('editUnknown');
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: '2-digit' }).format(new Date(timestamp));
     }
 

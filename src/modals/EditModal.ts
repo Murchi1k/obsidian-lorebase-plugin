@@ -1473,10 +1473,14 @@ export class EditModal extends Modal {
 
     private syncDateInput(input: HTMLInputElement, value: string): void {
         const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-        const isDayFirst = i18n.getLanguage() === 'ru' || i18n.getLanguage() === 'uk';
-        input.placeholder = isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
+        const language = i18n.getLanguage();
+        const isDayFirst = language === 'ru' || language === 'uk';
+        const isYearFirst = language === 'zh-CN';
+        input.placeholder = isYearFirst ? '年-月-日' : isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
         input.value = match
-            ? isDayFirst
+            ? isYearFirst
+                ? `${match[1]}-${match[2]}-${match[3]}`
+                : isDayFirst
                 ? `${match[3]}.${match[2]}.${match[1]}`
                 : `${match[2]}/${match[3]}/${match[1]}`
             : '';
@@ -1485,7 +1489,7 @@ export class EditModal extends Modal {
 
     private formatHumanDate(timestamp: number): string {
         if (!Number.isFinite(timestamp)) return t('editUnknown');
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         return new Intl.DateTimeFormat(locale, {
             year: 'numeric',
             month: 'short',

@@ -815,7 +815,7 @@ export class GameCard {
     private formatFinishedDate(value: string | null | undefined): string | null {
         const timestamp = this.getFinishedTimestamp(value);
         if (!timestamp || !Number.isFinite(timestamp)) return null;
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         const options: Intl.DateTimeFormatOptions = this.completionDateBadgeFormat === 'full'
             ? { month: 'short', day: 'numeric', year: 'numeric' }
             : { month: 'short', day: 'numeric' };

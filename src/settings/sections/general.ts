@@ -47,6 +47,7 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
             { value: 'en', label: 'English' },
             { value: 'ru', label: LABEL_RU },
             { value: 'uk', label: LABEL_UK },
+            { value: 'zh-CN', label: '简体中文' },
         ],
         context.plugin.settings.language,
         async (value) => {
@@ -145,22 +146,18 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
     addModeSetting.settingEl.addClass('lorebase-add-mode-choice-setting');
 
     const cardClickSetting = new Setting(container)
-        .setName(i18n.getLanguage() === 'ru' ? 'Клик по карточке' : i18n.getLanguage() === 'uk' ? 'Клік по картці' : 'Card click')
-        .setDesc(i18n.getLanguage() === 'ru'
-            ? 'Что делать при обычном клике по карточке в библиотеке.'
-            : i18n.getLanguage() === 'uk'
-                ? 'Що робити при звичайному кліку по картці в бібліотеці.'
-                : 'Choose what a normal click on a library card does.');
+        .setName(t('settingsCardClick'))
+        .setDesc(t('settingsCardClickDesc'));
     addLorebaseDropdown<CardClickAction>(
         cardClickSetting,
         [
             {
                 value: 'open',
-                label: i18n.getLanguage() === 'ru' ? 'Открывать заметку' : i18n.getLanguage() === 'uk' ? 'Відкривати нотатку' : 'Open note',
+                label: t('settingsCardClickOpenNote'),
             },
             {
                 value: 'edit',
-                label: i18n.getLanguage() === 'ru' ? 'Открывать редактирование' : i18n.getLanguage() === 'uk' ? 'Відкривати редагування' : 'Edit item',
+                label: t('settingsCardClickEditItem'),
             },
         ],
         context.plugin.settings.cardClickAction ?? 'open',
@@ -1262,7 +1259,7 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
     const badgeElements = new Map<BadgeKey, HTMLButtonElement>();
 
     const formatPreviewCompletionDate = (): string => {
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         const profile: MediaTypeKey = previewMode === 'game'
             ? 'games'
             : previewMode === 'movie'
