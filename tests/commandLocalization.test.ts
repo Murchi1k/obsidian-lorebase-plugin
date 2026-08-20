@@ -48,4 +48,24 @@ describe('command localization', () => {
         i18n.setLanguage('zh-CN');
         expect(i18n.getLocale()).toBe('zh-CN');
     });
+
+    it('localizes the community rating panel in Simplified Chinese', () => {
+        i18n.setLanguage('zh-CN');
+
+        const expected = {
+            communityRatingTitle: '社区评分',
+            communityRatingRefresh: '刷新评分',
+            communityRatingScore: '评分',
+            communityRatingNoSource: '暂无来源',
+            communityRatingNoVotes: '暂无评分人数',
+            communityRatingVotes: '人评分',
+            communityRatingNotFound: '未找到社区评分。',
+            communityRatingUpdated: '社区评分已更新。',
+            communityRatingRefreshFailed: '社区评分刷新失败。',
+        };
+
+        for (const [key, value] of Object.entries(expected)) {
+            expect(t(key as TranslationKey)).toBe(value);
+        }
+    });
 });

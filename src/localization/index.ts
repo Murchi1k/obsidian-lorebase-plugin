@@ -164,6 +164,9 @@ export type TranslationKey =
     | 'editSeries' | 'editNoSeries' | 'editAdult' | 'editCustomPoster'
     | 'editSave' | 'editCancel' | 'editProgress' | 'editGeneral' | 'editCollection' | 'editPersonal' | 'editMore' | 'editCompletedOn'
     | 'editDetails' | 'editAdvanced' | 'editClear'
+    | 'communityRatingTitle' | 'communityRatingRefresh' | 'communityRatingScore'
+    | 'communityRatingNoSource' | 'communityRatingNoVotes' | 'communityRatingVotes'
+    | 'communityRatingNotFound' | 'communityRatingUpdated' | 'communityRatingRefreshFailed'
     | 'editSeasonCurrent' | 'editEpisodeCurrent' | 'editEpisodeTotal' | 'editEpisodes'
     | 'editSeasonTotal' | 'editFormat' | 'editSummary' | 'editUrl' | 'editEpisodeInc'
     | 'editPageCurrent' | 'editPageTotal' | 'editChapterCurrent' | 'editChapterTotal'
@@ -681,6 +684,15 @@ const EN: Record<TranslationKey, string> = {
     editDetails: 'Details',
     editAdvanced: 'Advanced',
     editClear: 'Clear',
+    communityRatingTitle: 'Community rating',
+    communityRatingRefresh: 'Refresh rating',
+    communityRatingScore: 'Score',
+    communityRatingNoSource: 'No source',
+    communityRatingNoVotes: 'No votes',
+    communityRatingVotes: 'votes',
+    communityRatingNotFound: 'Community rating not found.',
+    communityRatingUpdated: 'Community rating updated.',
+    communityRatingRefreshFailed: 'Community rating refresh failed.',
     editSeasonCurrent: 'Season (current)',
     editSeasonTotal: 'Seasons (total)',
     editEpisodeCurrent: 'Episode (current)',
@@ -1349,6 +1361,15 @@ const RU: Record<TranslationKey, string> = {
     editDetails: 'Детали',
     editAdvanced: 'Дополнительно',
     editClear: 'Очистить',
+    communityRatingTitle: 'Оценка сообщества',
+    communityRatingRefresh: 'Обновить оценку',
+    communityRatingScore: 'оценка',
+    communityRatingNoSource: 'Нет источника',
+    communityRatingNoVotes: 'Нет голосов',
+    communityRatingVotes: 'голосов',
+    communityRatingNotFound: 'Оценка сообщества не найдена.',
+    communityRatingUpdated: 'Оценка сообщества обновлена.',
+    communityRatingRefreshFailed: 'Не удалось обновить оценку сообщества.',
     editSeasonCurrent: 'Сезон (текущий)',
     editSeasonTotal: 'Сезонов (всего)',
     editEpisodeCurrent: 'Эпизод (текущий)',
@@ -2015,6 +2036,15 @@ const UK: Record<TranslationKey, string> = {
     editDetails: 'Деталі',
     editAdvanced: 'Розширене',
     editClear: 'Очистити',
+    communityRatingTitle: 'Оцінка спільноти',
+    communityRatingRefresh: 'Оновити оцінку',
+    communityRatingScore: 'оцінка',
+    communityRatingNoSource: 'Немає джерела',
+    communityRatingNoVotes: 'Немає голосів',
+    communityRatingVotes: 'голосів',
+    communityRatingNotFound: 'Оцінку спільноти не знайдено.',
+    communityRatingUpdated: 'Оцінку спільноти оновлено.',
+    communityRatingRefreshFailed: 'Не вдалося оновити оцінку спільноти.',
     editSeasonCurrent: 'Сезон (поточний)',
     editSeasonTotal: 'Сезони (усього)',
     editEpisodeCurrent: 'Епізод (поточний)',
