@@ -12,7 +12,8 @@ import { ReadingService } from '../services/ReadingService';
 import { MetadataService } from '../services/MetadataService';
 import { Toolbar, ToolbarCallbacks } from '../components/Toolbar';
 import { GameCard } from '../components/GameCard';
-import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, STATUS_CONFIG, RATING_EMOJI, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS } from '../constants';
+import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, STATUS_CONFIG, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS } from '../constants';
+import { getRatingEmoji } from '../utils/ratingScale';
 import { t, i18n } from '../localization';
 import { VirtualGrid, VirtualGridController, VirtualGroupedGrid } from './library/VirtualGrid';
 import { showMediaContextMenu } from './library/contextMenu';
@@ -1534,7 +1535,7 @@ export class LibraryView extends ItemView {
 
         if (badgeProfile.rating.mode === 'emoji') {
             ratingBadge.addClass('is-emoji');
-            ratingBadge.textContent = RATING_EMOJI[item.userRating] ?? '';
+            ratingBadge.textContent = getRatingEmoji(item.userRating);
             return;
         }
 

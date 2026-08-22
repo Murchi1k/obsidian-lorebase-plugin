@@ -7,11 +7,12 @@
 import { App, TFile, TFolder } from 'obsidian';
 import { GameDlc, GameItem, GameStatus, FilterState, GameStats, SortField, SortOrder } from '../types';
 import { MetadataService } from './MetadataService';
-import { DEFAULT_COVER } from '../constants';
+import { DEFAULT_COVER, RATING_VALUE_CEILING } from '../constants';
 import { t } from '../localization';
 import { filterAndSortMedia } from './media/filtering';
 import { extractSimpleFrontmatter } from './media/libraryViewState';
 import { getRandomItem, parseRelatedMedia, serializeRelatedMedia } from './media/parsers';
+import { createRatingDistribution } from '../utils/ratingScale';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, mapInFrameBatches, normalizeCacheTags } from './media/serviceUtils';
 import { upsertMarkdownSection } from './markdownSections';
 
@@ -247,7 +248,7 @@ export class GameService {
     private parseUserRating(value: unknown): GameDlc['userRating'] {
         if (value === null || value === undefined || value === '') return null;
         const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-        return Number.isFinite(parsed) && parsed >= 1 && parsed <= 5
+        return Number.isFinite(parsed) && parsed >= 1 && parsed <= RATING_VALUE_CEILING
             ? parsed as GameDlc['userRating']
             : null;
     }
@@ -428,13 +429,13 @@ export class GameService {
             }
 
             // Parse rating safely
-            let userRating = null;
+            let userRating: number | null = null;
             if (metadata.userRating !== undefined && metadata.userRating !== null) {
                 const rating = typeof metadata.userRating === 'string'
                     ? parseInt(metadata.userRating, 10)
                     : Number(metadata.userRating);
-                if (!isNaN(rating) && rating >= 1 && rating <= 5) {
-                    userRating = rating as 1 | 2 | 3 | 4 | 5;
+                if (!isNaN(rating) && rating >= 1 && rating <= RATING_VALUE_CEILING) {
+                    userRating = rating;
                 }
             }
 
@@ -565,7 +566,7 @@ export class GameService {
             completed: 0, playing: 0, dropped: 0, sandbox: 0, wishlist: 0, notStarted: 0,
             favorite: 0, withRating: 0, avgRating: 0,
             customPosters: 0, adult: 0, seriesCount: 0,
-            ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            ratingDistribution: createRatingDistribution(),
             statusPercentages: {},
         };
 
@@ -591,7 +592,7 @@ export class GameService {
             if (game.userRating) {
                 stats.withRating++;
                 ratingSum += game.userRating;
-                stats.ratingDistribution[game.userRating]++;
+                stats.ratingDistribution[game.userRating] = (stats.ratingDistribution[game.userRating] || 0) + 1;
             }
 
             if (game.gameSeries && game.gameSeries !== t('noSeries')) {

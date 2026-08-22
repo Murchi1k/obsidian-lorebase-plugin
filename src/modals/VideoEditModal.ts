@@ -1,6 +1,7 @@
 import { App, Menu, Modal, setIcon, TFile } from 'obsidian';
 import { DEFAULT_COVER, STATUS_CONFIG } from '../constants';
 import { i18n, t } from '../localization';
+import { getRatingScale, getRatingValues } from '../utils/ratingScale';
 import { MovieItem, RelatedMediaLink, SeriesItem, UserRating, VideoPart, VideoStatus } from '../types';
 import { GenreEditModal } from './GenreEditModal';
 import { CommunityRatingRefresh, renderCommunityRatingPanel } from './CommunityRatingPanel';
@@ -252,7 +253,7 @@ export class VideoEditModal extends Modal {
                                 </div>
                                 <div class="lorebase-editmode-stars" data-role="stars"></div>
                                 <div class="lorebase-editmode-rating-meta">
-                                    <span class="lorebase-editmode-rating-value" data-role="rating-value">0.0 / 5.0</span>
+                                    <span class="lorebase-editmode-rating-value" data-role="rating-value">0.0 / ${getRatingScale().toFixed(1)}</span>
                                     <span class="lorebase-editmode-rating-hint">${t('editRatingHint')}</span>
                                 </div>
                                 <div class="lorebase-editmode-rating-line"><span class="lorebase-editmode-rating-line-fill" data-role="rating-line"></span></div>
@@ -742,12 +743,12 @@ export class VideoEditModal extends Modal {
         const stars = this.qs<HTMLElement>(root, '[data-role="stars"]');
         if (!stars) return;
         stars.empty();
-        for (let i = 1; i <= 5; i++) {
+        for (const value of getRatingValues()) {
             stars.createEl('button', {
                 cls: 'lorebase-editmode-star',
                 text: String.fromCharCode(9733),
-                attr: { type: 'button', 'data-rating': String(i), 'aria-label': `${t('editRating')} ${i}` },
-            }).dataset.rating = String(i);
+                attr: { type: 'button', 'data-rating': String(value), 'aria-label': `${t('editRating')} ${value}` },
+            }).dataset.rating = String(value);
         }
     }
 
@@ -1040,10 +1041,11 @@ export class VideoEditModal extends Modal {
             const value = Number(btn.dataset.rating ?? '0');
             btn.toggleClass('is-active', this.selectedRating !== null && value <= this.selectedRating);
         });
+        const scale = getRatingScale();
         const numeric = this.selectedRating ?? 0;
-        this.setText(root, '[data-role="rating-value"]', `${numeric.toFixed(1)} / 5.0`);
+        this.setText(root, '[data-role="rating-value"]', `${numeric.toFixed(1)} / ${scale.toFixed(1)}`);
         const line = this.qs<HTMLElement>(root, '[data-role="rating-line"]');
-        if (line) line.style.width = `${Math.round((numeric / 5) * 100)}%`;
+        if (line) line.style.width = `${Math.min(100, Math.round((numeric / scale) * 100))}%`;
     }
 
     private updateProgressSummary(root: HTMLElement): void {

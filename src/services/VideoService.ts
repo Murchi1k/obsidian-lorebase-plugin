@@ -5,6 +5,7 @@ import { MetadataService } from './MetadataService';
 import { filterAndSortMedia } from './media/filtering';
 import { extractSimpleFrontmatter } from './media/libraryViewState';
 import { getRandomItem, parseNumber, parseRelatedMedia, parseUserRating, parseYear, serializeRelatedMedia } from './media/parsers';
+import { createRatingDistribution } from '../utils/ratingScale';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, mapInFrameBatches } from './media/serviceUtils';
 import { upsertMarkdownSection } from './markdownSections';
 
@@ -164,7 +165,7 @@ export class VideoService {
             favorite: 0,
             withRating: 0,
             avgRating: 0,
-            ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            ratingDistribution: createRatingDistribution(),
             statusPercentages: {},
         };
 

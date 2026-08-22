@@ -13,6 +13,21 @@ import type { TranslationKey } from './localization';
 export const PARTICLE_INTENSITY_MIN = 20;
 export const PARTICLE_INTENSITY_MAX = 40;
 
+/** Lowest selectable value for the configurable rating scale */
+export const RATING_SCALE_MIN = 2;
+/** Highest selectable value for the configurable rating scale */
+export const RATING_SCALE_MAX = 20;
+/** Rating scale used before the scale became configurable */
+export const DEFAULT_RATING_SCALE = 5;
+/**
+ * Absolute upper bound accepted when reading a rating out of frontmatter.
+ *
+ * Deliberately independent of the configured scale: lowering the scale must not
+ * discard ratings that were recorded on a larger one, otherwise the next save
+ * would write the truncated value back to the note.
+ */
+export const RATING_VALUE_CEILING = 100;
+
 /** Default library settings */
 const DEFAULT_LIBRARY_SETTINGS = {
     folderPath: '',
@@ -415,6 +430,7 @@ export const DEFAULT_SETTINGS: LorebaseSettings = {
         manga: 'short',
     },
     enabledMedia: { games: true, anime: true, movies: true, series: true, books: true, manga: true },
+    ratingScale: DEFAULT_RATING_SCALE,
     particleEffect: 'none',
     particleIntensity: PARTICLE_INTENSITY_MAX,
     descriptionLines: 4,
@@ -832,6 +848,13 @@ const EMOJI_OKAY = '\u{1F610}';
 const EMOJI_WEAK = '\u{1F615}';
 const EMOJI_BAD = '\u{1F922}';
 
+/**
+ * The five sentiment tiers a rating is presented with.
+ *
+ * These are tiers, not scale positions: on a scale of 5 a value maps onto the
+ * tier of the same number, and on any other scale it maps proportionally.
+ * See `getRatingTier` in `utils/ratingScale`.
+ */
 export const RATING_CONFIG: Array<{ value: 1 | 2 | 3 | 4 | 5; emoji: string; labelKey: TranslationKey; color: string }> = [
     { value: 5, emoji: EMOJI_AWESOME, labelKey: 'ratingAwesome', color: '#4caf50' },
     { value: 4, emoji: EMOJI_GOOD, labelKey: 'ratingGood', color: '#8bc34a' },
@@ -840,7 +863,7 @@ export const RATING_CONFIG: Array<{ value: 1 | 2 | 3 | 4 | 5; emoji: string; lab
     { value: 1, emoji: EMOJI_BAD, labelKey: 'ratingBad', color: '#ff4444' },
 ];
 
-/** Rating emoji map for quick lookup */
+/** Tier emoji keyed by tier number; use `getRatingEmoji` to resolve an actual rating */
 export const RATING_EMOJI: Record<number, string> = {
     1: EMOJI_BAD,
     2: EMOJI_WEAK,
