@@ -1,6 +1,7 @@
 import { Setting, SliderComponent, ToggleComponent, setIcon } from 'obsidian';
-import { CARD_SIZES, COLOR_PRESETS, DEFAULT_COVER, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS, HORIZONTAL_CARD_SIZES, PARTICLE_INTENSITY_MAX, PARTICLE_INTENSITY_MIN, RATING_EMOJI, STATUS_CONFIG } from '../../constants';
+import { CARD_SIZES, COLOR_PRESETS, DEFAULT_COVER, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS, HORIZONTAL_CARD_SIZES, PARTICLE_INTENSITY_MAX, PARTICLE_INTENSITY_MIN, RATING_SCALE_MAX, RATING_SCALE_MIN, STATUS_CONFIG } from '../../constants';
 import { i18n, t } from '../../localization';
+import { getRatingEmoji, getRatingScale, normalizeRatingScale, ratingScale } from '../../utils/ratingScale';
 import type { BadgePosition, CardClickAction, CardStyle, CompletionDateBadgeFormat, Language, LorebaseSettings, ParticleEffect, RatingBadgeMode, TagPreset } from '../../types';
 import { ICON_CARD_CUSTOMIZATION, ICON_GENERAL, LABEL_RU, LABEL_UK } from './constants';
 import { addLorebaseDropdown, LorebaseDropdownHandle } from './customDropdown';
@@ -169,6 +170,23 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
             await context.plugin.saveSettings();
         }
     );
+
+    const ratingScaleSetting = new Setting(container)
+        .setName(t('settingsRatingScale'))
+        .setDesc(t('settingsRatingScaleDesc'));
+    ratingScaleSetting.addSlider(slider => {
+        slider
+            .setLimits(RATING_SCALE_MIN, RATING_SCALE_MAX, 1)
+            .setValue(normalizeRatingScale(context.plugin.settings.ratingScale))
+            .setDynamicTooltip()
+            .onChange(async (value) => {
+                const next = normalizeRatingScale(value);
+                context.plugin.settings.ratingScale = next;
+                ratingScale.set(next);
+                await context.plugin.saveSettings();
+                context.plugin.refreshViewsVisuals();
+            });
+    });
 
     renderResetSettings(context, container);
 }
@@ -1309,11 +1327,13 @@ function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElem
 
         if (badgeKey === 'rating') {
             const ratingBadge = createDiv({ cls: 'lorebase-card-rating' });
+            // Preview a high-but-not-perfect rating; resolves to 4 on a scale of 5.
+            const sample = Math.max(1, Math.round(getRatingScale() * 0.8));
             if (activeBadges.rating.mode === 'emoji') {
                 ratingBadge.classList.add('is-emoji');
-                ratingBadge.textContent = RATING_EMOJI[4];
+                ratingBadge.textContent = getRatingEmoji(sample);
             } else {
-                ratingBadge.textContent = '\u26054';
+                ratingBadge.textContent = `\u2605${sample}`;
             }
             badge.appendChild(ratingBadge);
             return;

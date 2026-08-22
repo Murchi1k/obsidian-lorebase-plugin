@@ -1,7 +1,8 @@
 import { Menu, MenuItem } from 'obsidian';
 import { AnimeItem, BookItem, GameItem, MediaItem, MediaStatus, MovieItem, RatingBadgeMode, ReadingItem, SeriesItem } from '../../types';
-import { FILTER_ICON_MAP, RATING_CONFIG, RATING_EMOJI, STATUS_ICON_MAP } from '../../constants';
+import { FILTER_ICON_MAP, STATUS_ICON_MAP } from '../../constants';
 import { t } from '../../localization';
+import { getRatingColor, getRatingEmoji, getRatingLabelKey, getRatingValues } from '../../utils/ratingScale';
 import { incrementAnimeEpisode, incrementMangaChapter } from './progressActions';
 
 type MenuItemWithSubmenu = MenuItem & { setSubmenu: () => Menu };
@@ -33,13 +34,9 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
         submenuHost.setTitle(t('contextChangeRating')).setIcon('star');
         const sub = submenuHost.setSubmenu();
 
-        const ratings: Array<{ value: 1 | 2 | 3 | 4 | 5; label: string }> = [
-            { value: 5, label: t('ratingAwesome') },
-            { value: 4, label: t('ratingGood') },
-            { value: 3, label: t('ratingOkay') },
-            { value: 2, label: t('ratingWeak') },
-            { value: 1, label: t('ratingBad') },
-        ];
+        const ratings = getRatingValues()
+            .reverse()
+            .map((value) => ({ value, label: t(getRatingLabelKey(value)) }));
 
         for (const rating of ratings) {
             sub.addItem((subItem: MenuItem) => {
@@ -47,11 +44,10 @@ export function showMediaContextMenu(item: MediaItem, x: number, y: number, deps
                 if (deps.ratingMode === 'star') {
                     title = createFragment();
                     const star = title.createSpan({ cls: 'lorebase-context-rating-star', text: '\u2605' });
-                    star.style.color = RATING_CONFIG.find((entry) => entry.value === rating.value)?.color
-                        ?? 'var(--interactive-accent)';
+                    star.style.color = getRatingColor(rating.value);
                     title.createSpan({ text: `${rating.value} \u00b7 ${rating.label}` });
                 } else {
-                    title = `${RATING_EMOJI[rating.value]} ${rating.label}`;
+                    title = `${getRatingEmoji(rating.value)} ${rating.label}`;
                 }
                 subItem.setTitle(title)
                     .onClick(() => {

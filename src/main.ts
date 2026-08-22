@@ -7,6 +7,7 @@ import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon, TFile, type Command } fro
 import { CommunityRating, GameDlc, LorebaseSettings, MediaItem, GameStats, AnimeStats, MediaType, RelatedMediaLink, IntegrationTemplateSettings } from './types';
 import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG, DEFAULT_COVER, PARTICLE_INTENSITY_MAX, PARTICLE_INTENSITY_MIN } from './constants';
 import { i18n, t, type TranslationKey } from './localization';
+import { normalizeRatingScale, ratingScale } from './utils/ratingScale';
 import { LibraryView } from './views/LibraryView';
 import { LorebaseSettingTab } from './settings/SettingsTab';
 import { EditModal } from './modals/EditModal';
@@ -210,6 +211,7 @@ export default class LorebasePlugin extends Plugin {
         this.settings.particleIntensity = Number.isFinite(particleIntensity)
             ? Math.min(PARTICLE_INTENSITY_MAX, Math.max(PARTICLE_INTENSITY_MIN, Math.round(particleIntensity)))
             : DEFAULT_SETTINGS.particleIntensity;
+        this.settings.ratingScale = normalizeRatingScale(Number(sanitized.ratingScale));
         this.settings.settingsLayoutMode = sanitized.settingsLayoutMode === 'accordion'
             ? 'accordion'
             : 'tabs';
@@ -229,6 +231,7 @@ export default class LorebasePlugin extends Plugin {
             manga: normalizeCompletionDateBadgeFormat(sanitized?.completionDateBadgeFormats?.manga),
         };
         i18n.setLanguage(this.settings.language);
+        ratingScale.set(this.settings.ratingScale);
 
         // Ensure nested objects are merged properly
         if (sanitized?.games) {
@@ -747,6 +750,7 @@ export default class LorebasePlugin extends Plugin {
 
         // Update localization
         i18n.setLanguage(this.settings.language);
+        ratingScale.set(this.settings.ratingScale);
         this.refreshLocalizedCommandNames();
 
         // Apply accent color

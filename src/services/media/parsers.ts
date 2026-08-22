@@ -1,3 +1,4 @@
+import { RATING_VALUE_CEILING } from '../../constants';
 import type { RelatedMediaLink, UserRating } from '../../types';
 
 export function parseNumber(value: unknown): number | null {
@@ -18,11 +19,18 @@ export function parseYear(value: unknown): number | null {
     return match ? Number(match[0]) : null;
 }
 
+/**
+ * Read a stored rating.
+ *
+ * Accepts anything up to `RATING_VALUE_CEILING` rather than the configured
+ * scale, so a rating recorded on a larger scale survives being viewed on a
+ * smaller one instead of being silently dropped and written back as null.
+ */
 export function parseUserRating(value: unknown): UserRating {
     const parsed = parseNumber(value);
     if (parsed === null) return null;
     const rating = Math.trunc(parsed);
-    return rating >= 1 && rating <= 5 ? rating as UserRating : null;
+    return rating >= 1 && rating <= RATING_VALUE_CEILING ? rating : null;
 }
 
 export function parseRelatedMedia(raw: unknown): RelatedMediaLink[] {

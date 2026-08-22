@@ -125,8 +125,8 @@ export interface RelatedMediaLink {
     imageUrl?: string | null;
 }
 
-/** User rating from 1-5 */
-export type UserRating = 1 | 2 | 3 | 4 | 5 | null;
+/** User rating from 1 to the configured rating scale */
+export type UserRating = number | null;
 
 /** Provider/community score stored in note frontmatter */
 export interface CommunityRating {
@@ -602,6 +602,8 @@ export interface LorebaseSettings {
         books: boolean;
         manga: boolean;
     };
+    /** Highest selectable user rating, i.e. the "out of" value */
+    ratingScale: number;
     /** Particle effect type */
     particleEffect: ParticleEffect;
     /** Particle intensity */

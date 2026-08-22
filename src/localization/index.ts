@@ -66,6 +66,7 @@ export type TranslationKey =
     | 'settingsBadgesStatusIconOnly'
     | 'settingsBadgesFavoritePulse'
     | 'settingsBadgesRatingMode' | 'settingsBadgesRatingModeStar' | 'settingsBadgesRatingModeEmoji'
+    | 'settingsRatingScale' | 'settingsRatingScaleDesc'
     | 'settingsCompletionDateBadgeFormat' | 'settingsCompletionDateBadgeFormatShort' | 'settingsCompletionDateBadgeFormatFull'
     | 'settingsBadgesEditorHint'
     | 'settingsOverlayHint' | 'settingsOverlayReadoutIdle'
@@ -407,6 +408,8 @@ const EN: Record<TranslationKey, string> = {
     settingsBadgesRatingMode: 'Rating style',
     settingsBadgesRatingModeStar: 'Star',
     settingsBadgesRatingModeEmoji: 'Emoji',
+    settingsRatingScale: 'Rating scale',
+    settingsRatingScaleDesc: 'Highest rating you can give. Existing ratings keep their stored number, so lowering the scale does not change them.',
     settingsCompletionDateBadgeFormat: 'Completion date format',
     settingsCompletionDateBadgeFormatShort: 'Status · Jul 22',
     settingsCompletionDateBadgeFormatFull: 'Status · Jul 22, 2025',
@@ -1069,6 +1072,8 @@ const RU: Record<TranslationKey, string> = {
     settingsBadgesRatingMode: 'Стиль рейтинга',
     settingsBadgesRatingModeStar: 'Звезда',
     settingsBadgesRatingModeEmoji: 'Эмоджи',
+    settingsRatingScale: 'Шкала оценок',
+    settingsRatingScaleDesc: 'Максимальная оценка, которую можно поставить. Существующие оценки сохраняют записанное значение, поэтому уменьшение шкалы их не изменяет.',
     settingsCompletionDateBadgeFormat: 'Формат даты просмотра',
     settingsCompletionDateBadgeFormatShort: 'Статус · 22 июл.',
     settingsCompletionDateBadgeFormatFull: 'Статус · 22 июл. 2025',
@@ -1732,6 +1737,8 @@ const UK: Record<TranslationKey, string> = {
     settingsBadgesRatingMode: 'Стиль рейтингу',
     settingsBadgesRatingModeStar: 'Зірка',
     settingsBadgesRatingModeEmoji: 'Емодзі',
+    settingsRatingScale: 'Шкала оцінок',
+    settingsRatingScaleDesc: 'Максимальна оцінка, яку можна поставити. Наявні оцінки зберігають записане значення, тому зменшення шкали їх не змінює.',
     settingsCompletionDateBadgeFormat: 'Формат дати перегляду',
     settingsCompletionDateBadgeFormatShort: 'Статус · 22 лип.',
     settingsCompletionDateBadgeFormatFull: 'Статус · 22 лип. 2025',

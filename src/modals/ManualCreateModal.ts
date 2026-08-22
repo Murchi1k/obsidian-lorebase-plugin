@@ -1,5 +1,6 @@
 import { App, Modal, Notice, setIcon } from 'obsidian';
 import { t } from '../localization';
+import { getRatingValues } from '../utils/ratingScale';
 import { createLorebaseDropdown } from '../components/LorebaseDropdown';
 import type { AnimeFormat, AnimePart, AnimeStatus, GameStatus, UserRating } from '../types';
 import type { MediaKind } from '../services/integrations/types';
@@ -331,15 +332,15 @@ export class ManualCreateModal extends Modal {
         const row = field.createDiv({ cls: 'lorebase-editmode-stars lorebase-manual-stars' });
         const render = (): void => {
             row.empty();
-            for (let i = 1; i <= 5; i++) {
+            for (const value of getRatingValues()) {
                 const button = row.createEl('button', {
                     cls: 'lorebase-editmode-star',
                     text: String.fromCharCode(9733),
-                    attr: { type: 'button', 'aria-label': `${t('editRating')} ${i}` },
+                    attr: { type: 'button', 'aria-label': `${t('editRating')} ${value}` },
                 });
-                button.toggleClass('is-active', this.draft.rating !== null && i <= this.draft.rating);
+                button.toggleClass('is-active', this.draft.rating !== null && value <= this.draft.rating);
                 button.addEventListener('click', () => {
-                    this.draft.rating = this.draft.rating === i ? null : i as Exclude<UserRating, null>;
+                    this.draft.rating = this.draft.rating === value ? null : value;
                     render();
                 });
             }

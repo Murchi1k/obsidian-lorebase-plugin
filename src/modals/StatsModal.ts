@@ -6,7 +6,7 @@
 import { Modal, App } from 'obsidian';
 import { GameStats, AnimeStats, MediaType } from '../types';
 import { t } from '../localization';
-import { RATING_CONFIG } from '../constants';
+import { getRatingScale, getRatingTier, getRatingValues } from '../utils/ratingScale';
 
 // =============================================================================
 // STATS MODAL
@@ -98,7 +98,7 @@ export class StatsModal extends Modal {
             icon: '\u{2B50}',
             label: t('statsAvgRating'),
             value: stats.avgRating,
-            subtext: `${t('statsOf')} 5.0`,
+            subtext: `${t('statsOf')} ${getRatingScale().toFixed(1)}`,
             color: 'pink'
         });
 
@@ -206,22 +206,33 @@ export class StatsModal extends Modal {
 
         const grid = section.createDiv({ cls: 'lorebase-stats-rating-grid' });
 
-        for (const config of RATING_CONFIG) {
-            const count = this.stats.ratingDistribution[config.value] || 0;
+        // Ratings above the configured scale can exist in a vault whose scale was
+        // lowered, so drive the grid off the recorded values rather than the scale alone.
+        const values = new Set(getRatingValues());
+        for (const key of Object.keys(this.stats.ratingDistribution)) {
+            const value = Number(key);
+            if (Number.isFinite(value) && value >= 1 && this.stats.ratingDistribution[value] > 0) {
+                values.add(value);
+            }
+        }
+
+        for (const value of [...values].sort((a, b) => b - a)) {
+            const tier = getRatingTier(value);
+            const count = this.stats.ratingDistribution[value] || 0;
             const percent = this.stats.withRating > 0
                 ? Math.round((count / this.stats.withRating) * 1000) / 10
                 : 0;
 
             const card = grid.createDiv({ cls: 'lorebase-stats-rating-card' });
 
-            card.createDiv({ cls: 'lorebase-stats-rating-emoji', text: config.emoji });
-            card.createDiv({ cls: 'lorebase-stats-rating-label', text: t(config.labelKey) });
+            card.createDiv({ cls: 'lorebase-stats-rating-emoji', text: tier.emoji });
+            card.createDiv({ cls: 'lorebase-stats-rating-label', text: `${value} · ${t(tier.labelKey)}` });
             card.createDiv({ cls: 'lorebase-stats-rating-count', text: String(count) });
 
             const bar = card.createDiv({ cls: 'lorebase-stats-bar' });
             const fill = bar.createDiv({ cls: 'lorebase-stats-bar-fill' });
             fill.style.width = `${percent}%`;
-            fill.style.background = config.color;
+            fill.style.background = tier.color;
 
             card.createDiv({ cls: 'lorebase-stats-rating-percent', text: `${percent}%` });
         }

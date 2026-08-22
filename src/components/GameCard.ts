@@ -7,7 +7,8 @@ import { requestUrl } from 'obsidian';
 
 import { AnimeItem, BookItem, MediaItem, CardSize, CardOrientation, CardStyle, SortField, LorebaseSettings, BadgePosition, MediaStatus, MangaItem, SeriesItem, CompletionDateBadgeFormat } from '../types';
 import { t, i18n } from '../localization';
-import { STATUS_CONFIG, RATING_EMOJI, CARD_SIZES, DEFAULT_COVER, DEFAULT_SETTINGS, HORIZONTAL_CARD_SIZES } from '../constants';
+import { STATUS_CONFIG, CARD_SIZES, DEFAULT_COVER, DEFAULT_SETTINGS, HORIZONTAL_CARD_SIZES } from '../constants';
+import { getRatingEmoji } from '../utils/ratingScale';
 import {
     getSteamAppIdFromImageUrl,
     getSteamHorizontalImageCandidates,
@@ -502,7 +503,7 @@ export class GameCard {
 
         const ratingBadge = parent.createDiv({ cls: 'lorebase-card-rating' });
         const starText = `\u2605${this.game.userRating}`;
-        const emojiText = RATING_EMOJI[this.game.userRating] ?? '';
+        const emojiText = getRatingEmoji(this.game.userRating);
         const mode = this.badges.rating.mode;
 
         if (mode === 'emoji') {

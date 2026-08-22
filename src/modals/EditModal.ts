@@ -7,6 +7,7 @@ import { App, Menu, Modal, Notice, TFile, setIcon } from 'obsidian';
 import { GameDlc, GameItem, GameStatus, RelatedMediaLink, TagPreset, UserRating } from '../types';
 import { DEFAULT_COVER, DEFAULT_GAME_TAG_PRESETS, STATUS_CONFIG } from '../constants';
 import { i18n, t } from '../localization';
+import { getRatingScale, getRatingValues } from '../utils/ratingScale';
 import { GenreEditModal } from './GenreEditModal';
 import { CommunityRatingRefresh, renderCommunityRatingPanel } from './CommunityRatingPanel';
 import { MediaSourceAction, renderMediaSourcePanel } from './MediaSourcePanel';
@@ -329,7 +330,7 @@ export class EditModal extends Modal {
                                 </div>
                                 <div class="lorebase-editmode-stars" data-role="stars"></div>
                                 <div class="lorebase-editmode-rating-meta">
-                                    <span class="lorebase-editmode-rating-value" data-role="rating-value">0.0 / 5.0</span>
+                                    <span class="lorebase-editmode-rating-value" data-role="rating-value">0.0 / ${getRatingScale().toFixed(1)}</span>
                                     <span class="lorebase-editmode-rating-hint">${t('editRatingHint')}</span>
                                 </div>
                                 <div class="lorebase-editmode-rating-line"><span class="lorebase-editmode-rating-line-fill" data-role="rating-line"></span></div>
@@ -608,15 +609,16 @@ export class EditModal extends Modal {
     private bindRating(root: HTMLElement): void {
         const stars = this.qs<HTMLElement>(root, '[data-role="stars"]');
         if (stars) {
-            for (let i = 1; i <= 5; i++) {
+            stars.empty();
+            for (const value of getRatingValues()) {
                 const btn = stars.createEl('button', {
                     cls: 'lorebase-editmode-star',
-                    attr: { type: 'button', 'aria-label': `${t('editRating')} ${i}` }
+                    attr: { type: 'button', 'aria-label': `${t('editRating')} ${value}` }
                 });
                 btn.textContent = String.fromCharCode(9733);
-                btn.dataset.rating = String(i);
+                btn.dataset.rating = String(value);
                 btn.addEventListener('click', () => {
-                    this.selectedRating = i as UserRating;
+                    this.selectedRating = value;
                     this.updateRatingUI(root);
                 });
             }
@@ -1250,7 +1252,7 @@ export class EditModal extends Modal {
             });
 
             const rating = row.createDiv({ cls: 'lorebase-editmode-dlc-rating', attr: { 'aria-label': t('editPersonalRating') } });
-            for (let value = 1; value <= 5; value++) {
+            for (const value of getRatingValues()) {
                 const star = rating.createEl('button', {
                     cls: 'lorebase-editmode-dlc-star',
                     text: String.fromCharCode(9733),
@@ -1259,7 +1261,7 @@ export class EditModal extends Modal {
                 star.toggleClass('is-active', item.userRating !== null && item.userRating !== undefined && value <= item.userRating);
                 star.addEventListener('click', (event) => {
                     event.stopPropagation();
-                    item.userRating = item.userRating === value ? null : value as UserRating;
+                    item.userRating = item.userRating === value ? null : value;
                     this.renderDlc(root);
                 });
             }
@@ -1372,9 +1374,10 @@ export class EditModal extends Modal {
         const ratingValue = this.qs<HTMLElement>(root, '[data-role="rating-value"]');
         const ratingLine = this.qs<HTMLElement>(root, '[data-role="rating-line"]');
 
+        const scale = getRatingScale();
         const numeric = this.selectedRating ?? 0;
-        const pct = Math.round((numeric / 5) * 100);
-        if (ratingValue) ratingValue.textContent = `${numeric.toFixed(1)} / 5.0`;
+        const pct = Math.min(100, Math.round((numeric / scale) * 100));
+        if (ratingValue) ratingValue.textContent = `${numeric.toFixed(1)} / ${scale.toFixed(1)}`;
         if (ratingLine) ratingLine.style.width = `${pct}%`;
     }
 
