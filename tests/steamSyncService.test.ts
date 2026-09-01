@@ -545,10 +545,10 @@ describe('SteamSyncService', () => {
                     },
                 };
             }
-            if (url.includes('/api/bleed/init')) {
+            if (url.includes('/api/search/site/init')) {
                 return { json: { token: 'token-1', hpKey: 'ign_test', hpVal: 'hp-value' } };
             }
-            if (url === 'https://howlongtobeat.com/api/bleed') {
+            if (url === 'https://howlongtobeat.com/api/search/site') {
                 expect(typeof options === 'string' ? undefined : options.headers?.['x-auth-token']).toBe('token-1');
                 return {
                     json: {

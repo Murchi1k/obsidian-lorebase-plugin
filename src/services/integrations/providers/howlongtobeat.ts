@@ -27,7 +27,7 @@ export async function getHowLongToBeatTimes(
     if (!terms.length) return null;
 
     const init = asObject(await fetchJson(
-        `https://howlongtobeat.com/api/bleed/init?t=${Date.now()}`,
+        `https://howlongtobeat.com/api/search/site/init?t=${Date.now()}`,
         HLTB_BASE_HEADERS
     ));
     const token = getString(init, 'token');
@@ -64,7 +64,7 @@ export async function getHowLongToBeatTimes(
     }
 
     const search = asObject(await fetchJson(
-        'https://howlongtobeat.com/api/bleed',
+        'https://howlongtobeat.com/api/search/site',
         {
             ...HLTB_BASE_HEADERS,
             'Content-Type': 'application/json',
