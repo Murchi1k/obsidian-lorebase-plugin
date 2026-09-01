@@ -16,7 +16,7 @@ describe('HowLongToBeat provider', () => {
             body?: string
         ): Promise<unknown> => {
             calls.push({ url, headers, method, body });
-            if (url.includes('/api/bleed/init')) {
+            if (url.includes('/api/search/site/init')) {
                 return { token: 'token-1', hpKey: 'ign_test', hpVal: 'hp-value' };
             }
             return {
@@ -36,8 +36,8 @@ describe('HowLongToBeat provider', () => {
         const searchCall = calls[1];
         const payload = JSON.parse(searchCall.body ?? '{}') as Record<string, unknown>;
 
-        expect(calls[0].url).toContain('/api/bleed/init');
-        expect(searchCall.url).toBe('https://howlongtobeat.com/api/bleed');
+        expect(calls[0].url).toContain('/api/search/site/init');
+        expect(searchCall.url).toBe('https://howlongtobeat.com/api/search/site');
         expect(searchCall.method).toBe('POST');
         expect(searchCall.headers?.['x-auth-token']).toBe('token-1');
         expect(searchCall.headers?.['x-hp-key']).toBe('ign_test');
