@@ -27,7 +27,7 @@ import { durationSeconds, formatDuration, formatMusicTotal, musicTrackGroups, mu
 import { mountTenthsRating, paintRatingStar, updateRatingReadout, validateRatingInputs } from '../components/RatingInput';
 import { getRatingMax, getRatingFromStarPosition } from '../utils/rating';
 import { setupMobileEditor } from './mobileEditor';
-import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
+import { appendEditorTemplate, bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
 import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
 import { getStatusOptionsForMediaType } from '../views/library/viewOptions';
 import { getStatusAppearance } from '../statusPresentation';
@@ -195,7 +195,7 @@ export class MusicEditModal extends Modal {
         }
         if (this.compact) {
             const chips = right.createEl('section', { cls: 'lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-tags' });
-            chips.insertAdjacentHTML('beforeend', buildCompactEditorChips());
+            appendEditorTemplate(chips, buildCompactEditorChips());
             this.compactChips = bindCompactEditorChips(root, {
                 tags: { read: () => this.draft.tags, write: values => { this.draft.tags = values; }, normalize: value => value.trim().replace(/^#+/, '').trim() || null },
                 genres: { read: () => this.draft.genres, write: values => { this.draft.genres = values; }, normalize: value => value.trim() || null },
@@ -220,7 +220,7 @@ export class MusicEditModal extends Modal {
         const file = this.draft.filePath ? this.app.vault.getAbstractFileByPath(this.draft.filePath) : null;
         if (file instanceof TFile) {
             const dates = this.compact ? extraFields : this.panel(right, t('editDates'), 'lorebase-editmode-panel-glass lorebase-editmode-timestamps');
-            dates.insertAdjacentHTML('beforeend', buildEditorTimestampRows());
+            appendEditorTemplate(dates, buildEditorTimestampRows());
             for (const [role, value] of [['ts-added', file.stat.ctime], ['ts-updated', file.stat.mtime]] as const) {
                 dates.querySelector<HTMLElement>(`[data-role="${role}"]`)!.textContent = new Date(value).toLocaleDateString(i18n.getLanguage(), { day: 'numeric', month: 'short', year: 'numeric' });
             }
@@ -242,7 +242,7 @@ export class MusicEditModal extends Modal {
             const rect = button.getBoundingClientRect(); menu.showAtPosition({ x: rect.right, y: rect.bottom });
         };
         if (this.compact) {
-            actions.insertAdjacentHTML('beforeend', buildEditorHeaderActions(true));
+            appendEditorTemplate(actions, buildEditorHeaderActions(true));
             actions.querySelector('[data-action="discard"]')?.addEventListener('click', () => this.close());
             actions.querySelector('[data-action="save"]')?.addEventListener('click', () => void this.save());
             const overflow = actions.querySelector<HTMLButtonElement>('[data-action="overflow"]')!;
@@ -257,7 +257,7 @@ export class MusicEditModal extends Modal {
     }
 
     private renderCoverIdentity(poster: HTMLElement, editTitle: (value: string) => void): HTMLButtonElement {
-        poster.insertAdjacentHTML('beforeend', buildCompactCoverIdentity('<div class="lorebase-music-cover-meta"></div>'));
+        appendEditorTemplate(poster, buildCompactCoverIdentity('<div class="lorebase-music-cover-meta"></div>'));
         const title = poster.querySelector<HTMLInputElement>('[data-field="title"]')!;
         title.value = this.draft.displayName;
         title.addEventListener('input', () => editTitle(title.value));
@@ -322,7 +322,7 @@ export class MusicEditModal extends Modal {
                 label: mt(status),
                 icon: STATUS_ICON_MAP[status],
             }));
-            quick.insertAdjacentHTML('beforeend', buildCompactQuickSettings([
+            appendEditorTemplate(quick, buildCompactQuickSettings([
                 { key: 'favorite', label: t('editFavorite'), icon: 'heart' }, ...statusButtons,
             ]));
             for (const status of QUICK_MUSIC_STATUSES) {
@@ -354,7 +354,7 @@ export class MusicEditModal extends Modal {
     }
 
     private renderNotes(center: HTMLElement, toggle: HTMLButtonElement): void {
-        if (this.compact) center.insertAdjacentHTML('beforeend', buildSummaryNotesPanel(true));
+        if (this.compact) appendEditorTemplate(center, buildSummaryNotesPanel(true));
         else {
             const notes = this.panel(center, t('editDescription'), 'lorebase-editmode-notes is-collapsed');
             notes.dataset.mobilePane = 'general';

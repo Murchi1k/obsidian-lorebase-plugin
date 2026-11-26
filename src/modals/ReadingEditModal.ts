@@ -24,7 +24,7 @@ import { CommunityRatingRefresh, renderCommunityRatingPanel } from './CommunityR
 import { MediaSourceAction, renderMediaSourcePanel } from './MediaSourcePanel';
 import { setupMobileEditor } from './mobileEditor';
 import { compactGameText } from '../localization/compactGameEditor';
-import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildCompactWorkTypeBadge, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
+import { appendEditorTemplate, bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildCompactWorkTypeBadge, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
 import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
 import { bindSourceUrlButton } from './sourceUrlButton';
 import { extractMarkdownSection } from '../services/markdownSections';
@@ -191,7 +191,7 @@ export class ReadingEditModal extends Modal {
         this.modalEl.addEventListener('keydown', this.onKeydown);
 
         const root = contentEl.createDiv({ cls: 'lorebase-editmode-root lorebase-editmode-reading-root lorebase-modal-panel' });
-        root.appendChild(this.createTemplateFragment(this.buildTemplate()));
+        appendEditorTemplate(root, this.buildTemplate());
         if (this.compact) bindCompactEditorChrome(root, this.modalEl, () => this.close());
         if (this.compact) {
             const progress = root.querySelector('.lorebase-editmode-reading-progress');
@@ -249,15 +249,6 @@ export class ReadingEditModal extends Modal {
         this.modalEl.removeEventListener('keydown', this.onKeydown);
         this.contentEl.empty();
         this.modalEl.removeClass('lorebase-editmode-modal-shell');
-    }
-
-    private createTemplateFragment(template: string): DocumentFragment {
-        const parsed = new DOMParser().parseFromString(template, 'text/html');
-        const fragment = createFragment();
-        for (const child of Array.from(parsed.body.childNodes)) {
-            fragment.appendChild(child.cloneNode(true));
-        }
-        return fragment;
     }
 
     private buildTemplate(): string {

@@ -38,7 +38,7 @@ import { MediaSourceAction, renderMediaSourcePanel } from './MediaSourcePanel';
 import { setupMobileEditor } from './mobileEditor';
 import { compactGameText } from '../localization/compactGameEditor';
 import { et } from '../localization/episodes';
-import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildCompactWorkTypeBadge, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
+import { appendEditorTemplate, bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildCompactWorkTypeBadge, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
 import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
 import { RelatedMediaEditor } from './RelatedMediaEditor';
 import { bindSourceUrlButton } from './sourceUrlButton';
@@ -207,7 +207,7 @@ export class VideoEditModal extends Modal {
         this.modalEl.addEventListener('keydown', this.onKeydown);
 
         const root = contentEl.createDiv({ cls: 'lorebase-editmode-root lorebase-editmode-video-root lorebase-modal-panel' });
-        root.appendChild(this.createTemplateFragment(this.buildTemplate()));
+        appendEditorTemplate(root, this.buildTemplate());
         if (this.compact) bindCompactEditorChrome(root, this.modalEl, () => this.close());
         this.bindStaticContent(root);
         renderCountriesControl(root, this.item, codes => this.countries = codes);
@@ -471,15 +471,6 @@ export class VideoEditModal extends Modal {
                 </div>
             </label>
         `;
-    }
-
-    private createTemplateFragment(template: string): DocumentFragment {
-        const parsed = new DOMParser().parseFromString(template, 'text/html');
-        const fragment = createFragment();
-        for (const child of Array.from(parsed.body.childNodes)) {
-            fragment.appendChild(child.cloneNode(true));
-        }
-        return fragment;
     }
 
     private bindStaticContent(root: HTMLElement): void {

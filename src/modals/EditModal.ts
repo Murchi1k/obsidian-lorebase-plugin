@@ -17,7 +17,7 @@ import type { RefreshPlayStationTracking } from '../components/PlayStationProgre
 import type { PlayStationProgressPreference } from '../components/PlayStationProgressPreference';
 import { gt } from '../localization/gameTracking';
 import { compactGameText } from '../localization/compactGameEditor';
-import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, formatCompactEditorRating } from './compactEditorLayout';
+import { appendEditorTemplate, bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, formatCompactEditorRating } from './compactEditorLayout';
 import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
 import { bindTrackingStatus, syncTrackingStatus, finishTrackingPanel } from '../components/EditTrackingPanel';
 import { renderCompactGamePlatforms, renderGamePlatformChips } from '../components/GamePlatformChips';
@@ -26,7 +26,7 @@ import { trackingText } from '../components/RepeatTrackingControl';
 import { renderWorkTypeControl } from '../components/MediaWorkTypeControl';
 import { DetailedRatingEditor } from './DetailedRatingEditor';
 import { mountPartRating } from '../components/PartRatingControl';
-﻿/**
+/**
  * LOREBASE - Edit Modal
  * Cinematic edit mode for game properties
  */
@@ -195,18 +195,18 @@ export class EditModal extends Modal {
 
         const root = contentEl.createDiv({ cls: 'lorebase-editmode-root lorebase-modal-panel' });
         root.toggleClass('lorebase-compact-game-editor', this.compactGameEditor);
-        root.appendChild(this.createTemplateFragment(this.buildTemplate()));
+        appendEditorTemplate(root, this.buildTemplate());
         if (this.compactGameEditor) bindCompactEditorChrome(root, this.modalEl, () => this.close());
         this.platformPlaythroughs = normalizePlatformPlaythroughs(this.game.platformPlaythroughs, this.game.playedOn, this.game.repeatCount);
         this.unassignedRepeats = Math.max(0, (this.game.repeatCount ?? 0) - totalPlatformRepeats(this.platformPlaythroughs));
         const tracking = root.querySelector<HTMLElement>('[data-role="personal-game-tracking"]');
         if (tracking) {
             this.trackingPanel = new GameTrackingPanel(tracking, this.game, this.onRefreshGameTracking, this.compactGameEditor, this.onRefreshPlayStation, this.playstationProgressPreference);
-            if (this.compactGameEditor) tracking.appendChild(this.createTemplateFragment(`
+            if (this.compactGameEditor) appendEditorTemplate(tracking, `
                 <div class="lorebase-played-platforms" data-role="compact-played-platforms">
                     <div data-role="platform-chips"></div>
                     ${this.buildPlatformAddRow()}
-                </div>`));
+                </div>`);
         }
         this.bindStaticContent(root);
         renderCountriesControl(root, this.game, codes => this.countries = codes);
@@ -243,15 +243,6 @@ export class EditModal extends Modal {
         this.modalEl.removeEventListener('keydown', this.onKeydown);
         contentEl.empty();
         this.modalEl.removeClass('lorebase-editmode-modal-shell');
-    }
-
-    private createTemplateFragment(template: string): DocumentFragment {
-        const parsed = new DOMParser().parseFromString(template, 'text/html');
-        const fragment = createFragment();
-        for (const child of Array.from(parsed.body.childNodes)) {
-            fragment.appendChild(child.cloneNode(true));
-        }
-        return fragment;
     }
 
     private buildTemplate(): string {

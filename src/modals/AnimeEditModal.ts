@@ -38,7 +38,7 @@ import { AnimeFormat, AnimeItem, AnimePart, AnimeStatus, RatingScaleSettings, Re
 import { DEFAULT_COVER } from '../constants';
 import { i18n, t } from '../localization';
 import { compactGameText } from '../localization/compactGameEditor';
-import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, formatCompactEditorRating } from './compactEditorLayout';
+import { appendEditorTemplate, bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, formatCompactEditorRating } from './compactEditorLayout';
 import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
 import { RelatedMediaEditor } from './RelatedMediaEditor';
 import { createLorebaseDropdown, LorebaseDropdownHandle } from '../components/LorebaseDropdown';
@@ -207,7 +207,7 @@ export class AnimeEditModal extends Modal {
         this.modalEl.addEventListener('keydown', this.onKeydown);
 
         const root = contentEl.createDiv({ cls: 'lorebase-editmode-root lorebase-editmode-anime-root lorebase-modal-panel' });
-        root.appendChild(this.createTemplateFragment(this.buildTemplate()));
+        appendEditorTemplate(root, this.buildTemplate());
         if (this.compactAnimeEditor) bindCompactEditorChrome(root, this.modalEl, () => this.close());
         this.bindStaticContent(root);
         const recommendationsHost = root.querySelector<HTMLElement>('[data-role="recommendations-panel"]');
@@ -252,15 +252,6 @@ export class AnimeEditModal extends Modal {
         this.modalEl.removeEventListener('keydown', this.onKeydown);
         this.contentEl.empty();
         this.modalEl.removeClass('lorebase-editmode-modal-shell');
-    }
-
-    private createTemplateFragment(template: string): DocumentFragment {
-        const parsed = new DOMParser().parseFromString(template, 'text/html');
-        const fragment = createFragment();
-        for (const child of Array.from(parsed.body.childNodes)) {
-            fragment.appendChild(child.cloneNode(true));
-        }
-        return fragment;
     }
 
     private buildTemplate(): string {

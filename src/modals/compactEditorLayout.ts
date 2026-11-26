@@ -3,6 +3,15 @@ import { focusNotesContent } from '../components/NotesReader';
 import { i18n, t } from '../localization';
 import { compactGameText } from '../localization/compactGameEditor';
 
+export function appendEditorTemplate(parent: HTMLElement, template: string): void {
+    const parsed = new DOMParser().parseFromString(template, 'text/html');
+    const fragment = parent.ownerDocument.createDocumentFragment();
+    for (const child of Array.from(parsed.body.childNodes)) {
+        fragment.appendChild(parent.ownerDocument.importNode(child, true));
+    }
+    parent.appendChild(fragment);
+}
+
 export function buildEditorHeaderActions(compact: boolean): string {
     return `
         <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost" data-action="discard">${t('editCancel')}</button>
@@ -75,10 +84,14 @@ export function bindCompactEditorChrome(root: HTMLElement, modal: HTMLElement, c
     });
 }
 
+function escapeAttribute(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function buildCompactQuickSettings(buttons: Array<{ key: string; label: string; icon?: string; hint?: string }>): string {
     return `<div class="lorebase-game-quick-actions" style="--quick-columns: ${buttons.length}">${buttons.map(({ key, label, icon, hint }) => `
-        <button type="button" class="lorebase-editmode-icon-btn" data-toggle="${key}" aria-pressed="false" aria-label="${label}" title="${hint ? `${label} · ${hint}` : label}">
-            ${icon ? `<span data-icon="${icon}" aria-hidden="true"></span>` : '<span aria-hidden="true">18+</span>'}
+        <button type="button" class="lorebase-editmode-icon-btn" data-toggle="${escapeAttribute(key)}" aria-pressed="false" aria-label="${escapeAttribute(label)}" title="${escapeAttribute(hint ? `${label} · ${hint}` : label)}">
+            ${icon ? `<span data-icon="${escapeAttribute(icon)}" aria-hidden="true"></span>` : '<span aria-hidden="true">18+</span>'}
         </button>`).join('')}</div>`;
 }
 
