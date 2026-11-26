@@ -62,11 +62,7 @@ export class ParticleService {
     private ensureContainer(): void {
         if (this.container?.isConnected || !this.doc.body) return;
         // Settings and dialogs can be siblings of the workspace.
-        const container = this.doc.createElement('div');
-        container.className = 'lorebase-particle-container';
-        container.setAttribute('aria-hidden', 'true');
-        this.doc.body.appendChild(container);
-        this.container = container;
+        this.container = this.doc.body.createDiv({ cls: 'lorebase-particle-container', attr: { 'aria-hidden': 'true' } });
     }
 
     private scheduleRender(): void {
@@ -92,18 +88,17 @@ export class ParticleService {
             this.container.lastElementChild?.remove();
         }
 
-        const fragment = this.doc.createDocumentFragment();
+        const fragment = this.doc.adoptNode(createFragment());
 
         for (let i = this.container.childElementCount; i < this.intensity; i++) {
-            fragment.appendChild(this.createParticle(this.effect));
+            this.createParticle(fragment, this.effect);
         }
 
         this.container.appendChild(fragment);
     }
 
-    private createParticle(effect: Exclude<ParticleEffect, 'none'>): HTMLElement {
-        const particle = this.doc.createElement('div');
-        particle.className = `lorebase-particle lorebase-particle-${effect}`;
+    private createParticle(fragment: DocumentFragment, effect: Exclude<ParticleEffect, 'none'>): void {
+        const particle = fragment.createDiv({ cls: `lorebase-particle lorebase-particle-${effect}` });
         const motion = PARTICLE_MOTION[effect];
         const size = motion.size + Math.random() * motion.sizeRange;
         const speed = motion.duration + Math.random() * motion.durationRange;
@@ -127,7 +122,5 @@ export class ParticleService {
         particle.style.setProperty('--particle-scale', scale.toFixed(2));
         particle.style.setProperty('--particle-spin', `${spin.toFixed(0)}deg`);
         particle.style.setProperty('--particle-rest-y', `${restY}%`);
-
-        return particle;
     }
 }

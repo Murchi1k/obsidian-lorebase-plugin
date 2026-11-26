@@ -38,11 +38,9 @@ export function renderReleaseGallery(
     let shown = 0;
     const more = parent.createEl('button', { cls: 'lorebase-release-show-more', attr: { type: 'button' } });
     const appendPage = (): void => {
-        const fragment = gallery.ownerDocument.createDocumentFragment();
+        const fragment = gallery.ownerDocument.adoptNode(createFragment());
         for (const entry of entries.slice(shown, shown + PAGE_SIZE)) {
-            const card = gallery.ownerDocument.createElement('button');
-            card.type = 'button';
-            card.className = `lorebase-release-card is-${entry.item.type}`;
+            const card = fragment.createEl('button', { cls: `lorebase-release-card is-${entry.item.type}`, attr: { type: 'button' } });
             card.title = entry.item.displayName;
             card.dataset.path = entry.item.filePath;
             const poster = card.createDiv({ cls: 'lorebase-release-card-cover' });
@@ -70,7 +68,6 @@ export function renderReleaseGallery(
                 countdown.createSpan({ cls: 'lorebase-release-countdown-text', text: calendarCountdownText(days) });
             }
             card.addEventListener('click', () => openItem(entry));
-            fragment.appendChild(card);
         }
         gallery.appendChild(fragment);
         shown = Math.min(shown + PAGE_SIZE, entries.length);

@@ -36,9 +36,7 @@ export class GameTrackingPanel {
         return true;
     }
     private el<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-        const node = parent.ownerDocument.createElement(tag); node.className = cls;
-        if (text) node.textContent = text;
-        parent.appendChild(node); return node;
+        return parent.createEl(tag, { cls, text });
     }
     private input(parent: HTMLElement, label: string, value: number | null | undefined): HTMLInputElement {
         const input = this.el(parent, 'input', 'lorebase-game-number');
@@ -57,12 +55,10 @@ export class GameTrackingPanel {
         ring.setAttribute('aria-label', gt('progress'));
         ring.setAttribute('aria-valuemin', '0');
         ring.setAttribute('aria-valuemax', '100');
-        const namespace = 'http://www.w3.org/2000/svg';
-        const svg = ring.ownerDocument.createElementNS(namespace, 'svg');
+        const svg = ring.createSvg('svg');
         svg.setAttribute('viewBox', '0 0 80 80');
         svg.setAttribute('aria-hidden', 'true');
-        ring.appendChild(svg);
-        const track = ring.ownerDocument.createElementNS(namespace, 'circle');
+        const track = svg.createSvg('circle');
         track.setAttribute('cx', '40');
         track.setAttribute('cy', '40');
         track.setAttribute('r', '34');
@@ -71,7 +67,7 @@ export class GameTrackingPanel {
         const fill = track.cloneNode() as SVGCircleElement;
         fill.setAttribute('class', 'lorebase-game-ring-fill');
         fill.setAttribute('transform', 'rotate(-90 40 40)');
-        svg.append(track, fill);
+        svg.append(fill);
         const output = this.el(ring, 'output', 'lorebase-game-ring-value');
         output.setAttribute('aria-hidden', 'true');
         const entry = this.el(ring.parentElement!, 'input', 'lorebase-game-ring-input');

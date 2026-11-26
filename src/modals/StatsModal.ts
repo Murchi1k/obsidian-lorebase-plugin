@@ -23,7 +23,7 @@ import type { StatisticsLibrary } from '../services/StatisticsService';
 import { defaultStatFilters, filterStatRecords, rankStatRecords, STAT_FACETS, STAT_MEDIA, statDay, summarizeStatRecords, type StatFacet, type StatFilters, type StatRecord } from '../services/media/statistics';
 
 function el<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls = '', text?: string): HTMLElementTagNameMap[K] {
-    const value = parent.ownerDocument.createElement(tag); value.className = cls; if (text !== undefined) value.textContent = text; parent.appendChild(value); return value;
+    return parent.createEl(tag, { cls, text });
 }
 function icon(parent: HTMLElement, name: string): void { const value = el(parent, 'span', 'lb-stat-icon'); value.setAttribute('aria-hidden', 'true'); setIcon(value, name); }
 function button(parent: HTMLElement, label: string, action: () => void, cls = '', symbol?: string): HTMLButtonElement {
@@ -312,8 +312,8 @@ export class StatsModal extends Modal {
         if (known < rows.length) button(stats, st('unknownCountry') + ': ' + (rows.length - known), () => this.openTitles({ countryUnknown: true, facet: null }), 'lb-stat-text-link', 'arrow-right');
         const layout = el(panel, 'div', 'lb-stat-map-layout'), map = el(layout, 'div', 'lb-stat-map');
         const label = el(map, 'div', 'lb-stat-map-label', st('geographyHint')); label.setAttribute('aria-live', 'polite');
-        const svg = map.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 1000 470'); svg.setAttribute('role', 'group'); svg.setAttribute('aria-label', st('geography')); map.appendChild(svg);
-        const group = map.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g'); svg.appendChild(group);
+        const svg = map.createSvg('svg', { attr: { viewBox: '0 0 1000 470', role: 'group', 'aria-label': st('geography') } });
+        const group = svg.createSvg('g');
         const controls = el(map, 'div', 'lb-stat-map-controls');
         const update = () => { this.mapView = boundedMapView(this.mapView); const { x, y, scale } = this.mapView; group.setAttribute('transform', 'translate(' + x + ' ' + y + ') scale(' + scale + ')'); zoomLabel.textContent = Math.round(scale * 100) + '%'; zoomIn.disabled = scale >= 6; zoomOut.disabled = scale <= 1; };
         const zoomOut = button(controls, '', () => { this.mapView = zoomMap(this.mapView, 1 / 1.4); update(); }, '', 'minus'); zoomOut.setAttribute('aria-label', st('zoomOut'));
@@ -331,11 +331,11 @@ export class StatsModal extends Modal {
         svg.addEventListener('wheel', event => { if (!event.ctrlKey) return; event.preventDefault(); const rect = svg.getBoundingClientRect(), factor = Math.max(.01,Math.min(rect.width / 1000, rect.height / 470)); this.mapView = zoomMap(this.mapView, event.deltaY < 0 ? 1.15 : 1 / 1.15, (event.clientX - rect.left - (rect.width - 1000 * factor) / 2) / factor, (event.clientY - rect.top - (rect.height - 470 * factor) / 2) / factor); update(); }, { passive: false });
         const max = Math.max(1, ...counts.values());
         for (const country of STAT_WORLD) {
-            const path = map.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', country.path); path.classList.add('lb-stat-map-country');
+            const path = group.createSvg('path', { cls: 'lb-stat-map-country', attr: { d: country.path } });
             const count = counts.get(country.code) ?? 0;
             const name = country.code.length === 2 ? statisticsCountryLabel(country.code, i18n.getLanguage()) : country.name;
             path.dataset.level = String(count ? Math.ceil(count / max * 4) : 0);
-            const title = map.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'title'); title.textContent = name + ': ' + count; path.appendChild(title);
+            path.createSvg('title').textContent = name + ': ' + count;
             if (count) {
                 path.setAttribute('role', 'button'); path.setAttribute('tabindex', '0'); path.setAttribute('aria-label', st('openTitles') + ': ' + name + ' · ' + count);
                 const open = () => { if (!this.mapMoved) this.openTitles({ facet: { key: 'countries', value: country.code } }); };
@@ -343,7 +343,6 @@ export class StatsModal extends Modal {
                 const show = () => { label.textContent = name + ' · ' + count + ' · ' + st('titleCount'); };
                 path.addEventListener('pointerenter', show); path.addEventListener('focus', show);
             } else path.setAttribute('aria-hidden', 'true');
-            group.appendChild(path);
         }
         const list = el(layout, 'div', 'lb-stat-country-list');
         for (const rank of ranks.slice(0, this.countryLimit)) {

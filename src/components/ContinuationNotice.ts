@@ -1,7 +1,7 @@
 import type { Continuation } from '../services/media/partCatalog';
 import { ct } from '../localization/continuations';
 import { isFutureReleaseDate } from '../services/media/releaseStatus';
-function node<K extends keyof HTMLElementTagNameMap>(parent:HTMLElement,tag:K,cls:string,text?:string):HTMLElementTagNameMap[K]{const element=parent.ownerDocument.createElement(tag);element.className=cls;if(text)element.textContent=text;parent.append(element);return element;}
+function node<K extends keyof HTMLElementTagNameMap>(parent:HTMLElement,tag:K,cls:string,text?:string):HTMLElementTagNameMap[K]{return parent.createEl(tag, { cls, text });}
 /** No status or progress changes occur until one of the explicit actions is selected. */
 export function renderContinuationNotice(root:HTMLElement,candidates:Continuation[],baseline:boolean,commit:(selected:string[],resume:boolean)=>void):void {
     root.querySelector('.lorebase-continuations')?.remove(); if(!candidates.length)return;

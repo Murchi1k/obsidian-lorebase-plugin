@@ -23,35 +23,21 @@ export const RETURN_COPY = {
 /** A non-modal return control; it never blocks interaction with the destination. */
 export function mountReleaseReturn(owner: Document, language: Language, onReturn: () => void): () => void {
     const copy = RETURN_COPY[language];
-    const root = owner.createElement('div');
-    root.className = 'lorebase-release-return';
-    root.setAttribute('role', 'region');
-    root.setAttribute('aria-label', copy.resume);
-    root.setAttribute('aria-live', 'polite');
-    const back = owner.createElement('button');
-    back.type = 'button';
-    back.className = 'lorebase-release-return-main';
-    back.setAttribute('aria-label', copy.resume);
-    const icon = owner.createElement('span');
-    icon.className = 'lorebase-release-return-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    setIcon(icon, 'chevron-left');
-    const text = owner.createElement('span');
-    text.className = 'lorebase-release-return-text';
-    const title = owner.createElement('span');
-    title.textContent = copy.resume;
-    text.append(title);
-    back.append(icon, text);
-    const dismiss = owner.createElement('button');
-    dismiss.type = 'button';
-    dismiss.className = 'lorebase-release-return-dismiss';
+    const root = owner.body.createDiv({
+        cls: 'lorebase-release-return', attr: { role: 'region', 'aria-label': copy.resume, 'aria-live': 'polite' },
+    });
+    const back = root.createEl('button', {
+        cls: 'lorebase-release-return-main', attr: { type: 'button', 'aria-label': copy.resume },
+    });
+    setIcon(back.createSpan({ cls: 'lorebase-release-return-icon', attr: { 'aria-hidden': 'true' } }), 'chevron-left');
+    back.createSpan({ cls: 'lorebase-release-return-text' }).createSpan({ text: copy.resume });
+    const dismiss = root.createEl('button', {
+        cls: 'lorebase-release-return-dismiss', attr: { type: 'button', 'aria-label': copy.dismiss },
+    });
     setIcon(dismiss, 'x');
-    dismiss.setAttribute('aria-label', copy.dismiss);
     const cleanup = (): void => root.remove();
     back.addEventListener('click', () => { cleanup(); onReturn(); });
     dismiss.addEventListener('click', cleanup);
-    root.append(back, dismiss);
-    owner.body.append(root);
     return cleanup;
 }
 

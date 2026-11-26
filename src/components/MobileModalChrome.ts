@@ -12,14 +12,11 @@ export function isMobileInterface(element: HTMLElement): boolean {
 export function addMobileModalClose(modal: HTMLElement, header: HTMLElement, onClose: () => void): HTMLButtonElement {
     modal.classList.add('has-mobile-inline-close');
     header.classList.add('has-mobile-close');
-    const close = header.ownerDocument.createElement('button');
-    close.type = 'button';
-    close.className = 'lorebase-mobile-inline-close';
+    const close = header.createEl('button', { cls: 'lorebase-mobile-inline-close', attr: { type: 'button' } });
     const label = { en: 'Close', ru: 'Закрыть', uk: 'Закрити', 'zh-CN': '关闭' }[i18n.getLanguage()];
     close.setAttribute('aria-label', label);
     close.title = label;
     setIcon(close, 'x');
     close.addEventListener('click', onClose);
-    header.appendChild(close);
     return close;
 }

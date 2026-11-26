@@ -5,7 +5,7 @@ import { compactGameText } from '../localization/compactGameEditor';
 
 export function appendEditorTemplate(parent: HTMLElement, template: string): void {
     const parsed = new DOMParser().parseFromString(template, 'text/html');
-    const fragment = parent.ownerDocument.createDocumentFragment();
+    const fragment = parent.ownerDocument.adoptNode(createFragment());
     for (const child of Array.from(parsed.body.childNodes)) {
         fragment.appendChild(parent.ownerDocument.importNode(child, true));
     }

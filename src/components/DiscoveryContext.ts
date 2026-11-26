@@ -8,9 +8,7 @@ import { createPersonalNoteDisclosure } from './PersonalNoteDisclosure';
 
 let discoveryId = 0;
 function element<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-    const node = parent.ownerDocument.createElement(tag); node.className = cls;
-    if (text) node.textContent = text;
-    parent.append(node); return node;
+    return parent.createEl(tag, { cls, text });
 }
 
 export function mountDiscovery(root: HTMLElement, initial: unknown, changed: (value: DiscoveryContext | undefined) => void, app?: App): void {

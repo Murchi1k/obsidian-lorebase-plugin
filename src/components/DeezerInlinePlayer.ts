@@ -31,7 +31,7 @@ export class DeezerInlinePlayer {
     private stopExtrasWatch: () => void;
     constructor(private load: LoadPreviews) {
         this.stopExtrasWatch = onOnlineExtrasChange(enabled => { if (!enabled) this.stop(); this.paintButtons(); });
-        this.root = document.createElement('div'); this.root.className = 'lorebase-deezer-inline';
+        this.root = createDiv({ cls: 'lorebase-deezer-inline' });
         this.status = this.root.createDiv({ cls: 'lorebase-deezer-inline-status', attr: { role: 'status', 'aria-live': 'polite' } });
         this.controls = this.root.createDiv({ cls: 'lorebase-deezer-inline-controls' });
         this.elapsed = this.controls.createSpan({ text: '0:00' });
@@ -110,7 +110,7 @@ export class DeezerInlinePlayer {
         if (!this.alive) return;
         this.releaseAudio(); this.status.textContent = mt('preview30'); this.controls.hidden = false;
         this.seek.value = '0'; this.paintRange(this.seek, 0); this.seek.disabled = true; this.elapsed.textContent = '0:00'; this.total.textContent = '0:30';
-        const audio = this.root.ownerDocument.createElement('audio'); this.audio = audio; audio.preload = 'none'; audio.src = item.preview;
+        const audio = this.root.ownerDocument.adoptNode(createEl('audio')); this.audio = audio; audio.preload = 'none'; audio.src = item.preview;
         audio.addEventListener('loadedmetadata', () => { if (this.audio === audio) { this.seek.disabled = false; this.seek.max = String(this.duration()); this.updateTime(); } });
         audio.addEventListener('timeupdate', () => {
             if (this.audio !== audio) return;

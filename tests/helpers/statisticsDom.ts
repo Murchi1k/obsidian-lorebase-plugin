@@ -1,10 +1,8 @@
-/** Minimal Obsidian DOM helpers for the real dropdown component in happy-dom. */
+/** Layout and styling helpers for statistics controls in happy-dom. */
 export function installStatisticsDom(): void {
     Object.assign(HTMLElement.prototype, {
         empty() { this.replaceChildren(); }, addClass(...names: string[]) { this.classList.add(...names); }, removeClass(...names: string[]) { this.classList.remove(...names); }, hasClass(name: string) { return this.classList.contains(name); }, toggleClass(name: string, active: boolean) { this.classList.toggle(name, active); },
         setCssStyles(styles: object) { Object.assign(this.style, styles); },
-        createEl(tag: string, options: any = {}) { const node = this.ownerDocument.createElement(tag); if (options.cls) node.className = options.cls; if (options.text) node.textContent = options.text; for (const [name, value] of Object.entries(options.attr ?? {})) node.setAttribute(name, String(value)); this.appendChild(node); return node; },
-        createDiv(options: any) { return this.createEl('div', options); }, createSpan(options: any) { return this.createEl('span', options); },
         getClientRects() { if (!this.isConnected) return []; for (let node: HTMLElement | null = this; node; node = node.parentElement) if (node.hidden) return []; return [this.getBoundingClientRect()]; },
     });
     Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1100 });

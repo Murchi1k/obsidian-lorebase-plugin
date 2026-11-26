@@ -67,14 +67,14 @@ export function getBookCoverColor(url: string, document: Document): Promise<Book
                 }));
                 source = objectUrl;
             }
-            const img = document.createElement('img');
+            const img = document.adoptNode(createEl('img'));
             await new Promise<void>((resolve, reject) => {
                 const timer = scheduleTimeout(() => { img.src = ''; reject(new Error('Cover timeout')); }, 15000);
                 img.onload = () => { timer(); resolve(); };
                 img.onerror = () => { timer(); reject(new Error('Cover unavailable')); };
                 img.src = source;
             });
-            const canvas = document.createElement('canvas');
+            const canvas = document.adoptNode(createEl('canvas'));
             canvas.width = 40;
             canvas.height = 56;
             const context = canvas.getContext('2d', { willReadFrequently: true });

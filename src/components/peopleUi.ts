@@ -3,9 +3,7 @@ import { setIcon } from 'obsidian';
 import { pt } from '../localization/people';
 
 export function peopleElement<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls = '', text?: string): HTMLElementTagNameMap[K] {
-    const node = parent.ownerDocument.createElement(tag); node.className = cls;
-    if (text !== undefined) node.textContent = text;
-    parent.appendChild(node); return node;
+    return parent.createEl(tag, { cls, text });
 }
 export function peopleButton(parent: HTMLElement, text: string, action: () => void, cls = ''): HTMLButtonElement {
     const button = peopleElement(parent, 'button', `lorebase-people-button ${cls}`, text); button.type = 'button';

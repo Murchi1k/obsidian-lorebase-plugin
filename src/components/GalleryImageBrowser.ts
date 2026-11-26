@@ -51,7 +51,7 @@ export function createGalleryImageBrowser(root: HTMLElement, title: string, kind
         photo.src = image.thumbnail;
         if (image.thumbnail === image.url) return;
         timer = view.setTimeout(() => {
-            const pending = photo.ownerDocument.createElement('img');
+            const pending = photo.ownerDocument.adoptNode(createEl('img'));
             original = pending;
             pending.decoding = 'async';
             pending.onload = () => {

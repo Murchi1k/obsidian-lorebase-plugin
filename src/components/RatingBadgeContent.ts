@@ -3,8 +3,6 @@ import type { CommunityRatingIcon, MediaType, RatingBadgeMode, RatingScaleSettin
 import { getClassicRatingLevel } from '../classicRatingPresets';
 import { formatCommunityRatingValue, formatRatingValue, getRatingBadgeText } from '../utils/rating';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
 export function renderRatingBadgeContent(
     host: HTMLElement, value: number, settings: RatingScaleSettings, classicMode: RatingBadgeMode, media?: MediaType
 ): void {
@@ -36,7 +34,7 @@ export function renderCommunityRatingIcon(host: HTMLElement, icon: CommunityRati
         attr: { 'aria-hidden': 'true', 'data-rating-icon': icon },
     });
     if (icon === 'tomato') {
-        const svg = wrapper.ownerDocument.createElementNS(SVG_NS, 'svg');
+        const svg = wrapper.createSvg('svg');
         svg.setAttribute('viewBox', '0 0 64 64');
         const paths: Record<string, string>[] = [
             { d: 'M32 18C18 9 6 21 8 37c2 14 12 21 24 21s22-7 24-21C58 21 46 9 32 18Z', fill: '#ef4444', stroke: '#b91c1c', 'stroke-width': '2' },
@@ -44,11 +42,9 @@ export function renderCommunityRatingIcon(host: HTMLElement, icon: CommunityRati
             { d: 'M32 19V9', stroke: '#15803d', 'stroke-width': '3', 'stroke-linecap': 'round' },
         ];
         for (const attributes of paths) {
-            const path = wrapper.ownerDocument.createElementNS(SVG_NS, 'path');
+            const path = svg.createSvg('path');
             for (const [key, value] of Object.entries(attributes)) path.setAttribute(key, value);
-            svg.appendChild(path);
         }
-        wrapper.appendChild(svg);
         return;
     }
     setIcon(wrapper, icon);

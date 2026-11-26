@@ -20,11 +20,10 @@ export function bindPosterGallery(app: App, root: HTMLElement, title: string, ga
     if (!poster || poster.parentElement?.classList.contains('lorebase-poster-gallery-trigger')) return;
 
     const name = gt('title');
-    const button = poster.ownerDocument.createElement('button');
-    button.className = 'lorebase-poster-gallery-trigger';
-    button.type = 'button';
-    button.title = name;
-    button.setAttribute('aria-label', name + ' · ' + title);
+    const button = poster.ownerDocument.adoptNode(createEl('button', {
+        cls: 'lorebase-poster-gallery-trigger', title: name,
+        attr: { type: 'button', 'aria-label': name + ' · ' + title },
+    }));
     poster.before(button);
     button.appendChild(poster);
     const icon = button.createSpan({ cls: 'lorebase-poster-gallery-icon', attr: { 'aria-hidden': 'true' } });

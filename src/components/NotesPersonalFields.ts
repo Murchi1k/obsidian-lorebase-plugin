@@ -10,10 +10,8 @@ export function notesPersonalFields(root: HTMLElement): HTMLElement | null {
     notes.classList.add('lorebase-notes-editor');
     mountNotesReader(notes);
     for(const tab of Array.from(notes.querySelectorAll<HTMLElement>('.lorebase-editmode-note-tab'))) {
-        const icon=notes.ownerDocument.createElement('span');
-        icon.className='lorebase-note-tab-icon';icon.setAttribute('aria-hidden','true');
+        const icon = tab.createSpan({ cls: 'lorebase-note-tab-icon', prepend: true, attr: { 'aria-hidden': 'true' } });
         setIcon(icon,tab.dataset.mode==='myNotes' ? 'notebook-pen' : 'align-left');
-        tab.prepend(icon);
     }
     const section=notes.createDiv({cls:'lorebase-notes-personal-context'});
     notes.insertBefore(section,notes.querySelector('.lorebase-editmode-notes-shell'));

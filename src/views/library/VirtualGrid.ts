@@ -11,12 +11,12 @@ const MAX_SCROLL_HEIGHT = 16_000_000;
 type ScrollRange = { height: number; offset: number };
 
 function cardBatch(grid: HTMLElement): HTMLElement {
-    return grid.ownerDocument?.createElement('div') ?? grid;
+    return grid.ownerDocument?.adoptNode(createDiv()) ?? grid;
 }
 
 function attachCardBatch(grid: HTMLElement, batch: HTMLElement): void {
     if (batch === grid || !batch.firstChild) return;
-    const fragment = batch.ownerDocument.createDocumentFragment();
+    const fragment = batch.ownerDocument.adoptNode(createFragment());
     while (batch.firstChild) fragment.appendChild(batch.firstChild);
     grid.appendChild(fragment);
 }

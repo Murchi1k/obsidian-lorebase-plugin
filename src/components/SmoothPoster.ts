@@ -39,7 +39,7 @@ export function setSmoothPoster(image: HTMLImageElement, sources: readonly (stri
         if (cancelled || index >= candidates.length) return;
         const source = candidates[index++];
         if (source === image.getAttribute('src') && image.complete && image.naturalWidth > 0) { onDisplayed?.(source); return; }
-        loader = image.ownerDocument.createElement('img');
+        loader = image.ownerDocument.adoptNode(createEl('img'));
         loader.decoding = 'async';
         loader.setAttribute('fetchpriority', priority);
         loader.onerror = next;

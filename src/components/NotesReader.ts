@@ -17,7 +17,7 @@ export function mountNotesReader(panel: HTMLElement): void {
     if (!input || !shell || !tabs) return;
     let header = tabs.parentElement!;
     if (!header.classList.contains('lorebase-editmode-panel-title-row')) {
-        header = panel.ownerDocument.createElement('div'); header.className = 'lorebase-editmode-panel-title-row';
+        header = panel.ownerDocument.adoptNode(createDiv({ cls: 'lorebase-editmode-panel-title-row' }));
         tabs.before(header); header.append(tabs);
     }
     const edit = header.createEl('button', { cls: 'lorebase-notes-edit-action', attr: { type: 'button', 'data-action': 'edit-description' } });

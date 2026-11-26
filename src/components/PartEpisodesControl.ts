@@ -10,9 +10,7 @@ type Part = AnimePart | VideoPart;
 export type EpisodeLoader = (part: Part) => Promise<EpisodeInfo[]>;
 export type EpisodeChange = 'progress' | 'mode' | 'metadata';
 function node<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls = '', text?: string): HTMLElementTagNameMap[K] {
-    const element = parent.ownerDocument.createElement(tag); element.className = cls;
-    if (text !== undefined) element.textContent = text;
-    parent.appendChild(element); return element;
+    return parent.createEl(tag, { cls, text });
 }
 function button(parent: HTMLElement, text: string, action: (event: MouseEvent) => void, cls = ''): HTMLButtonElement {
     const element = node(parent, 'button', cls, text); element.type = 'button'; element.addEventListener('click', action); return element;
