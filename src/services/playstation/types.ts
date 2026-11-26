@@ -53,9 +53,9 @@ export function normalizePlayStationSettings(value: unknown): PlayStationSyncSet
     for (const key of ['importPlaytime', 'importTrophies', 'autoSyncOnStartup', 'showProgress'] as const) if (typeof raw[key] === 'boolean') result[key] = raw[key];
     return result;
 }
-export function object(value: unknown): Record<string, any> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}; }
+export function object(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 export function text(value: unknown): string { return typeof value === 'string' || typeof value === 'number' ? String(value) : ''; }
-export function rows(value: unknown): Record<string, any>[] { return Array.isArray(value) ? value.map(object) : []; }
+export function rows(value: unknown): Record<string, unknown>[] { return Array.isArray(value) ? value.map(object) : []; }
 const count = (value: unknown): number | undefined => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 export function trophyCounts(value: unknown): TrophyCounts | undefined {
     const source = object(value);
@@ -74,7 +74,8 @@ export function normalizePlayStationTracking(value: unknown): PlayStationTrackin
     if (!/^\d+$/.test(accountId) || !/^(?:CUSA|PPSA|NPWR|NPU|NPB|PC)[A-Z0-9_-]+$/i.test(titleId)) return undefined;
     const result: PlayStationTracking = { accountId, titleId, platform: text(source.platform) };
     if (/^\d+$/.test(text(source.conceptId))) result.conceptId = text(source.conceptId);
-    if (count(source.playtimeMinutes) !== undefined) result.playtimeMinutes = source.playtimeMinutes;
+    const minutes = count(source.playtimeMinutes);
+    if (minutes !== undefined) result.playtimeMinutes = minutes;
     for (const key of ['played', 'owned'] as const) if (typeof source[key] === 'boolean') result[key] = source[key];
     for (const key of ['lastPlayedAt', 'updatedAt'] as const) if (typeof source[key] === 'string' && Number.isFinite(Date.parse(source[key]))) result[key] = source[key];
     if (Array.isArray(source.trophySets)) result.trophySets = rows(source.trophySets).map(normalizeTrophySet).filter((set): set is PlayStationTrophySet => Boolean(set));

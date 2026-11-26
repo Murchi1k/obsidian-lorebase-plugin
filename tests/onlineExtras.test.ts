@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import { installStatisticsDom } from './helpers/statisticsDom';
 
-const { transport, nativeTransport } = vi.hoisted(() => ({ transport: vi.fn(), nativeTransport: vi.fn() }));
-vi.mock('obsidian', async importOriginal => ({ ...await importOriginal<object>(), requestUrl: transport, AbstractInputSuggest: class {} }));
-vi.mock('https', () => ({ request: nativeTransport, default: { request: nativeTransport } }));
+const transport = vi.hoisted(() => vi.fn());
+const https: typeof import('https') = createRequire(import.meta.url)('https');
+vi.mock('obsidian', async importOriginal => ({ ...await importOriginal<object>(), Platform: { isDesktop: true }, requestUrl: transport, AbstractInputSuggest: class {} }));
 vi.mock('../src/settings/sections/reset', () => ({ renderResetSettings: vi.fn() }));
 
 import { areOnlineExtrasEnabled, configureOnlineExtras, onOnlineExtrasChange, OnlineExtrasDisabledError, readOnlineExtrasPreference, runOnlineExtra } from '../src/services/onlineExtras';
@@ -36,7 +37,7 @@ beforeAll(() => {
     Object.assign(globalThis, { createSvg: (tag: string) => document.createElementNS('http://www.w3.org/2000/svg', tag) });
     Object.assign(SVGElement.prototype, { createSvg(tag: string) { return this.appendChild(document.createElementNS('http://www.w3.org/2000/svg', tag)); } });
 });
-beforeEach(() => { configureOnlineExtras(true); transport.mockReset(); nativeTransport.mockReset(); resetIntegrationRequestStateForTests(); });
+beforeEach(() => { configureOnlineExtras(true); transport.mockReset(); resetIntegrationRequestStateForTests(); });
 afterEach(() => { configureOnlineExtras(true); vi.restoreAllMocks(); document.body.replaceChildren(); });
 
 describe('additional online features', () => {
@@ -51,12 +52,12 @@ describe('additional online features', () => {
 
     it('keeps desktop PSN authorization available', async () => {
         configureOnlineExtras(false);
-        nativeTransport.mockImplementation((_url, _options, respond) => {
+        const nativeTransport = vi.spyOn(https, 'request').mockImplementation(((_url: string, _options: unknown, respond: (result: unknown) => void) => {
             const request = new EventEmitter() as any;
             request.setTimeout = () => request;
             request.end = () => { respond({ resume() {}, statusCode: 302, headers: { location: 'com.playstation:/oauth?code=example' } }); request.emit('close'); };
             return request;
-        });
+        }) as typeof https.request);
         const result = await psnRequest('https://example.test/auth', new AbortController().signal, { redirect: false });
         expect(result.status).toBe(302); expect(nativeTransport).toHaveBeenCalledTimes(1);
     });

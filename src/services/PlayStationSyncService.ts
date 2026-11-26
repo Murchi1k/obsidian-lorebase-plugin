@@ -12,7 +12,7 @@ import { checkPsnAbort, normalizePlayStationTracking, object, text, type PlaySta
 import { psnError } from '../localization/playstation';
 import { withSyncSourceUrl } from '../utils/syncSource';
 
-interface LocalGame { file: TFile; title: string; fm: Record<string, any>; }
+interface LocalGame { file: TFile; title: string; fm: Record<string, unknown>; }
 export interface PlayStationPreview {
     entry: PlayStationEntry;
     path?: string;

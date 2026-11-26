@@ -9,6 +9,7 @@ import { renderMusicProviderSettings } from './music';
 import { Notice, Setting, setIcon } from 'obsidian';
 import { i18n, t, type TranslationKey } from '../../localization';
 import type { IntegrationTemplateSettings, NoteTemplateSettings } from '../../types';
+import { getSecretStorage } from '../../services/CredentialStore';
 import { IntegrationService } from '../../services/IntegrationService';
 import {
     buildIntegrationDiagnosticReport,
@@ -202,7 +203,8 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
     if (!integrations) return;
 
     context.createSectionHeader(container, ICON_INTEGRATIONS, t('settingsIntegrations'));
-    const credentialNotice = context.app.secretStorage ? {
+    const secretStorage = getSecretStorage(context.app);
+    const credentialNotice = secretStorage ? {
         en: 'Keys and tokens are kept on this device in Obsidian’s secure storage (Secret Storage). On another device, you may need to reconnect your services.',
         ru: 'Ключи и токены хранятся на этом устройстве в защищённом хранилище Obsidian (Secret Storage). На другом устройстве может потребоваться повторное подключение сервисов.',
         uk: 'Ключі й токени зберігаються на цьому пристрої в захищеному сховищі Obsidian (Secret Storage). На іншому пристрої може знадобитися повторне підключення сервісів.',
@@ -214,7 +216,7 @@ export function renderIntegrationsSection(context: SettingsSectionContext, conta
         'zh-CN': '此版本将凭据保存在插件设置中。Secret Storage 需要 Obsidian 1.11.4 或更高版本。',
     };
     const notice = container.createDiv({ cls: 'lorebase-credential-storage-notice' });
-    setIcon(notice.createSpan({ attr: { 'aria-hidden': 'true' } }), context.app.secretStorage ? 'shield-check' : 'info');
+    setIcon(notice.createSpan({ attr: { 'aria-hidden': 'true' } }), secretStorage ? 'shield-check' : 'info');
     notice.createDiv({ text: credentialNotice[context.plugin.settings.language] });
     const navigation = container.createDiv({ cls: 'lorebase-settings-subnav' });
     const options: Array<{ value: IntegrationsPane; label: string; icon: string }> = [

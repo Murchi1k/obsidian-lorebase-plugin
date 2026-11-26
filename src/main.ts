@@ -1,6 +1,6 @@
 import { configureOnlineExtras, onOnlineExtrasChange, readOnlineExtrasPreference } from './services/onlineExtras';
 import { StatisticsDeletionJournal } from './services/media/statisticsDeletions';
-import { CredentialStore } from './services/CredentialStore';
+import { CredentialStore, getSecretStorage } from './services/CredentialStore';
 import { TraktSyncService } from './services/TraktSyncService';
 import { PlayStationSyncService } from './services/PlayStationSyncService';
 import { createPlayStationProgressPreference } from './components/PlayStationProgressPreference';
@@ -109,7 +109,7 @@ export default class LorebasePlugin extends Plugin {
     private credentialStore?: CredentialStore;
 
     async saveData(data: unknown): Promise<void> {
-        this.credentialStore ??= new CredentialStore(this.app.secretStorage);
+        this.credentialStore ??= new CredentialStore(getSecretStorage(this.app));
         await this.credentialStore.save(data, snapshot => super.saveData(snapshot));
     }
     private traktSyncService: TraktSyncService | null = null;
@@ -468,7 +468,8 @@ export default class LorebasePlugin extends Plugin {
      */
     async loadSettings(): Promise<void> {
         let removedProviderSettings = false;
-        this.credentialStore ??= new CredentialStore(this.app.secretStorage);
+        const secretStorage = getSecretStorage(this.app);
+        this.credentialStore ??= new CredentialStore(secretStorage);
         const loaded: unknown = this.credentialStore.restore(await this.loadData());
         this.existingInstall = this.isSettingsRecord(loaded) && Object.keys(loaded).length > 0;
         const sanitized = this.isSettingsRecord(loaded) ? { ...loaded } : {};
@@ -926,7 +927,7 @@ export default class LorebasePlugin extends Plugin {
             this.settings.manga.savedViews.forEach(view => replaceWorkTypeInView(view.state, from, to));
         }
         const typeFiltersMigrated = beforeTypeFilters !== JSON.stringify([this.settings.manga.viewState, this.settings.manga.savedViews]);
-        if (templatesMigrated || settingsMigrated || kitsuMigrated || gameFiltersMigrated || removedProviderSettings || typeFiltersMigrated || comicsTypeMigrated || editorMigrated || this.app.secretStorage) {
+        if (templatesMigrated || settingsMigrated || kitsuMigrated || gameFiltersMigrated || removedProviderSettings || typeFiltersMigrated || comicsTypeMigrated || editorMigrated || secretStorage) {
             await this.saveData(this.settings);
         }
     }

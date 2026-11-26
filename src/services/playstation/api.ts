@@ -1,6 +1,5 @@
-import { requestUrl } from 'obsidian';
-import { type App } from 'obsidian';
-import { request as httpsRequest } from 'https';
+import { Platform, requestUrl, type App } from 'obsidian';
+import { getSecretStorage } from '../CredentialStore';
 import { checkPsnAbort, durationMinutes, normalizeTrophySet, object, rows, text, type PlayStationEntry, type PlayStationSyncSettings, type PlayStationTracking } from './types';
 import { PsnApiError, type PsnAuthStage } from './errors';
 
@@ -17,9 +16,10 @@ export const psnRequest: PsnRequest = async (url, signal, options = {}) => {
     // requestUrl follows redirects. The authorization endpoint redirects to a custom app
     // scheme; HTTPS is needed here to read its Location header without following it.
     if (options.redirect === false) {
-        if (typeof process === 'undefined' || !process.versions?.node) throw new Error('PSN_DESKTOP_AUTH');
+        if (!Platform.isDesktop) throw new Error('PSN_DESKTOP_AUTH');
+        const https = require('https') as typeof import('https');
         return await new Promise<PsnResponse>((resolve, reject) => {
-            const req = httpsRequest(url, { method: options.method ?? 'GET', headers: options.headers }, response => {
+            const req = https.request(url, { method: options.method ?? 'GET', headers: options.headers }, response => {
                 response.resume();
                 resolve({ status: response.statusCode ?? 0, headers: Object.fromEntries(Object.entries(response.headers).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value ?? ''])), data: null });
             });
@@ -62,7 +62,11 @@ export class PlayStationApi {
     private playedCache?: { secretId: string; until: number; entries: PlayStationEntry[] };
     constructor(private app: Pick<App, 'secretStorage'>, private config: () => PlayStationSyncSettings,
         private persist: () => Promise<void>, private request: PsnRequest = psnRequest) {}
-    private storage() { if (!this.app.secretStorage) throw new Error('PSN_SECRET_STORAGE'); return this.app.secretStorage; }
+    private storage() {
+        const storage = getSecretStorage(this.app);
+        if (!storage) throw new Error('PSN_SECRET_STORAGE');
+        return storage;
+    }
     private async authStep<T>(stage: PsnAuthStage, run: () => Promise<T>): Promise<T> {
         try { return await run(); }
         catch (error) {
@@ -71,7 +75,7 @@ export class PlayStationApi {
             throw new PsnApiError(code, stage, error instanceof PsnApiError ? error.status : undefined);
         }
     }
-    private checked(response: PsnResponse): Record<string, any> {
+    private checked(response: PsnResponse): Record<string, unknown> {
         if (response.status === 401) throw new PsnApiError('PSN_CONNECT_FIRST', undefined, response.status);
         if (response.status === 403) throw new PsnApiError('PSN_PRIVATE', undefined, response.status);
         if (response.status === 429) throw new PsnApiError('PSN_RATE_LIMIT', undefined, response.status);
@@ -145,7 +149,7 @@ export class PlayStationApi {
         await this.refreshing; checkPsnAbort(signal);
         if (this.config() !== config || config.secretId !== secretId) throw new Error('PSN_ACCOUNT_CHANGED');
     }
-    private async get(url: string, signal: AbortSignal): Promise<Record<string, any>> {
+    private async get(url: string, signal: AbortSignal): Promise<Record<string, unknown>> {
         await this.ready(signal); const config = this.config(), secretId = config.secretId;
         const graphql = new URL(url).pathname === '/api/graphql/v1/op';
         const stage: PsnAuthStage = graphql ? 'purchases' : url.includes('/gamelist/') ? 'played' : 'trophies';
@@ -161,15 +165,16 @@ export class PlayStationApi {
             return this.checked(response);
         });
     }
-    private async pages(url: string, key: string, signal: AbortSignal): Promise<Record<string, any>[]> {
-        const entries: Record<string, any>[] = []; let offset = 0;
+    private async pages(url: string, key: string, signal: AbortSignal): Promise<Record<string, unknown>[]> {
+        const entries: Record<string, unknown>[] = []; let offset = 0;
         for (;;) {
             checkPsnAbort(signal); const target = new URL(url);
             target.searchParams.set('limit', '100'); target.searchParams.set('offset', String(offset));
             const data = await this.get(target.toString(), signal);
             if (!Array.isArray(data[key])) throw new Error('PSN_RESPONSE');
             const page = rows(data[key]); entries.push(...page);
-            if (!page.length || (Number.isFinite(data.totalItemCount) && entries.length >= data.totalItemCount)) break;
+            const total = data.totalItemCount;
+            if (!page.length || (typeof total === 'number' && Number.isFinite(total) && entries.length >= total)) break;
             const next = Number(data.nextOffset);
             if (Number.isFinite(next) && next > offset) offset = next;
             else if (page.length < 100) break;
@@ -190,7 +195,7 @@ export class PlayStationApi {
         }));
         // The played-game endpoint covers PS4/PS5. Legacy trophy lists identify older
         // games by their trophy-set IDs; never guess a CUSA/PPSA link from a title.
-        let legacy: Record<string, any>[] = [];
+        let legacy: Record<string, unknown>[] = [];
         try { legacy = await this.pages(API + '/trophy/v1/users/me/trophyTitles', 'trophyTitles', signal); }
         catch (error) {
             checkPsnAbort(signal);
@@ -255,7 +260,7 @@ export class PlayStationApi {
                 const sets = rows(title.trophyTitles).map(normalizeTrophySet);
                 if (sets.some(set => !set)) throw new Error('PSN_RESPONSE');
                 result.trophySets = sets.filter((set): set is NonNullable<typeof set> => Boolean(set));
-            } catch (error) { checkPsnAbort(signal); if (this.config().accountId !== previous.accountId) throw new Error('PSN_ACCOUNT_CHANGED'); result.partial = true; }
+            } catch { checkPsnAbort(signal); if (this.config().accountId !== previous.accountId) throw new Error('PSN_ACCOUNT_CHANGED'); result.partial = true; }
         }
         checkPsnAbort(signal);
         if (this.config() !== config || config.secretId !== secretId) throw new Error('PSN_ACCOUNT_CHANGED');

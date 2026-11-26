@@ -21,11 +21,12 @@ describe('PlayStation transport in the Obsidian plugin loader', () => {
             return req;
         });
         const exports = {}, module = { exports };
+        const platform = { isDesktop: true };
         const context = createContext({ module, exports, process: { versions: { node: 'test' } },
             AbortController, DOMException, URL, URLSearchParams, setTimeout, clearTimeout,
             require: (name: string) => {
                 if (name === 'https') return { request };
-                if (name === 'obsidian') return { requestUrl: () => { throw Error('Unexpected requestUrl call'); } };
+                if (name === 'obsidian') return { Platform: platform, requestUrl: () => { throw Error('Unexpected requestUrl call'); } };
                 throw Error('Unexpected module ' + name);
             } });
         new Script(compiled).runInContext(context);
@@ -33,5 +34,8 @@ describe('PlayStation transport in the Obsidian plugin loader', () => {
             new AbortController().signal, { redirect: false, headers: { Cookie: 'npsso=test-placeholder' } });
         expect(result).toMatchObject({ status: 302, headers: { location: 'com.scee.psxandroid.scecompcall://redirect/?code=test-code' } });
         expect(request).toHaveBeenCalledOnce(); expect(sent).toHaveBeenCalledOnce(); expect(resume).toHaveBeenCalledOnce();
+        platform.isDesktop = false;
+        await expect((module.exports as any).psnRequest('https://example.test/auth', new AbortController().signal, { redirect: false })).rejects.toThrow('PSN_DESKTOP_AUTH');
+        expect(request).toHaveBeenCalledOnce();
     });
 });

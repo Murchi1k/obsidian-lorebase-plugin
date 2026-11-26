@@ -36,7 +36,7 @@ export class PlayStationMatchModal extends Modal {
         const message = root.createDiv({ cls: 'lorebase-psn-dialog-message', attr: { role: 'status', 'aria-live': 'polite' } });
         let results: HTMLElement | undefined;
         const paint = () => {
-            confirm.disabled = !this.draft.targetChosen || !Boolean(this.draft.path || this.draft.source || this.draft.psnOnly);
+            confirm.disabled = !this.draft.targetChosen || !(this.draft.path || this.draft.source || this.draft.psnOnly);
             if (!results) return;
             results.empty();
             for (const source of this.candidates) {

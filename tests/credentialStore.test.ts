@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CredentialStore } from '../src/services/CredentialStore';
+import * as obsidian from 'obsidian';
+import { CredentialStore, getSecretStorage } from '../src/services/CredentialStore';
 import { DEFAULT_SETTINGS } from '../src/constants';
 
 function storage() {
@@ -8,6 +9,18 @@ function storage() {
 }
 
 describe('CredentialStore', () => {
+    it('only reads Secret Storage on compatible Obsidian versions', () => {
+        const version = vi.spyOn(obsidian, 'requireApiVersion').mockReturnValue(false);
+        const getStorage = vi.fn(storage);
+        const app = Object.defineProperty({}, 'secretStorage', { get: getStorage }) as Pick<obsidian.App, 'secretStorage'>;
+        try {
+            expect(getSecretStorage(app)).toBeUndefined();
+            expect(getStorage).not.toHaveBeenCalled();
+            version.mockReturnValue(true);
+            expect(getSecretStorage(app)).toBe(getStorage.mock.results[0].value);
+            expect(version).toHaveBeenLastCalledWith('1.11.4');
+        } finally { version.mockRestore(); }
+    });
     it('migrates legacy plaintext without modifying runtime values and restores them on next load', async () => {
         const secrets = storage(); const store = new CredentialStore(secrets);
         const settings = structuredClone(DEFAULT_SETTINGS);

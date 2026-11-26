@@ -1,7 +1,15 @@
-import type { SecretStorage } from 'obsidian';
+import { requireApiVersion, type App } from 'obsidian';
 
 type RecordValue = Record<string, unknown>;
-type Storage = Pick<SecretStorage, 'getSecret' | 'setSecret'>;
+type Storage = {
+    getSecret(id: string): string | null;
+    setSecret(id: string, secret: string): void;
+};
+
+export function getSecretStorage(app: Pick<App, 'secretStorage'>): Storage | undefined {
+    if (!requireApiVersion('1.11.4')) return;
+    return app.secretStorage;
+}
 const record = (value: unknown): value is RecordValue => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const fixedPaths = ['steamSync.apiKey', 'anilistSync.accessToken', 'traktSync.accessToken', 'traktSync.refreshToken', 'music.lastfmApiKey'];
 
@@ -67,7 +75,7 @@ export class CredentialStore {
                     const previous = refs[path];
                     if (secret) {
                         if (!previous || this.storage.getSecret(previous) !== secret) {
-                            const id = 'lorebase-credential-' + globalThis.crypto.randomUUID();
+                            const id = 'lorebase-credential-' + crypto.randomUUID();
                             this.storage.setSecret(id, secret); created.push(id);
                             if (this.storage.getSecret(id) !== secret) throw new Error('Credential storage verification failed.');
                             refs[path] = id;

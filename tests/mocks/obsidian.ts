@@ -1,4 +1,5 @@
 export class App {}
+export function requireApiVersion(_version: string): boolean { return true; }
 
 
 export class TFile {
