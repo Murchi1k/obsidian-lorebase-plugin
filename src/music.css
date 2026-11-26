@@ -92,7 +92,6 @@ button.lorebase-music-search-result { display: flex; gap: 14px; text-align: left
 @media (max-width: 700px) {
     .lorebase-music-edit-modal { width: 100%; max-width: 100%; }
     .lorebase-music-edit-modal .lorebase-editmode-grid { display: flex; flex-direction: column; }
-    .lorebase-music-edit-modal .lorebase-editmode-column { display: contents; }
     .lorebase-music-edit-modal .lorebase-editmode-grid { overflow-y: auto; }
     .lorebase-music-edit-modal .lorebase-editmode-panel { padding: 12px; }
     .lorebase-music-editor-art { max-width: 220px; margin-inline: auto; }
@@ -104,7 +103,7 @@ button.lorebase-music-search-result { display: flex; gap: 14px; text-align: left
     .lorebase-music-edit-modal .lorebase-editmode-header h2 { margin: 0; font-size: 18px; }
 }
 
-.lorebase-music-note .metadata-property[data-property-key="tracks"] { display: none !important; }
+.lorebase-music-note .metadata-container .metadata-property[data-property-key="tracks"] { display: none; }
 
 /* A quiet tracklist in the note body, matching the density of a native list. */
 details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; border: 0; background: transparent; box-shadow: none; }
@@ -293,7 +292,7 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-search-modal .lorebase-select-card-image { aspect-ratio: 1; height: auto; }
 .lorebase-music-search-modal .lorebase-select-card-image img { width: 100%; height: 100%; object-fit: cover; }
 .lorebase-music-search-modal .lorebase-select-search-controls { flex-wrap: wrap; gap: 10px; }
-.lorebase-music-search-modal [hidden] { display: none !important; }
+.lorebase-music-search-modal :is(button, .lorebase-select-pagination)[hidden] { display: none; }
 .lorebase-music-manual .lorebase-manual-cover-preview { aspect-ratio: 1; min-height: 0; }
 .lorebase-music-manual .lorebase-manual-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
 @media (max-width: 520px) { .modal.lorebase-music-search-modal { width: 100vw; max-width: 100vw; } }
@@ -311,7 +310,7 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-search-modal .lorebase-select-search-controls { display: flex; flex-direction: row; justify-content: space-between; }
 .lorebase-music-search-kind { width: 150px; flex: 0 0 auto; }
 .lorebase-music-artist-options { max-height: 220px; overflow-y: auto; }
-.lorebase-music-artist-options [hidden] { display: none !important; }
+.lorebase-music-artist-options :is(button, div)[hidden] { display: none; }
 .lorebase-music-edit-modal .lorebase-editmode-genres-field > .lorebase-editmode-chip-row { grid-column: 1; grid-row: 1; }
 .lorebase-music-edit-modal .lorebase-editmode-genres-field > .lorebase-editmode-title-meta-actions { grid-column: 2; grid-row: 1; }
 .lorebase-music-edit-modal .lorebase-editmode-genres-field > .lorebase-music-field { grid-column: 1 / -1; grid-row: 2; }
@@ -462,7 +461,7 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-discography-release > button { margin-top: auto; box-shadow: none; font-size: 11px; border-radius: 6px; min-height: 30px; }
 .lorebase-discography-release.is-in-library > button { color: var(--color-green); background: color-mix(in srgb, var(--color-green) 10%, var(--background-secondary)); opacity: 1; }
 .lorebase-discography-footer { text-align: center; }
-.lorebase-artist-modal [hidden] { display: none !important; }
+.lorebase-artist-modal :is(button, div)[hidden] { display: none; }
 @media (max-width: 520px) {
     .lorebase-music-edit-modal .lorebase-music-track-heading { grid-template-columns: 12px 24px minmax(0, 1fr) auto 22px 22px; gap: 4px; padding: 0 4px; }
     .lorebase-music-edit-modal .lorebase-music-tracklist-tools button { min-height: 36px; }

@@ -18,17 +18,18 @@ export function renderMediaSourcePanel(
     const column = root.querySelector<HTMLElement>('.lorebase-editmode-column-right');
     if (!column) return;
 
-    const panel = root.ownerDocument.createElement('div');
-    panel.className = 'lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-source-panel';
+    const panel = column.createDiv({ cls: 'lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-source-panel' });
     panel.dataset.mobilePane = 'more';
     const titleRow = panel.createDiv({ cls: 'lorebase-editmode-panel-title-row' });
     titleRow.createEl('h3', { cls: 'lorebase-editmode-panel-title', text: t('editSource') });
     const compactRow = panel.createDiv({ cls: 'lorebase-source-compact-row' });
+    const primary = compactRow.createDiv({ cls: 'lorebase-source-origin' });
     const state = compactRow.createDiv({ cls: 'lorebase-source-state' });
     const actions = compactRow.createDiv({ cls: 'lorebase-source-actions' });
     const urlRow = showUrl ? panel.createDiv({ cls: 'lorebase-source-url-row' }) : null;
 
     const render = (): void => {
+        primary.empty();
         state.empty();
         actions.empty();
         urlRow?.empty();
@@ -38,8 +39,8 @@ export function renderMediaSourcePanel(
         const provider = identity.provider;
         const id = identity.id;
         const connected = Boolean(provider && id);
+        primary.hidden = !origin;
         if (origin) {
-            const primary = state.createDiv({ cls: 'lorebase-source-origin' });
             primary.createSpan({ cls: 'lorebase-source-role', text: pt('primarySource') });
             primary.createSpan({ cls: 'lorebase-source-identity', text: origin.provider === 'playstation' ? 'PlayStation' : 'Trakt' });
             primary.createSpan({ cls: 'lorebase-source-origin-id', text: origin.id, attr: { title: origin.id } });

@@ -50,8 +50,8 @@
 .lorebase-psn-steam-progress[open] > div { margin-top: 12px; }
 .lorebase-source-origin, .lorebase-source-catalog { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .lorebase-source-panel.has-sync-source .lorebase-source-compact-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 9px 8px; }
-.lorebase-source-panel.has-sync-source .lorebase-source-state { display: contents; }
 .lorebase-source-panel.has-sync-source .lorebase-source-actions { grid-column: 2; grid-row: 2; }
+.lorebase-source-origin[hidden] { display: none; }
 .lorebase-source-origin { grid-column: 1 / -1; flex-wrap: nowrap; min-width: 0; }
 .lorebase-source-origin .lorebase-source-role, .lorebase-source-origin .lorebase-source-identity { flex: 0 0 auto; }
 .lorebase-source-origin .lorebase-source-origin-id { flex: 0 1 auto; max-width: none; }

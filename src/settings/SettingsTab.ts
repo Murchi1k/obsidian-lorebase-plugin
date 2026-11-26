@@ -152,7 +152,34 @@ export class LorebaseSettingTab extends PluginSettingTab {
             this.renderTabbedSections(contentEl, sections);
         }
 
+        this.trackTextControls(contentEl);
         this.restoreScrollState(scrollState);
+    }
+
+    private trackTextControls(root: HTMLElement): void {
+        const field = ".setting-item-control > :is(input[type=text], input[type=password], textarea, .lorebase-provider-credentials)";
+        const refresh = (row: Element): void => { row.classList.toggle("has-lorebase-text-control", !!row.querySelector(field)); };
+        root.querySelectorAll(".setting-item").forEach(refresh);
+
+        const Observer = root.ownerDocument.defaultView?.MutationObserver;
+        if (!Observer) return;
+        const observer = new Observer(records => {
+            const rows = new Set<Element>();
+            for (const record of records) {
+                const target = record.target as Element;
+                const row = target.closest(".setting-item");
+                if (row) rows.add(row);
+                for (const node of Array.from(record.addedNodes)) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    const element = node as Element;
+                    if (element.matches(".setting-item")) rows.add(element);
+                    element.querySelectorAll(".setting-item").forEach(child => rows.add(child));
+                }
+            }
+            rows.forEach(refresh);
+        });
+        observer.observe(root, { childList: true, subtree: true });
+        this.renderLifetime.signal.addEventListener("abort", () => observer.disconnect(), { once: true });
     }
 
     hide(): void {

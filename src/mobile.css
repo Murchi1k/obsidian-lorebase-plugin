@@ -61,7 +61,7 @@
         top: calc(12px + var(--lb-phone-top));
         right: 12px;
     }
-    .modal.has-mobile-inline-close > :is(.modal-header, .modal-header-button, .modal-close-button) { display: none !important; }
+    .modal[class*="lorebase-"].has-mobile-inline-close > :is(.modal-header, .modal-header-button, .modal-close-button) { display: none; }
     .modal[class*="lorebase-"] .has-mobile-close {
         position: relative;
         min-height: 44px;
@@ -100,7 +100,7 @@
         overflow-wrap: anywhere;
     }
     :is(.lorebase-settings, .lorebase-editmode-root, .lorebase-add-workspace) [hidden] {
-        display: none !important;
+        display: none;
     }
 
     /* Library: search and two compact rows of icons. Accessible names stay on buttons. */
@@ -212,20 +212,25 @@
         height: auto;
         min-height: 0;
         min-width: 0;
-        padding: 12px;
-        gap: 12px;
+        padding: 12px 12px 0;
+        gap: 0;
         overflow-y: auto;
         overflow-x: hidden;
         overscroll-behavior: contain;
         scroll-padding-block: 12px;
     }
     .lorebase-editmode-root .lorebase-editmode-column {
-        display: contents;
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        min-height: 0;
+        gap: 0;
         overflow: visible;
         padding: 0;
         container-type: normal;
     }
-    .lorebase-editmode-root .lorebase-editmode-panel { flex: 0 0 auto; min-width: 0; margin: 0; padding: 12px; }
+    .lorebase-editmode-root .lorebase-editmode-column > * { margin-block-end: 12px; }
+    .lorebase-editmode-root .lorebase-editmode-panel { flex: 0 0 auto; min-width: 0; margin: 0 0 12px; padding: 12px; }
     .lorebase-editmode-root .lorebase-editmode-view[data-mobile-tab="general"] [data-mobile-pane]:not([data-mobile-pane="general"]),
     .lorebase-editmode-root .lorebase-editmode-view[data-mobile-tab="personal"] [data-mobile-pane]:not([data-mobile-pane="personal"]),
     .lorebase-editmode-root .lorebase-editmode-view[data-mobile-tab="more"] [data-mobile-pane]:not([data-mobile-pane="more"]) { display: none; }
@@ -236,7 +241,7 @@
         width: min(100%, 240px);
         min-height: 0;
         height: auto;
-        margin: 0 auto;
+        margin: 0 auto 12px;
         padding: 10px;
         align-items: stretch;
     }
@@ -337,7 +342,7 @@
     .lorebase-settings .setting-item-info { min-width: 0; }
     .lorebase-settings .setting-item-name { line-height: 1.4; overflow-wrap: anywhere; }
     .lorebase-settings .setting-item-control { min-width: 0; max-width: 100%; }
-    .lorebase-settings .setting-item:has(.setting-item-control > :is(input[type="text"], input[type="password"], textarea, .lorebase-provider-credentials)) { flex-direction: column; align-items: stretch; }
+    .lorebase-settings .setting-item.has-lorebase-text-control { flex-direction: column; align-items: stretch; }
     .lorebase-settings .setting-item-control > :is(input[type="text"], input[type="password"], textarea) { width: 100%; }
     .lorebase-settings :is(.lorebase-settings-choices button, .lorebase-settings-dropdown-btn) { min-height: 40px; white-space: normal; }
     .lorebase-settings .lorebase-card-mini-viewport { height: 310px; min-height: 0; max-width: 100%; padding: 10px; }

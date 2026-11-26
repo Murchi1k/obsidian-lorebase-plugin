@@ -163,8 +163,9 @@
 .lorebase-release-installed-dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .lorebase-release-history-heading.is-installed h3 { color: var(--release-ink); }
 
-.lorebase-release-target-highlight {
-    outline: 2px solid var(--lorebase-accent, var(--text-accent)) !important;
+.lorebase-release-target-highlight,
+:is(.lorebase-settings, .lorebase-view) .lorebase-release-target-highlight {
+    outline: 2px solid var(--lorebase-accent, var(--text-accent));
     outline-offset: 4px;
     border-radius: 8px;
     box-shadow: 0 0 0 6px color-mix(in srgb, var(--lorebase-accent, var(--text-accent)) 10%, transparent);

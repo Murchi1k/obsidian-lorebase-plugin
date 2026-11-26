@@ -7,7 +7,7 @@
 .lorebase-custom-groups button { font-family: inherit; box-shadow: none; cursor: pointer; }
 .lorebase-custom-groups button:disabled { cursor: default; opacity: .4; }
 .lorebase-custom-groups button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
-.lorebase-custom-groups [hidden] { display: none !important; }
+.lorebase-custom-groups [hidden] { display: none; }
 .lorebase-groups-header { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; padding: 0 0 20px; }
 .lorebase-groups-header-copy { flex: 1; min-width: 0; }
 .lorebase-groups-header-icon { display: grid; width: 38px; height: 38px; flex: 0 0 38px; place-items: center; border: 1px solid var(--background-modifier-border); border-radius: 10px; color: var(--text-muted); background: var(--background-secondary); }

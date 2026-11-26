@@ -45,14 +45,15 @@ export function buildTitlePartEditor(compact = false): string {
         <div class="lorebase-part-poster-placeholder" data-role="part-poster-placeholder"><span data-role="part-poster-icon"></span><span>${copy.cover}</span></div>
     </div>`;
     const posterEdit = `<button type="button" class="lorebase-part-artwork-change" data-action="edit-part-poster" aria-expanded="false"><span data-role="part-poster-edit-icon"></span>${copy.change}</button>`;
-    const name = `<label class="lorebase-part-field is-wide"><span>${copy.name}</span><input class="lorebase-editmode-input" data-field="part-title" type="text" /></label>`;
-    const kind = `<div class="lorebase-part-field"><span>${t('editFormat')}</span><div class="lorebase-editmode-dropdown" data-field="part-kind"></div></div>`;
-    const year = `<label class="lorebase-part-field"><span>${copy.year}</span><input class="lorebase-editmode-input" data-field="part-year" type="number" min="1" inputmode="numeric" /></label>`;
+    const name = `<label class="lorebase-part-field lorebase-part-name"><span>${copy.name}</span><input class="lorebase-editmode-input" data-field="part-title" type="text" /></label>`;
+    const kind = `<div class="lorebase-part-field lorebase-part-kind"><span>${t('editFormat')}</span><div class="lorebase-editmode-dropdown" data-field="part-kind"></div></div>`;
+    const year = `<label class="lorebase-part-field lorebase-part-year"><span>${copy.year}</span><input class="lorebase-editmode-input" data-field="part-year" type="number" min="1" inputmode="numeric" /></label>`;
     const increment = `<button type="button" data-action="episode-inc" aria-label="${t('editEpisodeInc')}">+</button>`;
-    const stepper = `<div class="lorebase-part-stepper" role="group" aria-label="${t('editEpisodeCurrent')}">
+    const counter = `
         <button type="button" data-action="episode-dec" aria-label="${t('editEpisodeCurrent')}: −1">−</button>
-        <input data-field="part-episode-current" type="number" min="0" inputmode="numeric" aria-label="${t('editEpisodeCurrent')}" />
-        ${compact ? '' : increment}
+        <input data-field="part-episode-current" type="number" min="0" inputmode="numeric" aria-label="${t('editEpisodeCurrent')}" />`;
+    const stepper = compact ? counter : `<div class="lorebase-part-stepper" role="group" aria-label="${t('editEpisodeCurrent')}">
+        ${counter}${increment}
     </div>`;
     const total = `<input class="lorebase-editmode-input" data-field="part-episode-total" type="number" min="0" inputmode="numeric" placeholder="?" aria-label="${t('editEpisodeTotal')}" />`;
     const status = '<div class="lorebase-part-live-status" data-role="part-status-segments"></div>';
@@ -76,31 +77,29 @@ export function buildTitlePartEditor(compact = false): string {
                 <div class="lorebase-part-artwork">${poster}
                     <button type="button" class="lorebase-part-artwork-change" data-action="edit-part-poster" aria-expanded="false" aria-label="${watchCopy().poster}" title="${copy.cover}"><span data-role="part-poster-edit-icon" aria-hidden="true"></span></button>
                 </div>
-                <div class="lorebase-title-part-content">
-                    <div class="lorebase-title-part-heading">
-                        <div class="lorebase-title-part-identity">
-                            <span class="lorebase-title-part-position" data-role="part-position"></span>
-                            <input class="lorebase-editmode-input lorebase-title-part-title" data-field="part-title" data-role="part-card-title" type="text" aria-label="${copy.name}" placeholder="${copy.name}" />
-                        </div>
-                        <div class="lorebase-title-part-field lorebase-title-part-rating">
-                            <span class="lorebase-title-part-label">${card.partRating}</span><div data-role="part-rating"></div>
-                        </div>
+                <div class="lorebase-title-part-heading">
+                    <div class="lorebase-title-part-identity">
+                        <span class="lorebase-title-part-position" data-role="part-position"></span>
+                        <input class="lorebase-editmode-input lorebase-title-part-title" data-field="part-title" data-role="part-card-title" type="text" aria-label="${copy.name}" placeholder="${copy.name}" />
                     </div>
-                    <div class="lorebase-title-part-tracking">
-                        ${status}
-                        <div class="lorebase-title-part-progress">
-                            <div class="lorebase-title-part-progress-heading"><span data-role="part-card-watched"></span><strong data-role="part-card-percent"></strong></div>
-                            <progress class="lorebase-watch-progress-bar" data-role="part-card-progress" max="100" aria-label="${watchCopy().progress}"></progress>
-                        </div>
-                        <div class="lorebase-title-part-repeats">${repeats}</div>
+                    <div class="lorebase-title-part-field lorebase-title-part-rating">
+                        <span class="lorebase-title-part-label">${card.partRating}</span><div data-role="part-rating"></div>
                     </div>
-                    <div class="lorebase-title-part-metadata">
-                        <div class="lorebase-title-part-field">${caption('monitor', t('editFormat'))}<div data-field="part-kind"></div></div>
-                        <label class="lorebase-title-part-field">${caption('calendar-days', t('templateFieldYear'))}<input class="lorebase-editmode-input" data-field="part-year" type="number" min="1" inputmode="numeric" placeholder="—" /></label>
-                        <div class="lorebase-title-part-field lorebase-title-part-episodes-field">
-                            ${caption('layers', t('editEpisodes'))}
-                            <div class="lorebase-title-part-episode-count" role="group" aria-label="${copy.episodes}">${stepper}<span class="lorebase-part-episode-divider" aria-hidden="true">/</span>${total}${increment}</div>
-                        </div>
+                </div>
+                <div class="lorebase-title-part-tracking">
+                    ${status}
+                    <div class="lorebase-title-part-progress">
+                        <div class="lorebase-title-part-progress-heading"><span data-role="part-card-watched"></span><strong data-role="part-card-percent"></strong></div>
+                        <progress class="lorebase-watch-progress-bar" data-role="part-card-progress" max="100" aria-label="${watchCopy().progress}"></progress>
+                    </div>
+                    <div class="lorebase-title-part-repeats">${repeats}</div>
+                </div>
+                <div class="lorebase-title-part-metadata">
+                    <div class="lorebase-title-part-field">${caption('monitor', t('editFormat'))}<div data-field="part-kind"></div></div>
+                    <label class="lorebase-title-part-field">${caption('calendar-days', t('templateFieldYear'))}<input class="lorebase-editmode-input" data-field="part-year" type="number" min="1" inputmode="numeric" placeholder="—" /></label>
+                    <div class="lorebase-title-part-field lorebase-title-part-episodes-field">
+                        ${caption('layers', t('editEpisodes'))}
+                        <div class="lorebase-title-part-episode-count" role="group" aria-label="${copy.episodes}">${stepper}<span class="lorebase-part-episode-divider" aria-hidden="true">/</span>${total}${increment}</div>
                     </div>
                 </div>
                 ${posterSource}
@@ -111,20 +110,18 @@ export function buildTitlePartEditor(compact = false): string {
     return `<div class="lorebase-part-editor" data-role="part-editor" role="tabpanel">
         <div class="lorebase-part-details">
             <div class="lorebase-part-artwork">${poster}${posterEdit}</div>
-            <div class="lorebase-part-fields">
-                ${name}${kind}${year}
-                <div class="lorebase-part-tracking is-wide">
-                    <div class="lorebase-part-field"><span>${copy.episodes}</span>
-                        <div class="lorebase-part-episode-inputs">
-                            ${stepper}
-                            <span class="lorebase-part-episode-divider" aria-hidden="true">/</span>
-                            ${total}
-                        </div>
+            ${name}${kind}${year}
+            <div class="lorebase-part-tracking is-wide">
+                <div class="lorebase-part-field"><span>${copy.episodes}</span>
+                    <div class="lorebase-part-episode-inputs">
+                        ${stepper}
+                        <span class="lorebase-part-episode-divider" aria-hidden="true">/</span>
+                        ${total}
                     </div>
-                    <div class="lorebase-part-field"><span>${t('editStatus')}</span>${status}</div>
                 </div>
-                <div class="lorebase-part-utilities is-wide">${defaults}${repeats}</div>
+                <div class="lorebase-part-field"><span>${t('editStatus')}</span>${status}</div>
             </div>
+            <div class="lorebase-part-utilities is-wide">${defaults}${repeats}</div>
             ${posterSource}
         </div>
         ${episodes}

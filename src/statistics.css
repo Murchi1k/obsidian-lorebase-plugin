@@ -1,9 +1,9 @@
 .modal.lorebase-dashboard-container { width:min(1440px,95vw); max-width:97vw; height:94vh; max-height:96vh; padding:0; border:1px solid var(--background-modifier-border); border-radius:16px; background:var(--background-primary); overflow:hidden; }
 .modal.lorebase-dashboard-container.is-wide { width:min(1700px,97vw); }
-.modal.lorebase-dashboard-container .modal-close-button { display:none!important; }
+.modal.lorebase-dashboard-container .modal-close-button { display:none; }
 .lorebase-dashboard-container .modal-content.lorebase-dashboard { display:flex; flex-direction:column; position:relative; height:100%; margin:0; padding:0; overflow:hidden; color:var(--text-normal); font:14px var(--font-interface); }
 .lorebase-dashboard *,.lorebase-dashboard *::before,.lorebase-dashboard *::after { box-sizing:border-box; }
-.lorebase-dashboard [hidden] { display:none!important; }
+.lorebase-dashboard :is(.lb-stat-customization, .lb-stat-extra-filters, .lb-stat-layout-toggle, .lb-stat-filter-count, .lb-stat-poster-fallback)[hidden] { display:none; }
 .lorebase-dashboard button,.lorebase-dashboard input { font:inherit; color:var(--text-normal); }
 .lorebase-dashboard button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:36px; height:auto; margin:0; padding:7px 12px; border:1px solid var(--background-modifier-border); border-radius:8px; box-shadow:none; background:transparent; cursor:pointer; }
 .lorebase-dashboard button:hover:not(:disabled) { background:var(--background-modifier-hover); }

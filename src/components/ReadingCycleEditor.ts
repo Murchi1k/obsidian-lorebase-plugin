@@ -112,8 +112,7 @@ export class ReadingCycleEditor {
         this.active = item.filePath;
         const value = this.read(item);
         this.panel.createEl('img', { cls: 'lorebase-reading-cycle-cover', attr: { src: value.imageUrl || DEFAULT_COVER, alt: '', loading: 'lazy' } });
-        const content = this.panel.createDiv({ cls: 'lorebase-reading-cycle-content' });
-        const header = content.createDiv({ cls: 'lorebase-reading-cycle-header' });
+        const header = this.panel.createDiv({ cls: 'lorebase-reading-cycle-header' });
         const identity = header.createDiv({ cls: 'lorebase-reading-cycle-identity' });
         identity.createEl('strong', { text: value.displayName });
         identity.createDiv({ cls: 'lorebase-reading-cycle-authors', text: value.authors.join(', ') });
@@ -146,7 +145,7 @@ export class ReadingCycleEditor {
         menu.addEventListener('keydown', event => {
             if (event.key === 'Escape') { menu.open = false; summary.focus(); }
         });
-        const status = content.createDiv({ cls: 'lorebase-reading-cycle-status' });
+        const status = this.panel.createDiv({ cls: 'lorebase-reading-cycle-status' });
         createLorebaseDropdown(status, getStatusOptionsForMediaType(value.type).map(option => ({ value: option.status, label: option.label })), value.status, next => {
             const patch: ReadingCycleUpdates = { status: next as ReadingItem['status'] };
             if (next === 'completed') {
@@ -162,7 +161,7 @@ export class ReadingCycleEditor {
         const statusIcon = statusButton.createSpan({ cls: 'lorebase-reading-cycle-status-icon', attr: { 'aria-hidden': 'true' } });
         setIcon(statusIcon, appearance.icon);
         statusButton.prepend(statusIcon);
-        const fields = content.createDiv({ cls: 'lorebase-reading-cycle-fields' });
+        const fields = this.panel.createDiv({ cls: 'lorebase-reading-cycle-fields' });
         const field = (host: HTMLElement, key: string, label: string, number: number | null, caption: string): void => {
             const holder = host.createEl('label');
             holder.createSpan({ text: caption });
