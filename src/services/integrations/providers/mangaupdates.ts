@@ -1,4 +1,6 @@
+import { readAlternativeTitles } from '../alternativeTitles';
 import { IntegrationMangaPart, MangaDetails, SearchResult } from '../types';
+import { inferMangaWorkType } from '../../../utils/mangaWorkType';
 import {
     JsonFetcher,
     asObject,
@@ -57,7 +59,9 @@ export async function searchMangaUpdates(
             provider: 'mangaupdates',
             image: details.poster,
             year: details.year,
-            format: 'MangaUpdates',
+            publicationStatus: details.publicationStatus,
+            isAdult: details.isAdult,
+            workType: details.workType, workTypeMedia: 'manga',
         }], false);
     }
 
@@ -167,9 +171,12 @@ function mapSearchResult(entry: unknown): SearchResult | null {
         title,
         subtitle: hitTitle && hitTitle !== title ? hitTitle : '',
         provider: 'mangaupdates',
+        isAdult: getArray(record, 'genres').some(entry => ['adult', 'hentai'].includes(getString(asObject(entry), 'genre').toLowerCase())),
         image: getImageUrl(record),
         year: getString(record, 'year'),
-        format: getString(record, 'type') || 'MangaUpdates',
+        publicationStatus: getString(record, 'status') || getCached(detailsCache, id)?.publicationStatus,
+        workType: getString(record, 'type') ? inferMangaWorkType(getString(record, 'type')) : undefined,
+        workTypeMedia: 'manga',
     };
 }
 
@@ -200,6 +207,9 @@ function mapDetails(item: Record<string, unknown>): MangaDetails | null {
 
     return {
         kind: 'manga',
+        publicationStatus: item.completed === true ? 'completed' : getString(item, 'status'),
+        alternativeTitles: readAlternativeTitles('mangaupdates', item),
+        workType: inferMangaWorkType(getString(item, 'type')),
         name,
         description: getString(item, 'description').trim(),
         poster: getImageUrl(item),
@@ -245,7 +255,14 @@ function readVolumeCount(status: string): string {
 
 function getImageUrl(item: Record<string, unknown> | null): string {
     const urls = getObject(getObject(item, 'image'), 'url');
-    return getString(urls, 'original') || getString(urls, 'thumb');
+    const original = getString(urls, 'original');
+    if (original) return original;
+    const thumbnail = getString(urls, 'thumb');
+    try {
+        const url = new URL(thumbnail);
+        if (url.hostname === 'cdn.mangaupdates.com') url.pathname = url.pathname.replace(/^\/image\/thumb\//, '/image/');
+        return url.toString();
+    } catch { return thumbnail; }
 }
 
 function mangaUpdatesHeaders(includeJsonBody = false): Record<string, string> {

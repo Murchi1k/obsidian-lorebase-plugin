@@ -1,8 +1,13 @@
+import { readAlternativeTitles } from '../alternativeTitles';
 import { IntegrationMangaPart, MangaDetails, SearchResult } from '../types';
+import { inferMangaWorkType } from '../../../utils/mangaWorkType';
 import { JsonFetcher, asObject, getArray, getObject, getString, mapStringList, stripHtml } from './common';
 import { isProviderBlockedError } from '../shared';
+import { MANGADEX_HEADERS } from '../mangadexRequest';
+export { MANGADEX_HEADERS } from '../mangadexRequest';
 
 interface MangaDexOptions {
+    includeAdult?: boolean;
     page?: number;
     pageSize?: number;
 }
@@ -25,13 +30,15 @@ export async function searchMangaDex(
     const page = Math.max(1, options.page ?? 1);
     const pageSize = Math.max(1, options.pageSize ?? 10);
     const url = buildMangaDexUrl('/manga', {
-        title: query,
+        title: query.trim(),
+        'contentRating[]': options.includeAdult ? ['safe', 'suggestive', 'erotica', 'pornographic'] : ['safe', 'suggestive'],
+        'order[relevance]': 'desc',
         limit: String(Math.min(pageSize, 100)),
         offset: String((page - 1) * pageSize),
         'includes[]': ['cover_art', 'author', 'artist'],
     });
 
-    const root = asObject(await fetchJson(url));
+    const root = asObject(await fetchJson(url, MANGADEX_HEADERS));
     const data = getArray(root, 'data');
     const mapped = await Promise.all(data.map(async (entry) => {
         const item = asObject(entry);
@@ -41,11 +48,13 @@ export async function searchMangaDex(
         return {
             id: getString(item, 'id'),
             title,
-            subtitle: getString(attributes, 'status'),
+            publicationStatus: getString(attributes, 'status'),
             provider: 'mangadex' as const,
+            isAdult: ['erotica', 'pornographic'].includes(getString(attributes, 'contentRating')),
             image: cover,
             year: getString(attributes, 'year'),
-            format: 'Manga / MangaDex',
+            workType: getMangaDexWorkType(attributes),
+            workTypeMedia: 'manga' as const,
         };
     }));
     const filtered = mapped.filter((item) => item.id && item.title);
@@ -63,7 +72,7 @@ export async function getMangaDexDetails(fetchJson: JsonFetcher, id: string): Pr
     if (!id) return null;
     const root = asObject(await fetchJson(buildMangaDexUrl(`/manga/${encodeURIComponent(id)}`, {
         'includes[]': ['cover_art', 'author', 'artist'],
-    })));
+    }), MANGADEX_HEADERS));
     const item = getObject(root, 'data');
     if (!item) return null;
 
@@ -78,6 +87,8 @@ export async function getMangaDexDetails(fetchJson: JsonFetcher, id: string): Pr
 
     return {
         kind: 'manga',
+        alternativeTitles: readAlternativeTitles('mangadex', attributes),
+        workType: getMangaDexWorkType(attributes),
         name: title,
         description: stripHtml(pickLocalized(getObject(attributes, 'description'))),
         poster: cover,
@@ -94,10 +105,35 @@ export async function getMangaDexDetails(fetchJson: JsonFetcher, id: string): Pr
     };
 }
 
+/** Use a larger cover only when MangaDex explicitly links to this MangaUpdates record. */
+export async function findMangaDexCoverForMangaUpdates(fetchJson: JsonFetcher, id: string, title: string): Promise<string> {
+    if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0 || !title.trim()) return '';
+    const identities = new Set([id, Number(id).toString(36)]);
+    const root = asObject(await fetchJson(buildMangaDexUrl('/manga', {
+        title: title.trim(), limit: '10', 'order[relevance]': 'desc',
+        'includes[]': ['cover_art'],
+        'contentRating[]': ['safe', 'suggestive', 'erotica', 'pornographic'],
+    }), MANGADEX_HEADERS));
+    const match = getArray(root, 'data').map(asObject).find(item => {
+        let link = getString(getObject(getObject(item, 'attributes'), 'links'), 'mu').trim();
+        if (/^https?:\/\//i.test(link)) {
+            try {
+                const url = new URL(link);
+                if (!['mangaupdates.com', 'www.mangaupdates.com'].includes(url.hostname)) return false;
+                link = url.searchParams.get('id') || url.pathname.match(/^\/series\/([^/]+)/)?.[1] || '';
+            } catch { return false; }
+        }
+        return identities.has(link.toLowerCase());
+    });
+    if (!match) return '';
+    // Store the original in the note; the preview can use a smaller CDN rendition.
+    return (await getCoverUrl(fetchJson, match)).replace(/\.512\.jpg$/i, '');
+}
+
 async function fetchMangaDexAggregate(fetchJson: JsonFetcher, id: string): Promise<IntegrationMangaPart[]> {
     const root = asObject(await fetchJson(buildMangaDexUrl(`/manga/${encodeURIComponent(id)}/aggregate`, {
         'translatedLanguage[]': ['en'],
-    })));
+    }), MANGADEX_HEADERS));
     const volumes = getObject(root, 'volumes');
     if (!volumes) return [];
 
@@ -154,7 +190,7 @@ async function fetchCoverFileName(fetchJson: JsonFetcher, mangaId: string): Prom
             'manga[]': mangaId,
             limit: '12',
             'order[volume]': 'asc',
-        })));
+        }), MANGADEX_HEADERS));
         const covers = getArray(root, 'data')
             .map((entry) => asObject(entry))
             .filter((entry): entry is Record<string, unknown> => Boolean(entry));
@@ -170,6 +206,13 @@ async function fetchCoverFileName(fetchJson: JsonFetcher, mangaId: string): Prom
 
 function buildCoverUrl(mangaId: string, fileName: string): string {
     return `https://uploads.mangadex.org/covers/${mangaId}/${fileName}.512.jpg`;
+}
+
+function getMangaDexWorkType(attributes: Record<string, unknown> | null): string {
+    const formats = getArray(attributes, 'tags').map(raw => getObject(asObject(raw), 'attributes'))
+        .filter(tag => getString(tag, 'group') === 'format')
+        .map(tag => getString(getObject(tag, 'name'), 'en'));
+    return inferMangaWorkType(formats.join(' '), getString(attributes, 'originalLanguage'));
 }
 
 function relationshipNames(relationships: unknown[], type: string): string[] {

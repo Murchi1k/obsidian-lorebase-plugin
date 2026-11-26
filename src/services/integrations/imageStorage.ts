@@ -1,9 +1,14 @@
+import { getTemplateYamlKeys, orderTemplateFrontmatter } from './templateSchema';
 import { App, TFile, TFolder } from 'obsidian';
 import type { IntegrationImageStorageSettings, LorebaseSettings } from '../../types';
-import type { MediaKind } from './types';
-import { sanitizeFileName } from './templateUtils';
+import type { MediaKind, TemplateKind } from './types';
+import { coverImageExtension, createCoverImage } from './imageBinary';
+import { requestWithDeadline } from './requestDeadline';
+import { isOperationCancelled, type BackgroundOperation } from '../BackgroundOperation';
 import { getAllMarkdownFiles } from '../media/serviceUtils';
 import { fetchBinary } from './shared';
+import { applyFrontmatterAliases, parseTemplateFieldAliases, remapFrontmatterUpdates } from '../media/templateFieldAliases';
+import { TEMPLATE_MEDIA_TYPES } from './templatePreferences';
 
 type ImageValueKey = 'Poster' | 'PosterHorizontal' | 'image' | 'ImageHorizontal';
 
@@ -34,7 +39,11 @@ const IMAGE_FIELDS: Record<MediaKind, Array<{ key: ImageValueKey; label: string 
     ],
 };
 
-const FRONTMATTER_IMAGE_FIELDS: Record<MediaKind, Array<{ key: string; label: string }>> = {
+const FRONTMATTER_IMAGE_FIELDS: Record<TemplateKind, Array<{ key: string; label: string }>> = {
+    music: [
+        { key: 'poster', label: 'Poster' },
+        { key: 'poster_b', label: 'Horizontal' },
+    ],
     games: [
         { key: 'poster', label: 'Poster' },
         { key: 'poster_b', label: 'Horizontal' },
@@ -64,6 +73,7 @@ const FRONTMATTER_IMAGE_FIELDS: Record<MediaKind, Array<{ key: string; label: st
 };
 
 export interface ExistingImageLocalizationResult {
+    cancelled?: boolean;
     scanned: number;
     updated: number;
     downloaded: number;
@@ -76,7 +86,8 @@ export async function localizeTemplateImages(
     title: string,
     values: Record<string, unknown>,
     settings: IntegrationImageStorageSettings | undefined,
-    template: string
+    template: string,
+    signal?: AbortSignal
 ): Promise<Record<string, unknown>> {
     const forceLocalMangaDex = kind === 'manga' && Object.values(values).some((value) => (
         typeof value === 'string' && isMangaDexCoverUrl(value)
@@ -109,10 +120,12 @@ export async function localizeTemplateImages(
                 kind,
                 title,
                 label: field.label,
+                signal,
             });
             downloadedByUrl.set(url, localPath);
             nextValues[field.key] = localPath;
         } catch (error) {
+            if (isOperationCancelled(error)) throw error;
             console.warn('[Lorebase] Failed to save remote image locally:', url, error);
         }
     }
@@ -123,24 +136,21 @@ export async function localizeTemplateImages(
 export async function saveManualImageFileToVault(
     app: App,
     file: File,
-    params: { baseFolder: string; kind: MediaKind; title: string; label: string }
+    params: { baseFolder: string; kind: MediaKind | 'music'; title: string; label: string; signal?: AbortSignal }
 ): Promise<string> {
     const baseFolder = normalizeVaultPath(params.baseFolder || 'files/lorebase/images');
     const folderPath = normalizeVaultPath(`${baseFolder}/${params.kind}`);
-    const titlePart = sanitizeFileName(params.title) || 'Untitled';
-    const labelPart = sanitizeFileName(params.label) || 'Image';
-    const extension = getFileImageExtension(file);
-    const filePath = normalizeVaultPath(`${folderPath}/${titlePart} - ${labelPart}.${extension}`);
-
+    if (file.size > 20 * 1024 * 1024) throw new Error('Cover images must not exceed 20 MB.');
+    const buffer = await file.arrayBuffer();
+    coverImageExtension(buffer, file.type);
     await ensureFolder(app, folderPath);
-    await app.vault.adapter.writeBinary(filePath, await file.arrayBuffer());
-
-    return filePath;
+    return createCoverImage(app, folderPath, params.title, params.label, buffer, file.type, params.signal);
 }
 
 export async function localizeExistingNoteImages(
     app: App,
-    settings: LorebaseSettings
+    settings: LorebaseSettings,
+    operation?: BackgroundOperation
 ): Promise<ExistingImageLocalizationResult> {
     const storageSettings = settings.integrations?.imageStorage;
     const baseFolder = normalizeVaultPath(storageSettings?.folderPath || 'files/lorebase/images');
@@ -160,6 +170,7 @@ export async function localizeExistingNoteImages(
         ...getLibraryFiles(app, settings.series.folderPath, 'series'),
         ...getLibraryFiles(app, settings.books.folderPath, 'books'),
         ...getLibraryFiles(app, settings.manga.folderPath, 'manga'),
+        ...getLibraryFiles(app, settings.music.folderPath, 'music'),
     ];
     const seen = new Set<string>();
 
@@ -169,28 +180,43 @@ export async function localizeExistingNoteImages(
         result.scanned++;
 
         try {
+            operation?.check();
             const cache = app.metadataCache.getFileCache(entry.file);
             const metadata = cache?.frontmatter;
             if (!metadata) continue;
+            const expected = { ...metadata };
+            const config = entry.kind === 'music' ? settings.music.noteTemplate : settings.integrations?.media[entry.kind];
+            const aliases = config?.templateMode === 'advanced'
+                ? parseTemplateFieldAliases(TEMPLATE_MEDIA_TYPES[entry.kind], config.template)
+                : config?.fieldAliases ?? {};
+            const resolved = applyFrontmatterAliases(metadata, aliases);
 
-            const updates = await buildFrontmatterImageUpdates(app, {
-                metadata,
+            const download = () => buildFrontmatterImageUpdates(app, {
+                metadata: resolved,
                 kind: entry.kind,
-                title: getNoteTitle(entry.file, metadata),
+                title: getNoteTitle(entry.file, resolved),
                 baseFolder,
+                signal: operation?.signal,
             });
+            const updates = remapFrontmatterUpdates(await (operation ? operation.wait(download) : download()), aliases);
 
             if (Object.keys(updates).length === 0) continue;
 
+            let applied = 0;
             await app.fileManager.processFrontMatter(entry.file, (frontmatter: Record<string, unknown>) => {
+                operation?.check();
                 for (const [key, value] of Object.entries(updates)) {
+                    if (frontmatter[key] !== expected[key]) continue;
                     frontmatter[key] = value;
+                    applied++;
                 }
+                if (config?.templateEnabled) orderTemplateFrontmatter(frontmatter, getTemplateYamlKeys(config.template), {}, { compact: settings.integrations?.compactTemplates });
             });
 
-            result.updated++;
-            result.downloaded += Object.keys(updates).length;
+            if (applied) result.updated++;
+            result.downloaded += applied;
         } catch (error) {
+            if (isOperationCancelled(error)) { result.cancelled = true; break; }
             result.failed++;
             console.warn('[Lorebase] Failed to localize existing note images:', entry.file.path, error);
         }
@@ -199,7 +225,7 @@ export async function localizeExistingNoteImages(
     return result;
 }
 
-function getLibraryFiles(app: App, folderPath: string, kind: MediaKind): Array<{ file: TFile; kind: MediaKind }> {
+function getLibraryFiles(app: App, folderPath: string, kind: TemplateKind): Array<{ file: TFile; kind: TemplateKind }> {
     const folder = app.vault.getAbstractFileByPath(folderPath);
     if (!(folder instanceof TFolder)) return [];
     return getAllMarkdownFiles(folder).map((file) => ({ file, kind }));
@@ -209,9 +235,10 @@ async function buildFrontmatterImageUpdates(
     app: App,
     params: {
         metadata: Record<string, unknown>;
-        kind: MediaKind;
+        kind: TemplateKind;
         title: string;
         baseFolder: string;
+        signal?: AbortSignal;
     }
 ): Promise<Record<string, string>> {
     const updates: Record<string, string> = {};
@@ -234,6 +261,7 @@ async function buildFrontmatterImageUpdates(
             kind: params.kind,
             title: params.title,
             label: field.label,
+            signal: params.signal,
         });
         downloadedByUrl.set(url, localPath);
         updates[field.key] = localPath;
@@ -249,19 +277,14 @@ function getNoteTitle(file: TFile, metadata: Record<string, unknown>): string {
 
 async function downloadImageToVault(
     app: App,
-    params: { url: string; baseFolder: string; kind: MediaKind; title: string; label: string }
+    params: { url: string; baseFolder: string; kind: TemplateKind; title: string; label: string; signal?: AbortSignal }
 ): Promise<string> {
-    const response = await fetchBinary(params.url);
-    const extension = getImageExtension(params.url, response.headers?.['content-type']);
+    const response = await requestWithDeadline(() => fetchBinary(params.url), undefined, params.signal);
+    const contentType = Object.entries(response.headers ?? {}).find(([key]) => key.toLowerCase() === 'content-type')?.[1] ?? '';
+    coverImageExtension(response.arrayBuffer, contentType);
     const folderPath = normalizeVaultPath(`${params.baseFolder}/${params.kind}`);
-    const titlePart = sanitizeFileName(params.title) || 'Untitled';
-    const labelPart = sanitizeFileName(params.label) || 'Image';
-    const filePath = normalizeVaultPath(`${folderPath}/${titlePart} - ${labelPart}.${extension}`);
-
     await ensureFolder(app, folderPath);
-    await app.vault.adapter.writeBinary(filePath, response.arrayBuffer);
-
-    return filePath;
+    return createCoverImage(app, folderPath, params.title, params.label, response.arrayBuffer, contentType, params.signal);
 }
 
 async function ensureFolder(app: App, folderPath: string): Promise<void> {
@@ -272,8 +295,9 @@ async function ensureFolder(app: App, folderPath: string): Promise<void> {
         current = current ? `${current}/${part}` : part;
         const existing = app.vault.getAbstractFileByPath(current);
         if (existing instanceof TFolder) continue;
-        if (existing) return;
-        await app.vault.createFolder(current);
+        if (existing) throw new Error(`An existing file blocks the image folder: ${current}`);
+        try { await app.vault.createFolder(current); }
+        catch (error) { if (!(app.vault.getAbstractFileByPath(current) instanceof TFolder)) throw error; }
     }
 }
 
@@ -286,39 +310,9 @@ function isMangaDexCoverUrl(value: string): boolean {
 }
 
 function normalizeVaultPath(path: string): string {
-    return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/{2,}/g, '/').trim();
-}
-
-function getImageExtension(url: string, contentType?: string): string {
-    const normalizedContentType = contentType?.toLowerCase() ?? '';
-    if (normalizedContentType.includes('image/png')) return 'png';
-    if (normalizedContentType.includes('image/webp')) return 'webp';
-    if (normalizedContentType.includes('image/gif')) return 'gif';
-    if (normalizedContentType.includes('image/jpeg') || normalizedContentType.includes('image/jpg')) return 'jpg';
-
-    try {
-        const pathname = new URL(url).pathname;
-        const match = pathname.match(/\.([a-z0-9]+)$/i);
-        const ext = match?.[1]?.toLowerCase();
-        if (ext === 'jpeg') return 'jpg';
-        if (ext && ['jpg', 'png', 'webp', 'gif'].includes(ext)) return ext;
-    } catch {
-        // Fall back below.
+    const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/{2,}/g, '/');
+    if (/^[a-z]:/i.test(normalized) || normalized.includes('\0') || normalized.split('/').some(part => part === '..' || part === '.')) {
+        throw new Error('Choose an image folder inside the vault using a relative path.');
     }
-
-    return 'jpg';
-}
-
-function getFileImageExtension(file: File): string {
-    const type = file.type.toLowerCase();
-    if (type.includes('png')) return 'png';
-    if (type.includes('webp')) return 'webp';
-    if (type.includes('gif')) return 'gif';
-    if (type.includes('jpeg') || type.includes('jpg')) return 'jpg';
-
-    const match = file.name.match(/\.([a-z0-9]+)$/i);
-    const ext = match?.[1]?.toLowerCase();
-    if (ext === 'jpeg') return 'jpg';
-    if (ext && ['jpg', 'png', 'webp', 'gif'].includes(ext)) return ext;
-    return 'jpg';
+    return normalized;
 }
