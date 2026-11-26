@@ -15,7 +15,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -23,6 +23,17 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Validate release metadata
+        env:
+          LOREBASE_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node scripts/check-release.cjs
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
 
       - name: Upload release assets
         env:
