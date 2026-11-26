@@ -1,6 +1,6 @@
 {
     "name": "lorebase",
-    "version": "4.0.0",
+    "version": "4.0.1",
     "description": "A media hub for games, anime, movies, series, books, manga, and music with rich cards, progress, ratings, and metadata.",
     "main": "main.js",
     "scripts": {

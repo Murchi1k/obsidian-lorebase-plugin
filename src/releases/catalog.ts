@@ -212,7 +212,30 @@ const WORKFLOW_ICONS: Record<ChangeKind, string[]> = {
     added: ['user-round', 'gamepad-2'], improved: ['list-video', 'sliders-horizontal', 'list-filter'], fixed: [],
 };
 
+const PATCH_401: Record<Language, string[]> = {
+    en: [
+        'Improved compatibility with Obsidian. Updated desktop and mobile layouts, settings controls, and timers used with pop-out windows.',
+        'Corrected release packaging. The GitHub tag and downloadable plugin files now match version 4.0.1.',
+    ],
+    ru: [
+        'Совместимость с Obsidian. Обновлены мобильная и десктопная раскладки, элементы настроек и таймеры для отдельных окон.',
+        'Сборка релиза. Тег GitHub и файлы плагина теперь соответствуют версии 4.0.1.',
+    ],
+    uk: [
+        'Сумісність з Obsidian. Оновлено мобільний і настільний макети, елементи налаштувань і таймери для окремих вікон.',
+        'Збірка випуску. Тег GitHub і файли плагіна тепер відповідають версії 4.0.1.',
+    ],
+    'zh-CN': [
+        '改进 Obsidian 兼容性。更新了桌面和移动端布局、设置控件以及弹出窗口使用的计时器。',
+        '修正发布打包。GitHub 标签和可下载的插件文件现已与 4.0.1 版本一致。',
+    ],
+};
+
 export function getReleaseHistory(language: Language, installedVersion: string): ReleaseNotes[] {
+    const patch: ReleaseNotes = {
+        version: '4.0.1',
+        groups: [{ kind: 'fixed', items: PATCH_401[language] }],
+    };
     const features = getReleaseHighlights(language, '4.0.0');
     const current: ReleaseNotes = {
         version: '4.0.0',
@@ -245,7 +268,7 @@ export function getReleaseHistory(language: Language, installedVersion: string):
             return { kind: group.kind, items, summaries: items.map(summarizeReleaseNote) };
         }),
     }));
-    return [current, ...legacy].filter(release => {
+    return [patch, current, ...legacy].filter(release => {
         const comparison = compareVersions(release.version, installedVersion);
         return comparison !== null && comparison <= 0;
     });

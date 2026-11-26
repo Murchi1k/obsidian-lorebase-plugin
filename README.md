@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Obsidian-Plugin-7C3AED?style=for-the-badge&logo=obsidian&logoColor=white" alt="Obsidian Plugin" />
-  <img src="https://img.shields.io/badge/Version-4.0.0-e4a47e?style=for-the-badge" alt="Version 4.0.0" />
+  <img src="https://img.shields.io/badge/Version-4.0.1-e4a47e?style=for-the-badge" alt="Version 4.0.1" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License" />
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
 </p>
@@ -657,7 +657,7 @@ The community catalog installs the published release. To use a source checkout o
 
 ### Manual installation
 
-1. Download **main.js**, **manifest.json** and **styles.css** from the **same version** on [GitHub Releases](https://github.com/Murchi1k/obsidian-lorebase-plugin/releases). For 4.0.0, choose its release once published, or build this checkout.
+1. Download **main.js**, **manifest.json** and **styles.css** from the **same version** on [GitHub Releases](https://github.com/Murchi1k/obsidian-lorebase-plugin/releases).
 2. Place them in the plugin directory below. If you use a custom Obsidian configuration folder, replace `.obsidian` accordingly.
 
    ~~~text
@@ -979,6 +979,12 @@ The library, editors and settings support these languages. Some provider setup/h
 ## 📋 Changelog
 
 The **What’s new** button in the settings header opens the feature tour and release history, even without an internet connection. It opens after an upgrade; fresh installations can open it manually.
+
+<a id="v401"></a>
+### v4.0.1
+
+- Improved Obsidian compatibility for settings, pop-out timers, and desktop and mobile layouts.
+- Aligned the release metadata and downloadable plugin files with version 4.0.1.
 
 <a id="v400"></a>
 <details open>

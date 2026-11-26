@@ -1,5 +1,6 @@
 import { scheduleTimeout } from '../../utils/timers';
 import { requestUrl } from 'obsidian';
+import { PLUGIN_VERSION } from '../../version';
 import type { TraktEntry, TraktState, TraktSyncSettings } from './types';
 
 type Data = Record<string, unknown>;
@@ -22,7 +23,7 @@ export async function traktRequest(url: string, signal: AbortSignal, options: { 
     let timer: (() => void) | undefined, abort: (() => void) | undefined;
     try {
         const response = await Promise.race([
-            requestUrl({ url, method: options.method ?? (options.body === undefined ? 'GET' : 'POST'), headers: { Accept: 'application/json', 'User-Agent': 'Lorebase/4.0.0 (Obsidian plugin)', ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body), throw: false }),
+            requestUrl({ url, method: options.method ?? (options.body === undefined ? 'GET' : 'POST'), headers: { Accept: 'application/json', 'User-Agent': `Lorebase/${PLUGIN_VERSION} (Obsidian plugin)`, ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body), throw: false }),
             new Promise<never>((_, reject) => {
                 timer = scheduleTimeout(() => reject(new Error('Request timed out')), 30_000);
                 abort = () => reject(new DOMException('Cancelled', 'AbortError')); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();

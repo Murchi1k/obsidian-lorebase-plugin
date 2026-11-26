@@ -33,6 +33,15 @@ describe('release notification lifecycle', () => {
 });
 
 describe('offline release catalog', () => {
+    it('lists the patch first while keeping the 4.0.0 history', () => {
+        for (const language of ['en', 'ru', 'uk', 'zh-CN'] as const) {
+            const [patch, previous] = getReleaseHistory(language, '4.0.1');
+            expect(patch.version).toBe('4.0.1');
+            expect(patch.groups[0].kind).toBe('fixed');
+            expect(patch.groups[0].items).toHaveLength(2);
+            expect(previous.version).toBe('4.0.0');
+        }
+    });
     it('lists actors as added and statistics once as the eighteenth feature', () => {
         const groups = getReleaseHistory('ru', '4.0.0')[0].groups;
         expect(groups.find(group => group.kind === 'added')?.summaries).toContain('Актёры и фильмография');
