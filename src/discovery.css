@@ -1,0 +1,17 @@
+.lorebase-personal-note-body.lorebase-discovery-body { grid-template-columns:minmax(0,1fr); gap:10px; align-items:start; }
+.lorebase-discovery-field { display:grid; grid-template-columns:148px minmax(0,1fr); gap:12px; align-items:start; min-width:0; color:var(--text-muted); font-size:12px; }
+.lorebase-discovery-field > label { padding-top:8px; font-weight:500; line-height:1.5; }
+.lorebase-discovery-field textarea { resize:vertical; min-height:68px; }
+.lorebase-notes-personal-context { margin:4px 0 6px; container-type:inline-size; }
+.lorebase-notes-personal-fields { display:grid; grid-template-columns:minmax(0,max-content) minmax(0,max-content) minmax(0,1fr); gap:8px; align-items:start; }
+@container (max-width:480px) {
+    .lorebase-discovery-field { grid-template-columns:minmax(0,1fr); gap:5px; }
+    .lorebase-discovery-field > label { padding-top:0; }
+}
+.lorebase-discovery-mark { position:absolute; top:10px; left:10px; z-index:5; display:inline-flex; align-items:center; justify-content:center; width:23px; height:23px; border-radius:6px; color:var(--text-normal); background:color-mix(in srgb,var(--background-primary) 85%,transparent); pointer-events:none; }
+.lorebase-discovery-mark svg { width:14px; height:14px; }
+
+.lorebase-discovery-suggestions { max-height:150px; overflow-y:auto; border:1px solid var(--background-modifier-border); border-radius:7px; background:var(--background-secondary); }
+.lorebase-discovery-suggestions[hidden] { display:none; }
+.lorebase-editmode-root .lorebase-discovery-suggestions button { display:block; width:100%; min-height:30px; margin:0; padding:6px 9px; border:0; border-radius:0; box-shadow:none; background:transparent; color:var(--text-normal); text-align:left; font:inherit; cursor:pointer; }
+.lorebase-editmode-root .lorebase-discovery-suggestions button:hover,.lorebase-editmode-root .lorebase-discovery-suggestions button.is-active { background:var(--background-modifier-hover); color:var(--lorebase-accent); }
