@@ -1,7 +1,13 @@
 import { Notice, setIcon } from 'obsidian';
 import { i18n, t } from '../localization';
+import { normalizePersonalDate, UNKNOWN_DATE } from '../utils/personalDates';
+import { personalDateText } from '../localization/personalDates';
+import { normalizeReleaseDate, parseReleaseWindow } from '../utils/releaseDates';
+import { releaseDateText } from '../localization/releaseDates';
 
-type DatePickerMode = 'days' | 'months' | 'years';
+export interface PersonalDatePickerOptions { allowPartial?: boolean; allowUnknown?: boolean; allowQuarter?: boolean }
+
+type DatePickerMode = 'days' | 'months' | 'quarters' | 'years';
 
 interface DateParts {
     year: number;
@@ -14,6 +20,7 @@ export class HierarchicalDatePicker {
     private mode: DatePickerMode = 'days';
     private viewYear = new Date().getFullYear();
     private viewMonth = new Date().getMonth();
+    private precision: 'day' | 'month' | 'quarter' | 'year' = 'day';
 
     private readonly onInputClick = (event: MouseEvent): void => {
         event.preventDefault();
@@ -37,7 +44,7 @@ export class HierarchicalDatePicker {
         const raw = this.input.value.trim();
         if (!raw) this.onChange('');
         else {
-            const parsed = parseManualDate(raw);
+            const parsed = this.parseValue(raw);
             if (parsed) this.onChange(parsed);
         }
         if (!this.popover) return;
@@ -90,7 +97,8 @@ export class HierarchicalDatePicker {
         private readonly input: HTMLInputElement,
         private readonly trigger: HTMLButtonElement,
         private readonly getValue: () => string,
-        private readonly onChange: (value: string) => void
+        private readonly onChange: (value: string) => void,
+        private readonly options: PersonalDatePickerOptions = {}
     ) {
         this.input.setAttribute('aria-haspopup', 'dialog');
         this.trigger.setAttribute('aria-haspopup', 'dialog');
@@ -100,6 +108,7 @@ export class HierarchicalDatePicker {
         this.input.addEventListener('keydown', this.onFieldKeydown);
         this.trigger.addEventListener('click', this.onInputClick);
         this.trigger.addEventListener('keydown', this.onInputKeydown);
+        if (options.allowPartial) this.input.title = options.allowQuarter ? releaseDateText('hint') : personalDateText('hint');
     }
 
     destroy(): void {
@@ -113,11 +122,25 @@ export class HierarchicalDatePicker {
     }
 
     syncInput(value: string = this.getValue()): void {
+        if (this.options.allowQuarter && /^(\d{4}-Q[1-4])$/.test(value)) {
+            this.input.value = value;
+            this.input.toggleClass('is-empty', false);
+            return;
+        }
+        if (this.options.allowUnknown && value === UNKNOWN_DATE || this.options.allowPartial && /^\d{4}(?:-\d{2})?$/.test(value)) {
+            this.input.value = value === UNKNOWN_DATE ? personalDateText('unknown') : value;
+            this.input.toggleClass('is-empty', false);
+            return;
+        }
         const selected = parseIsoDate(value);
-        const isDayFirst = i18n.getLanguage() === 'ru' || i18n.getLanguage() === 'uk';
-        this.input.placeholder = isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
+        const language = i18n.getLanguage();
+        const isDayFirst = language === 'ru' || language === 'uk';
+        const isYearFirst = language === 'zh-CN';
+        this.input.placeholder = isYearFirst ? '年-月-日' : isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
         this.input.value = selected
-            ? isDayFirst
+            ? isYearFirst
+                ? `${selected.year}-${String(selected.month).padStart(2, '0')}-${String(selected.day).padStart(2, '0')}`
+                : isDayFirst
                 ? `${String(selected.day).padStart(2, '0')}.${String(selected.month).padStart(2, '0')}.${selected.year}`
                 : `${String(selected.month).padStart(2, '0')}/${String(selected.day).padStart(2, '0')}/${selected.year}`
             : '';
@@ -132,7 +155,7 @@ export class HierarchicalDatePicker {
             this.syncInput('');
             return true;
         }
-        const parsed = parseManualDate(raw);
+        const parsed = this.parseValue(raw);
         if (!parsed) {
             this.input.addClass('is-invalid');
             return false;
@@ -146,6 +169,14 @@ export class HierarchicalDatePicker {
     focus(): void {
         this.input.focus();
     }
+    get validationMessage(): string { return this.options.allowQuarter ? releaseDateText('invalid') : this.options.allowPartial ? personalDateText('invalid') : ''; }
+
+    private parseValue(raw: string): string | null {
+        if (this.options.allowUnknown && (raw === personalDateText('unknown') || raw.toLowerCase() === UNKNOWN_DATE)) return UNKNOWN_DATE;
+        if (this.options.allowQuarter) return parseManualDate(raw) || normalizeReleaseDate(raw) || null;
+        if (this.options.allowPartial && /^\d{4}(?:-\d{2})?$/.test(raw)) return normalizePersonalDate(raw) || null;
+        return parseManualDate(raw);
+    }
 
     private open(): void {
         const selected = parseIsoDate(this.getValue());
@@ -153,6 +184,17 @@ export class HierarchicalDatePicker {
         this.viewYear = initial.year;
         this.viewMonth = initial.month - 1;
         this.mode = 'days';
+        const partial = /^(\d{4})(?:-(\d{2}))?$/.exec(this.getValue());
+        this.precision = this.options.allowPartial && partial ? partial[2] ? 'month' : 'year' : 'day';
+        if (partial && this.options.allowPartial) {
+            this.viewYear = Number(partial[1]);
+            if (partial[2]) this.viewMonth = Number(partial[2]) - 1;
+            this.mode = partial[2] ? 'months' : 'years';
+        }
+        const quarter = this.options.allowQuarter && parseReleaseWindow(this.getValue());
+        if (quarter && quarter.precision === 'quarter') {
+            this.precision = 'quarter'; this.mode = 'quarters'; this.viewYear = quarter.start!.getFullYear();
+        }
 
         this.popover = document.body.createDiv({
             cls: 'lorebase-date-picker-popover',
@@ -171,7 +213,7 @@ export class HierarchicalDatePicker {
         window.addEventListener('scroll', this.onViewportChange, true);
     }
 
-    private close(): void {
+    close(): void {
         this.popover?.remove();
         this.popover = null;
         document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
@@ -201,8 +243,20 @@ export class HierarchicalDatePicker {
         const popover = this.popover;
         if (!popover) return;
         popover.empty();
-        popover.toggleClass('is-month-view', this.mode === 'months');
+        popover.toggleClass('is-month-view', this.mode === 'months' || this.mode === 'quarters');
         popover.toggleClass('is-year-view', this.mode === 'years');
+        if (this.options.allowPartial) {
+            const precision = popover.createDiv({ cls: 'lorebase-date-precision' });
+            for (const [value, label] of [['day', 'exact'], ['month', 'month'], ['year', 'year']] as const) {
+                const button = precision.createEl('button', { text: this.options.allowQuarter ? releaseDateText(value) : personalDateText(label), attr: { type: 'button', 'aria-pressed': String(this.precision === value) } });
+                button.addEventListener('click', () => { this.precision = value; this.mode = value === 'year' ? 'years' : value === 'month' ? 'months' : 'days'; this.render(); });
+            }
+            if (this.options.allowQuarter) {
+                const button = precision.createEl('button', { text: releaseDateText('quarter'), attr: { type:'button', 'aria-pressed':String(this.precision === 'quarter') } });
+                precision.insertBefore(button, precision.children[2]);
+                button.addEventListener('click', () => { this.precision = 'quarter'; this.mode = 'quarters'; this.render(); });
+            }
+        }
 
         const header = popover.createDiv({ cls: 'lorebase-date-picker-header' });
         const label = header.createEl('button', {
@@ -215,7 +269,7 @@ export class HierarchicalDatePicker {
         label.disabled = this.mode === 'years';
         label.addEventListener('click', () => {
             if (this.mode === 'days') this.mode = 'months';
-            else if (this.mode === 'months') this.mode = 'years';
+            else if (this.mode === 'months' || this.mode === 'quarters') this.mode = 'years';
             this.render();
         });
 
@@ -225,6 +279,15 @@ export class HierarchicalDatePicker {
 
         if (this.mode === 'days') this.renderDays(popover);
         else if (this.mode === 'months') this.renderMonths(popover);
+        else if (this.mode === 'quarters') {
+            const grid = popover.createDiv({ cls:'lorebase-date-picker-grid is-months is-quarters' });
+            for (let quarter = 1; quarter <= 4; quarter++) {
+                const value = `${this.viewYear}-Q${quarter}`;
+                const button = grid.createEl('button', { cls:'lorebase-date-picker-cell', text:`${['I','II','III','IV'][quarter-1]} ${releaseDateText('quarter')}`, attr:{type:'button'} });
+                button.toggleClass('is-selected', this.getValue() === value);
+                button.addEventListener('click', () => this.selectValue(value));
+            }
+        }
         else this.renderYears(popover);
 
         const footer = popover.createDiv({ cls: 'lorebase-date-picker-footer' });
@@ -235,6 +298,10 @@ export class HierarchicalDatePicker {
         });
         clear.disabled = !this.getValue();
         clear.addEventListener('click', () => this.selectValue(''));
+        if (this.options.allowUnknown) {
+            const unknown = footer.createEl('button', { cls: 'lorebase-date-picker-footer-button', text: personalDateText('unknown'), attr: { type: 'button' } });
+            unknown.addEventListener('click', () => this.selectValue(UNKNOWN_DATE));
+        }
 
         this.positionPopover();
     }
@@ -250,7 +317,7 @@ export class HierarchicalDatePicker {
                 const next = new Date(this.viewYear, this.viewMonth + direction, 1);
                 this.viewYear = next.getFullYear();
                 this.viewMonth = next.getMonth();
-            } else if (this.mode === 'months') {
+            } else if (this.mode === 'months' || this.mode === 'quarters') {
                 this.viewYear += direction;
             } else {
                 this.viewYear += direction * 10;
@@ -264,7 +331,7 @@ export class HierarchicalDatePicker {
             return new Intl.DateTimeFormat(getLocale(), { month: 'long', year: 'numeric' })
                 .format(new Date(this.viewYear, this.viewMonth, 1));
         }
-        if (this.mode === 'months') return String(this.viewYear);
+        if (this.mode === 'months' || this.mode === 'quarters') return String(this.viewYear);
         const decadeStart = Math.floor(this.viewYear / 10) * 10;
         return `${decadeStart} – ${decadeStart + 9}`;
     }
@@ -314,6 +381,7 @@ export class HierarchicalDatePicker {
             button.toggleClass('is-selected', selected?.year === this.viewYear && selected.month === month + 1);
             button.addEventListener('click', () => {
                 this.viewMonth = month;
+                if (this.precision === 'month') { this.selectValue(`${this.viewYear}-${String(month + 1).padStart(2, '0')}`); return; }
                 this.mode = 'days';
                 this.render();
             });
@@ -334,7 +402,8 @@ export class HierarchicalDatePicker {
             button.toggleClass('is-selected', selected?.year === year);
             button.addEventListener('click', () => {
                 this.viewYear = year;
-                this.mode = 'months';
+                if (this.precision === 'year') { this.selectValue(String(year)); return; }
+                this.mode = this.precision === 'quarter' ? 'quarters' : 'months';
                 this.render();
             });
         }
@@ -356,8 +425,8 @@ export function validateDatePickers(pickers: HierarchicalDatePicker[]): boolean 
             ? 'Введите корректную дату в формате дд.мм.гггг'
             : language === 'uk'
                 ? 'Введіть коректну дату у форматі дд.мм.рррр'
-                : 'Enter a valid date in mm/dd/yyyy format';
-        new Notice(message);
+                : language === 'zh-CN' ? '请输入有效日期，格式为年-月-日' : 'Enter a valid date in mm/dd/yyyy format';
+        new Notice(picker.validationMessage || message);
         picker.focus();
         return false;
     }
@@ -412,8 +481,5 @@ function isSameDate(left: DateParts, right: DateParts): boolean {
 }
 
 function getLocale(): string {
-    const language = i18n.getLanguage();
-    if (language === 'ru') return 'ru-RU';
-    if (language === 'uk') return 'uk-UA';
-    return 'en-US';
+    return i18n.getLocale();
 }

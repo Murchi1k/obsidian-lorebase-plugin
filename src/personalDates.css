@@ -1,0 +1,8 @@
+.lorebase-date-precision { display: flex; gap: 4px; padding-bottom: 8px; }
+.lorebase-date-precision button { flex: 1; min-width: 0; padding: 4px 5px; height: auto; font-size: var(--font-ui-smaller); white-space: normal; box-shadow: none; }
+.lorebase-date-precision button[aria-pressed="true"] { background: var(--interactive-accent); color: var(--text-on-accent); }
+.lorebase-date-picker-footer { flex-wrap: wrap; gap: 6px; }
+.lorebase-completion-date-field, .lorebase-completion-date-actions { display: flex; gap: 8px; margin: 12px 0; }
+.lorebase-completion-date-field input { flex: 1; min-width: 0; }
+.lorebase-completion-date-field svg { width: 18px; height: 18px; }
+.lorebase-completion-hint { color: var(--text-muted); line-height: 1.5; }
