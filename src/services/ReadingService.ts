@@ -1,3 +1,14 @@
+import { normalizeStatusReasons } from '../utils/statusReasons';
+import { normalizeReleaseDate, releaseDatePatch } from '../utils/releaseDates';
+import { normalizeChapterPosition } from '../utils/mangaChapters';
+import { normalizeDiscovery, discoveryFrontmatter } from '../utils/discovery';
+import { normalizePriority } from '../utils/priority';
+import { normalizePersonalDate, personalDateTimestamp, readPersonalDate } from '../utils/personalDates';
+import { normalizeRepeatCount } from '../utils/repeatTracking';
+import { readPartAlternativeTitles } from './integrations/alternativeTitles';
+import { wikilinkLabel } from './integrations/templateValues';
+import { parseDetailedRatings } from '../utils/detailedRatings';
+import { isCustomStatus, countCustomStatus } from '../statusPresentation';
 import { App, TFile, TFolder } from 'obsidian';
 import { FilterState, MangaItem, MangaPart, ReadingItem, ReadingStatus, ReadingStats, SortField, SortOrder } from '../types';
 import { DEFAULT_COVER } from '../constants';
@@ -6,7 +17,9 @@ import { filterAndSortMedia } from './media/filtering';
 import { extractSimpleFrontmatter } from './media/libraryViewState';
 import { getRandomItem, parseNumber, parseRelatedMedia, parseUserRating, parseYear, serializeRelatedMedia } from './media/parsers';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, mapInFrameBatches } from './media/serviceUtils';
-import { upsertMarkdownSection } from './markdownSections';
+import { parseReadingCycle, serializeReadingCycle } from './media/readingCycle';
+import { updateMarkdownSection } from './markdownSections';
+import { normalizeMangaWorkType } from '../utils/mangaWorkType';
 
 export type ReadingMediaType = 'book' | 'manga';
 
@@ -57,7 +70,7 @@ export class ReadingService {
         try {
             const cache = this.app.metadataCache.getFileCache(file);
             const rawMetadata: unknown = cache?.frontmatter;
-            const metadata = isRecord(rawMetadata) ? rawMetadata : {};
+            const metadata = this.metadataService.resolveFrontmatter(this.mediaType, isRecord(rawMetadata) ? rawMetadata : {});
             const rawType = typeof metadata.type === 'string' ? metadata.type.trim().toLowerCase() : '';
             if (rawType && rawType !== this.mediaType) return null;
 
@@ -79,8 +92,12 @@ export class ReadingService {
                 year: parseYear(metadata.year ?? metadata.first_publish_year),
                 description,
                 summary: description,
+                detailedRatings: parseDetailedRatings(metadata.detailed_ratings),
                 userRating: parseUserRating(metadata.userRating ?? metadata.rating_user ?? metadata.rating),
                 favorite: isTruthy(metadata.favorite),
+                priority: normalizePriority(metadata.personal_priority),
+                discovery: normalizeDiscovery(metadata.discovery_context),
+                statusReasons: normalizeStatusReasons(metadata.status_reasons),
                 poster,
                 imageUrl: verticalImageUrl || poster || DEFAULT_COVER,
                 horizontalImageUrl: horizontalImageUrl || horizontal || verticalImageUrl || poster || null,
@@ -88,6 +105,7 @@ export class ReadingService {
                 isAdult: this.mediaType === 'manga'
                     && (explicitAdult === undefined ? inferredAdult : isTruthy(explicitAdult)),
                 status,
+                repeatCount: this.mediaType === 'manga' ? normalizeRepeatCount(metadata.repeat_count) : undefined,
                 genres,
                 tags: collectTags(metadata, cache?.tags),
                 dateAdded: file.stat?.ctime ?? file.stat?.mtime ?? Date.now(),
@@ -98,24 +116,25 @@ export class ReadingService {
                 integrationProvider: this.normalizeProvider(this.readText(metadata, ['integration_provider'])),
                 integrationId: this.readText(metadata, ['integration_id']) || null,
                 relatedMedia: parseRelatedMedia(metadata.related_media),
+                readingCycle: parseReadingCycle(metadata.reading_cycle),
                 communityRating: parseNumber(metadata.communityRating ?? metadata.community_rating),
                 communityVotes: parseNumber(metadata.communityVotes ?? metadata.community_votes),
                 communityRatingProvider: this.readText(metadata, ['communityRatingProvider', 'community_rating_provider']) || null,
-                rawFields: extractSimpleFrontmatter(metadata),
+                rawFields: extractSimpleFrontmatter(metadata.alt_titles === undefined ? metadata : { ...metadata, alt_titles: metadata.alt_titles }),
             };
 
             if (this.mediaType === 'book') {
                 return {
                     ...base,
                     type: 'book',
-                    authors: this.toStringArray(metadata.authors ?? metadata.author ?? metadata.author_name),
+                    authors: this.toStringArray(metadata.authors ?? metadata.author ?? metadata.author_name).map(wikilinkLabel),
                     publisher: this.readText(metadata, ['publisher', 'publishers']) || '',
-                    releaseDate: this.readDateText(metadata, ['released', 'release_date', 'publishedDate', 'publish_date']),
+                    releaseDate: this.readDateText(metadata, ['released', 'release_date', 'releaseDate', 'publishedDate', 'publish_date', 'published', 'publication_date']),
                     pageCurrent: parseNumber(metadata.page_current ?? metadata.pageCurrent),
                     pageTotal: parseNumber(metadata.page_total ?? metadata.pageTotal ?? metadata.pages ?? metadata.pageCount ?? metadata.number_of_pages),
                     chapterCurrent: parseNumber(metadata.chapter_current ?? metadata.chapterCurrent),
                     chapterTotal: parseNumber(metadata.chapter_total ?? metadata.chapterTotal ?? metadata.chapters),
-                    integrationProvider: base.integrationProvider === 'hardcover' || base.integrationProvider === 'googlebooks'
+                    integrationProvider: base.integrationProvider === 'hardcover' || base.integrationProvider === 'googlebooks' || base.integrationProvider === 'openlibrary'
                         ? base.integrationProvider
                         : null,
                 };
@@ -138,7 +157,9 @@ export class ReadingService {
             return {
                 ...base,
                 type: 'manga',
-                authors: this.toStringArray(metadata.authors ?? metadata.author),
+                workType: normalizeMangaWorkType(metadata.work_type ?? metadata.workType ?? metadata.manga_type ?? metadata.format),
+                releaseDate: this.readDateText(metadata, ['released', 'release_date', 'releaseDate', 'publishedDate', 'publish_date', 'published', 'publication_date']),
+                authors: this.toStringArray(metadata.authors ?? metadata.author).map(wikilinkLabel),
                 artists: this.toStringArray(metadata.artists ?? metadata.artist),
                 chapterCurrent: activePart?.chapterCurrent ?? chapterCurrent,
                 chapterTotal: activePart?.chapterTotal ?? chapterTotal,
@@ -151,6 +172,7 @@ export class ReadingService {
                     || base.integrationProvider === 'shikimori'
                     || base.integrationProvider === 'mangaupdates'
                     || base.integrationProvider === 'mangadex'
+                    || base.integrationProvider === 'comicvine'
                     ? base.integrationProvider
                     : null,
             };
@@ -193,6 +215,7 @@ export class ReadingService {
             completed: 0,
             dropped: 0,
             paused: 0,
+            to_be_released: 0,
             favorite: 0,
             withRating: 0,
             avgRating: 0,
@@ -202,7 +225,8 @@ export class ReadingService {
 
         let ratingSum = 0;
         for (const item of items) {
-            stats[item.status]++;
+            countCustomStatus(stats, item.status);
+            if (!isCustomStatus(item.status)) stats[item.status]++;
             if (item.favorite) stats.favorite++;
             if (item.userRating) {
                 stats.withRating++;
@@ -211,7 +235,7 @@ export class ReadingService {
             }
         }
         stats.avgRating = stats.withRating > 0 ? Math.round((ratingSum / stats.withRating) * 10) / 10 : 0;
-        for (const status of ['planned', 'watching', 'completed', 'dropped', 'paused'] as const) {
+        for (const status of ['to_be_released', 'planned', 'watching', 'completed', 'dropped', 'paused'] as const) {
             stats.statusPercentages[status] = stats.total > 0 ? Math.round((stats[status] / stats.total) * 1000) / 10 : 0;
         }
         return stats;
@@ -221,8 +245,12 @@ export class ReadingService {
         const file = this.app.vault.getAbstractFileByPath(item.filePath);
         if (!(file instanceof TFile)) return;
 
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const rawFrontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const frontmatter = this.metadataService.resolveFrontmatter(this.mediaType, isRecord(rawFrontmatter) ? rawFrontmatter : {});
         const frontmatterUpdates: Record<string, unknown> = {};
+        if ('countries' in updates) frontmatterUpdates.countries = updates.countries ?? [];
+        if ('readingCycle' in updates) frontmatterUpdates.reading_cycle = serializeReadingCycle(updates.readingCycle ?? []);
+        if ('repeatCount' in updates && item.type === 'manga') frontmatterUpdates.repeat_count = normalizeRepeatCount(updates.repeatCount);
 
         frontmatterUpdates.type = item.type;
         if ('displayName' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['title', 'name'], updates.displayName);
@@ -236,18 +264,27 @@ export class ReadingService {
         if ('genres' in updates) this.updateListField(frontmatterUpdates, frontmatter, ['genres', 'genre'], updates.genres);
         if ('tags' in updates) this.updateListField(frontmatterUpdates, frontmatter, ['tags', 'tag'], updates.tags, true);
         if ('status' in updates) frontmatterUpdates.status = updates.status;
+        if ('detailedRatings' in updates) frontmatterUpdates.detailed_ratings = parseDetailedRatings(updates.detailedRatings) ?? null;
         if ('userRating' in updates) frontmatterUpdates.rating = updates.userRating ?? null;
         if ('favorite' in updates) frontmatterUpdates.favorite = updates.favorite;
+        if ('priority' in updates) frontmatterUpdates.personal_priority = normalizePriority(updates.priority);
+        if ('discovery' in updates) frontmatterUpdates.discovery_context = discoveryFrontmatter(updates.discovery);
+        if ('statusReasons' in updates) frontmatterUpdates.status_reasons = normalizeStatusReasons(updates.statusReasons) ?? null;
         if (item.type === 'manga' && 'isAdult' in updates) frontmatterUpdates.Sex18 = updates.isAdult;
         if ('sourceUrl' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['url', 'source_url'], updates.sourceUrl);
-        if ('started' in updates) frontmatterUpdates.started = this.normalizeDateString(String(updates.started ?? '')) || null;
-        if ('finished' in updates) frontmatterUpdates.finished = this.normalizeDateString(String(updates.finished ?? '')) || null;
+        if ('started' in updates) frontmatterUpdates.started = normalizePersonalDate(updates.started) || null;
+        if ('finished' in updates) {
+            frontmatterUpdates.finished = normalizePersonalDate(updates.finished) || null;
+            for (const key of ['dateFinished', 'finish_date', 'dateRead', 'readDate', 'completedDate']) frontmatterUpdates[key] = null;
+        }
         if ('integrationProvider' in updates) frontmatterUpdates.integration_provider = updates.integrationProvider;
         if ('integrationId' in updates) frontmatterUpdates.integration_id = updates.integrationId;
         if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia);
         if ('communityRating' in updates) frontmatterUpdates.communityRating = updates.communityRating;
         if ('communityVotes' in updates) frontmatterUpdates.communityVotes = updates.communityVotes;
         if ('communityRatingProvider' in updates) frontmatterUpdates.communityRatingProvider = updates.communityRatingProvider;
+
+        if ('releaseDate' in updates) Object.assign(frontmatterUpdates,releaseDatePatch(frontmatter,updates.releaseDate,['released','release_date','releaseDate','publishedDate','publish_date','published','publication_date']));
 
         if (item.type === 'book') {
             if ('authors' in updates) this.updateDisplayListField(
@@ -264,12 +301,6 @@ export class ReadingService {
                 'publishers',
                 updates.publisher
             );
-            if ('releaseDate' in updates) this.updateTextField(
-                frontmatterUpdates,
-                frontmatter,
-                ['released', 'release_date', 'publishedDate'],
-                this.normalizeDateString(String(updates.releaseDate ?? ''))
-            );
             const pageTotal = 'pageTotal' in updates ? this.normalizeProgressValue(updates.pageTotal) : item.pageTotal;
             const pageCurrent = 'pageCurrent' in updates ? this.normalizeProgressValue(updates.pageCurrent, pageTotal) : item.pageCurrent;
             const chapterTotal = 'chapterTotal' in updates ? this.normalizeProgressValue(updates.chapterTotal) : item.chapterTotal;
@@ -284,6 +315,7 @@ export class ReadingService {
                 frontmatterUpdates.status = 'completed';
             }
         } else {
+            if ('workType' in updates) frontmatterUpdates.work_type = normalizeMangaWorkType(updates.workType);
             if ('authors' in updates) this.updateDisplayListField(
                 frontmatterUpdates,
                 frontmatter,
@@ -301,7 +333,7 @@ export class ReadingService {
             let parts = this.cloneParts(Array.isArray(updates.parts) ? updates.parts as MangaPart[] : item.parts ?? []);
             let activePartId = updates.activePartId !== undefined ? String(updates.activePartId || '') || null : item.activePartId ?? null;
             const chapterTotal = 'chapterTotal' in updates ? this.normalizeProgressValue(updates.chapterTotal) : item.chapterTotal;
-            const chapterCurrent = 'chapterCurrent' in updates ? this.normalizeProgressValue(updates.chapterCurrent, chapterTotal) : item.chapterCurrent;
+            const chapterCurrent = 'chapterCurrent' in updates ? normalizeChapterPosition(updates.chapterCurrent, chapterTotal) : item.chapterCurrent;
 
             if (parts.length) {
                 if ('volumeCurrent' in updates) {
@@ -320,11 +352,11 @@ export class ReadingService {
                 }
             }
 
-            if (parts.length && this.areAllMangaPartsCompleted(parts)) {
+            if (!isCustomStatus(updates.status ?? item.status) && parts.length && this.areAllMangaPartsCompleted(parts)) {
                 frontmatterUpdates.status = 'completed';
             }
             if ('parts' in updates || 'chapterCurrent' in updates || 'chapterTotal' in updates || 'volumeCurrent' in updates) {
-                frontmatterUpdates.manga_parts = this.serializeMangaParts(parts);
+                frontmatterUpdates.manga_parts = this.serializeMangaParts(parts,frontmatter.manga_parts);
                 frontmatterUpdates.active_part_id = activePartId ?? null;
             }
             if ('chapterCurrent' in updates) frontmatterUpdates.chapter_current = chapterCurrent;
@@ -333,7 +365,7 @@ export class ReadingService {
             if ('volumeTotal' in updates) frontmatterUpdates.volume_total = this.normalizeProgressValue(updates.volumeTotal);
         }
 
-        await this.metadataService.updateMetadata(file, frontmatterUpdates);
+        await this.metadataService.updateMetadata(file, frontmatterUpdates, this.mediaType);
         if ('myNotes' in updates) {
             await this.updateMyNotesSection(file, String(updates.myNotes ?? ''));
         }
@@ -341,11 +373,7 @@ export class ReadingService {
     }
 
     private async updateMyNotesSection(file: TFile, value: string): Promise<void> {
-        const content = await this.app.vault.read(file);
-        const next = upsertMarkdownSection(content, 'My Notes', value);
-        if (next !== content) {
-            await this.app.vault.modify(file, next);
-        }
+        await updateMarkdownSection(this.app, file, value);
     }
 
     async deleteItem(item: ReadingItem): Promise<void> {
@@ -390,6 +418,7 @@ export class ReadingService {
             id: this.readText(source, ['id']) || `volume-${volumeNumber ?? index + 1}`,
             kind: 'volume',
             title,
+            alternativeTitles: readPartAlternativeTitles(source),
             volumeNumber,
             chapterCurrent: parseNumber(source.chapterCurrent ?? source.chapter_current ?? source.current),
             chapterTotal: parseNumber(source.chapterTotal ?? source.chapter_total ?? source.total),
@@ -397,11 +426,19 @@ export class ReadingService {
         };
     }
 
-    private serializeMangaParts(parts: MangaPart[]): Array<Record<string, unknown>> {
+    private serializeMangaParts(parts: MangaPart[], original: unknown): Array<Record<string, unknown>> {
+        const saved=Array.isArray(original) ? original.filter(isRecord) : [];
+        const prior=(part:MangaPart):Record<string,unknown>|undefined=>saved.find((source,index)=>
+            (this.readText(source,['id']) || `volume-${parseNumber(source.volumeNumber ?? source.volume ?? source.volume_number) ?? index+1}`) === part.id);
+        const managed=new Set(['id','kind','title','name','label','alt_titles','alternativeTitles','volume','volumeNumber','volume_number',
+            'chapterCurrent','chapter_current','current','chapterTotal','chapter_total','total','status']);
+        // Preserve unknown fields in existing notes when editing known progress.
         return parts.map((part) => ({
+            ...Object.fromEntries(Object.entries(prior(part) ?? {}).filter(([key])=>!managed.has(key))),
             id: part.id,
             kind: part.kind,
             title: part.title,
+            ...(part.alternativeTitles?.length ? { alt_titles: part.alternativeTitles } : {}),
             volume: part.volumeNumber,
             chapter_current: part.chapterCurrent,
             chapter_total: part.chapterTotal,
@@ -437,14 +474,14 @@ export class ReadingService {
 
     private getStatus(value: string): ReadingStatus | null {
         const normalized = value.trim().toLowerCase();
-        return ['planned', 'watching', 'completed', 'dropped', 'paused'].includes(normalized)
+        return isCustomStatus(normalized) || ['planned', 'watching', 'completed', 'dropped', 'paused', 'to_be_released'].includes(normalized)
             ? normalized as ReadingStatus
             : null;
     }
 
     private normalizeProvider(value: string): string | null {
         const normalized = value.trim().toLowerCase();
-        return ['hardcover', 'googlebooks', 'anilist', 'jikan', 'shikimori', 'mangaupdates', 'mangadex'].includes(normalized)
+        return ['hardcover', 'googlebooks', 'openlibrary', 'anilist', 'jikan', 'shikimori', 'mangaupdates', 'mangadex', 'comicvine'].includes(normalized)
             ? normalized
             : null;
     }
@@ -465,28 +502,18 @@ export class ReadingService {
     }
 
     private readDateText(source: Record<string, unknown>, keys: string[]): string | null {
+        if (keys[0] === 'started' || keys[0] === 'finished') return readPersonalDate(source, keys);
         const text = this.readText(source, keys);
         if (!text) return null;
         return this.normalizeDateString(text) || null;
     }
 
     private normalizeDateString(value: string): string {
-        const trimmed = value.trim();
-        if (!trimmed) return '';
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        const parsed = Date.parse(trimmed);
-        if (Number.isNaN(parsed)) return '';
-        const date = new Date(parsed);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return normalizeReleaseDate(value);
     }
 
     private parseDateString(value: string | null | undefined): number | null {
-        if (!value) return null;
-        const parsed = Date.parse(value);
-        return Number.isNaN(parsed) ? null : parsed;
+        return personalDateTimestamp(value);
     }
 
     private hasKey(frontmatter: Record<string, unknown> | null | undefined, key: string): boolean {
@@ -550,7 +577,10 @@ export class ReadingService {
 
     private toStringArray(value: unknown): string[] {
         if (Array.isArray(value)) return value.map((entry) => String(entry).trim()).filter(Boolean);
-        if (typeof value === 'string') return value.split(/[,;\n]+/).map((entry) => entry.trim()).filter(Boolean);
+        if (typeof value === 'string') {
+            if (wikilinkLabel(value) !== value) return [value.trim()];
+            return value.split(/[,;\n]+/).map((entry) => entry.trim()).filter(Boolean);
+        }
         return [];
     }
 
