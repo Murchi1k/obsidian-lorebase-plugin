@@ -1,0 +1,188 @@
+.lorebase-psn-settings-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin: 16px 0; }
+.lorebase-psn-settings-field { display: grid; gap: 6px; min-width: 0; }
+.lorebase-psn-settings-field > label { color: var(--text-muted); font-size: 12px; }
+.lorebase-playstation-settings .lorebase-psn-settings-field button { min-height: 34px; height: 34px; font-size: 12px; }
+.lorebase-psn-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.lorebase-psn-settings-disclosure { border-top: 1px solid var(--background-modifier-border); padding: 11px 0; }
+.lorebase-psn-settings-disclosure > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-muted); font-size: 12px; list-style: none; }
+.lorebase-psn-settings-disclosure > summary::after { content: '›'; margin-left: auto; transition: transform .15s; }
+.lorebase-psn-settings-disclosure[open] > summary::after { transform: rotate(90deg); }
+.lorebase-psn-settings-disclosure > summary svg { width: 15px; height: 15px; }
+.lorebase-psn-settings-disclosure .setting-item-description { margin-top: 9px; font-size: 12px; line-height: 1.6; }
+.lorebase-psn-settings-disclosure .lorebase-sync-startup { border: 0; margin: 0; padding: 10px 0 2px; }
+.lorebase-psn-auth-links { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+.lorebase-playstation-settings .lorebase-sync-field-control input.lorebase-sync-field-input { width: 100%; min-width: 0; height: 38px; min-height: 38px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text-normal); }
+.lorebase-psn-auth-message { white-space: pre-line; overflow-wrap: anywhere; margin: 12px 0; }
+.lorebase-psn-progress { display: grid; gap: 12px; container: psn-progress / inline-size; }
+.lorebase-editmode-root .lorebase-psn-progress > .lorebase-game-tracking-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
+.lorebase-psn-refresh-actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.lorebase-psn-refresh-status { font-size: 11px; color: var(--text-muted); max-width: 230px; line-height: 1.4; white-space: pre-line; }
+.lorebase-psn-refresh-status:empty { display: none; }
+.lorebase-psn-refresh-status.is-success { color: var(--color-green); }
+.lorebase-psn-refresh-status.is-warning { color: var(--text-warning); }
+.lorebase-psn-refresh-status.is-error { color: var(--text-error); }
+.lorebase-editmode-root button.lorebase-psn-refresh { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; height: 30px; padding: 0 9px; font-size: 11px; }
+.lorebase-psn-refresh svg { display: block; width: 13px; height: 13px; }
+.lorebase-psn-refresh.is-loading svg { animation: lorebase-psn-spin 1s linear infinite; }
+.lorebase-psn-time { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.lorebase-psn-time > span { display: inline-flex; }
+.lorebase-psn-time svg { display: block; width: 15px; height: 15px; }
+.lorebase-psn-time strong { color: var(--text-normal); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lorebase-psn-platform { border-right: 1px solid var(--background-modifier-border); padding-right: 8px; }
+.lorebase-psn-trophy-set { min-width: 0; }
+.lorebase-psn-set-title { margin: 2px 0 8px; color: var(--text-muted); font-size: 12px; }
+.lorebase-psn-trophy-row { display: grid; grid-template-columns: 40px minmax(0,1fr); align-items: center; gap: 12px; }
+.lorebase-psn-trophy-ring { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: conic-gradient(var(--interactive-accent) var(--psn-trophy-progress),var(--background-modifier-border) 0); }
+.lorebase-psn-trophy-ring::before { position: absolute; content: ''; inset: 3px; border-radius: 50%; background: var(--background-primary); }
+.lorebase-psn-trophy-ring > span { position: relative; font-size: 10px; font-weight: 600; }
+.lorebase-psn-trophies { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.lorebase-psn-trophy { --psn-grade-color: #E99565; position: relative; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 9px 8px; min-width: 0; overflow: hidden; isolation: isolate; border: 1px solid var(--background-modifier-border); border-radius: 10px; background: var(--background-primary); transition: border-color .18s, background .18s, box-shadow .18s; }
+.lorebase-psn-trophy.is-silver { --psn-grade-color: #C5D5EC; }
+.lorebase-psn-trophy.is-gold { --psn-grade-color: #FFD45C; }
+.lorebase-psn-trophy.is-platinum { --psn-grade-color: #A5DFFF; }
+.lorebase-psn-trophy-icon { display: inline-flex; position: relative; z-index: 1; flex: 0 0 72px; }
+.lorebase-psn-trophy > div { position: relative; z-index: 1; display: grid; gap: 4px; min-width: 0; }
+.lorebase-psn-trophy-label { font-size: 10px; color: var(--text-muted); }
+.lorebase-psn-trophy strong { font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lorebase-psn-trophy:hover, .lorebase-psn-trophy:focus-visible { border-color: color-mix(in srgb,var(--psn-grade-color) 65%,var(--background-modifier-border)); background: color-mix(in srgb,var(--psn-grade-color) 7%,var(--background-primary)); box-shadow: 0 0 16px color-mix(in srgb,var(--psn-grade-color) 12%,transparent); outline: none; }
+.lorebase-psn-steam-progress { margin-top: 12px; border-top: 1px solid var(--background-modifier-border); padding-top: 10px; }
+.lorebase-psn-steam-progress > summary { color: var(--text-muted); cursor: pointer; font-size: 12px; }
+.lorebase-psn-steam-progress[open] > div { margin-top: 12px; }
+.lorebase-source-origin, .lorebase-source-catalog { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.lorebase-source-panel.has-sync-source .lorebase-source-compact-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 9px 8px; }
+.lorebase-source-panel.has-sync-source .lorebase-source-state { display: contents; }
+.lorebase-source-panel.has-sync-source .lorebase-source-actions { grid-column: 2; grid-row: 2; }
+.lorebase-source-origin { grid-column: 1 / -1; flex-wrap: nowrap; min-width: 0; }
+.lorebase-source-origin .lorebase-source-role, .lorebase-source-origin .lorebase-source-identity { flex: 0 0 auto; }
+.lorebase-source-origin .lorebase-source-origin-id { flex: 0 1 auto; max-width: none; }
+.lorebase-source-catalog a.lorebase-source-identity { text-decoration: none; color: var(--text-normal); }
+.lorebase-source-catalog a.lorebase-source-identity:hover { text-decoration: underline; }
+.lorebase-source-role, .lorebase-source-origin-id { color: var(--text-muted); font-size: 11px; }
+.lorebase-source-origin-id { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-source-panel .lorebase-source-actions { align-self: flex-end; }
+.modal.lorebase-psn-import-container { width: min(1200px,94vw); max-height: min(850px,92vh); }
+.lorebase-psn-import .lorebase-psn-message { font-size: 12px; color: var(--text-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.lorebase-psn-message:empty { display: none; }
+.lorebase-psn-import .lorebase-trakt-filter-count { margin-left: 4px; }
+.lorebase-psn-review-warning { display: block; margin-top: 3px; font-size: 11px; color: var(--text-warning); }
+@container psn-progress (max-width: 660px) {
+    .lorebase-psn-trophy { flex-direction: column; gap: 5px; padding: 9px 5px; }
+    .lorebase-psn-trophy > div { justify-items: center; }
+    .lorebase-psn-trophy-icon { flex-basis: auto; }
+}
+@container psn-progress (max-width: 380px) {
+    .lorebase-psn-trophy-row { grid-template-columns: minmax(0,1fr); gap: 8px; }
+    .lorebase-psn-trophy-ring { width: 32px; height: 32px; }
+    .lorebase-psn-trophy strong { font-size: 11px; }
+    .lorebase-psn-trophies { gap: 5px; }
+}
+@media (max-width: 600px) {
+    .lorebase-psn-settings-fields { grid-template-columns: minmax(0,1fr); gap: 12px; }
+}
+@keyframes lorebase-psn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lorebase-psn-refresh.is-loading svg { animation: none !important; } }
+
+.lorebase-psn-platinum-particles { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.lorebase-psn-trophy.is-platinum:is(:hover,:focus-visible) .lorebase-psn-platinum-particles { opacity: 1; }
+.lorebase-psn-platinum-particles span { position: absolute; left: var(--psn-spark-x,20%); bottom: -5px; width: 3px; height: 3px; border-radius: 50%; background: #c6eaff; box-shadow: 0 0 6px #b798ef; animation: lorebase-psn-spark 3.8s var(--psn-spark-delay,0s) linear infinite paused; }
+.lorebase-psn-trophy.is-platinum:is(:hover,:focus-visible) .lorebase-psn-platinum-particles span { animation-play-state: running; }
+.lorebase-psn-platinum-particles span:nth-child(2) { --psn-spark-x: 38%; --psn-spark-delay: -1.4s; }
+.lorebase-psn-platinum-particles span:nth-child(3) { --psn-spark-x: 58%; --psn-spark-delay: -2.8s; width: 2px; height: 2px; }
+.lorebase-psn-platinum-particles span:nth-child(4) { --psn-spark-x: 76%; --psn-spark-delay: -.8s; }
+.lorebase-psn-platinum-particles span:nth-child(5) { --psn-spark-x: 89%; --psn-spark-delay: -2s; width: 2px; height: 2px; }
+.lorebase-psn-platinum-particles span:nth-child(6) { --psn-spark-x: 9%; --psn-spark-delay: -3.4s; }
+@keyframes lorebase-psn-spark { 0% { transform: translate(0,0); opacity: 0; } 18% { opacity: .8; } 75% { opacity: .6; } 100% { transform: translate(12px,-110px); opacity: 0; } }
+.lorebase-psn-attach-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.lorebase-editmode-root .lorebase-game-tracking .lorebase-psn-attach-actions button.lorebase-game-steam-refresh { margin-left: 0; }
+.lorebase-editmode-root button.lorebase-psn-attach { height: 30px; min-height: 30px; padding: 0 10px; font-size: 12px; font-weight: 600; }
+.modal.lorebase-psn-match-modal, .modal.lorebase-psn-link-modal { width: min(620px,94vw); max-height: 86vh; padding: 24px; }
+.lorebase-psn-dialog { display: flex; flex-direction: column; gap: 16px; min-height: 0; max-height: calc(86vh - 48px); overflow-y: auto; }
+.lorebase-psn-dialog h2 { margin: 0; padding-right: 24px; font-size: 20px; }
+.lorebase-psn-dialog-subtitle { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.lorebase-psn-dialog-field { display: grid; gap: 8px; }
+.lorebase-psn-dialog-field label { font-size: 12px; color: var(--text-muted); }
+.lorebase-psn-dialog-search { display: flex; gap: 8px; }
+.lorebase-psn-dialog-search input, input.lorebase-psn-link-search { flex: 1; width: 100%; min-width: 0; height: 38px; }
+.lorebase-psn-dialog-search button { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; }
+.lorebase-psn-dialog-search svg { width: 17px; height: 17px; }
+.lorebase-psn-dialog-message { color: var(--text-muted); font-size: 12px; white-space: pre-line; overflow-wrap: anywhere; }
+.lorebase-psn-dialog-message:empty { display: none; }
+.lorebase-psn-match-results, .lorebase-psn-link-results { display: grid; gap: 7px; min-height: 0; max-height: 320px; overflow-y: auto; flex-shrink: 1; }
+button.lorebase-psn-match-result { display: flex; align-items: center; gap: 12px; width: 100%; height: auto; min-height: 54px; padding: 9px 12px; text-align: left; white-space: normal; border: 1px solid var(--background-modifier-border); border-radius: 10px; box-shadow: none; background: var(--background-primary); }
+button.lorebase-psn-match-result:hover { background: var(--background-modifier-hover); }
+button.lorebase-psn-match-result[aria-pressed=true] { border-color: var(--interactive-accent); background: color-mix(in srgb,var(--interactive-accent) 9%,var(--background-primary)); }
+.lorebase-psn-match-result img { width: 38px; height: 50px; object-fit: cover; border-radius: 5px; flex: 0 0 auto; }
+.lorebase-psn-match-result > span:first-of-type { display: grid; gap: 5px; min-width: 0; }
+.lorebase-psn-match-result strong { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.lorebase-psn-match-result > span > span { font-size: 11px; color: var(--text-muted); }
+.lorebase-psn-match-check { margin-left: auto; color: var(--interactive-accent); }
+.lorebase-psn-match-check svg { width: 16px; height: 16px; }
+button.lorebase-psn-only-choice { align-self: flex-start; box-shadow: none; font-size: 12px; }
+button.lorebase-psn-only-choice[aria-pressed=true] { color: var(--interactive-accent); border-color: var(--interactive-accent); }
+.lorebase-psn-dialog-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--background-modifier-border); }
+@media (max-width: 600px) { .modal.lorebase-psn-match-modal, .modal.lorebase-psn-link-modal { padding: 20px 16px; } }
+
+.lorebase-game-tracking-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.lorebase-editmode-root .lorebase-game-tracking .lorebase-game-tracking-actions button.lorebase-game-steam-refresh { margin-left: 0; }
+.lorebase-editmode-root button.lorebase-psn-mode { min-height: 30px; height: 30px; padding: 0 10px; font-weight: 600; }
+.lorebase-editmode-root button.lorebase-psn-mode.is-active { color: var(--lorebase-accent); border-color: var(--lorebase-accent); background: color-mix(in srgb,var(--lorebase-accent) 12%,transparent); }
+.lorebase-game-tracking-actions .lorebase-psn-refresh-status { flex-basis: 100%; text-align: end; }
+.lorebase-psn-trophy-section { display: grid; gap: 9px; container: psn-progress / inline-size; padding-top: 12px; border-top: 1px solid var(--background-modifier-border); }
+.lorebase-psn-trophy-section[hidden], .lorebase-game-tracking-actions button[hidden] { display: none; }
+.lorebase-psn-trophy-heading { color: var(--text-muted); font-size: 11px; }
+.lorebase-psn-trophy-section .lorebase-psn-trophy-row { display: block; }
+.lorebase-psn-navigation > button:last-child { margin-inline-start: auto; }
+.lorebase-psn-connect-intro { margin-bottom: 14px; }
+.lorebase-psn-connection .lorebase-psn-auth-links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 0 0 18px; }
+a.lorebase-psn-auth-step { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; color: var(--text-normal); text-decoration: none; font-size: 12px; background: var(--background-primary); }
+a.lorebase-psn-auth-step:hover { border-color: var(--lorebase-accent); background: var(--background-modifier-hover); }
+.lorebase-psn-auth-step > span:last-child { display: inline-flex; margin-left: auto; color: var(--text-muted); }
+.lorebase-psn-auth-step svg { width: 14px; height: 14px; }
+.lorebase-psn-auth-step-number { display: grid; place-items: center; flex: 0 0 22px; height: 22px; border-radius: 50%; color: var(--lorebase-accent); background: color-mix(in srgb,var(--lorebase-accent) 12%,transparent); font-size: 11px; font-weight: 600; }
+.lorebase-psn-security { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--background-modifier-border); }
+.lorebase-psn-security > summary { color: var(--text-muted); cursor: pointer; font-size: 11px; }
+.lorebase-psn-security .setting-item-description { margin-top: 8px; font-size: 12px; }
+.lorebase-psn-card-match { display: flex; align-items: center; gap: 5px; color: #a7dbc0; font-size: 10px; line-height: 1.4; margin-top: 4px; }
+.lorebase-psn-card-match > span:first-child { display: inline-flex; }
+.lorebase-psn-card-match svg { width: 13px; height: 13px; }
+@media (max-width: 600px) { .lorebase-psn-connection .lorebase-psn-auth-links { grid-template-columns: minmax(0,1fr); } }
+
+
+/* Compact PS toggle; the refresh button is mounted only while expanded. */
+.lorebase-psn-control { display: inline-flex; align-items: center; gap: 0; flex: 0 0 auto; padding: 2px; border: 1px solid var(--background-modifier-border); border-radius: 7px; background: transparent; }
+.lorebase-psn-control.is-active { border-color: color-mix(in srgb,var(--lorebase-accent) 45%,var(--background-modifier-border)); background: color-mix(in srgb,var(--lorebase-accent) 9%,var(--background-primary)); }
+.lorebase-editmode-root .lorebase-game-tracking .lorebase-psn-control button { height: 28px; min-height: 28px; border: 0; border-radius: 5px; background: transparent; box-shadow: none; padding: 0 9px; color: var(--text-muted); }
+.lorebase-editmode-root .lorebase-game-tracking .lorebase-psn-control.is-active .lorebase-psn-mode { color: var(--text-normal); font-weight: 600; }
+.lorebase-editmode-root .lorebase-game-tracking .lorebase-psn-control button.lorebase-psn-refresh { width: 28px; min-width: 28px; padding: 0; margin: 0; border-inline-start: 1px solid color-mix(in srgb,var(--lorebase-accent) 22%,transparent); border-start-start-radius: 0; border-end-start-radius: 0; }
+.lorebase-psn-mode-indicator { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: var(--lorebase-accent); }
+.lorebase-psn-control button:hover:not(:disabled) { background: var(--background-modifier-hover); }
+/* Shared frame with optical sizing: compensate for each silhouette and its visual weight. */
+.lorebase-psn-trophy-art { display: block; width: 72px; height: 72px; background-repeat: no-repeat; }
+.lorebase-psn-trophy-art.is-bronze { background-image: url('./assets/playstation/bronze.png'); background-size: 82.90982% 82.90982%; background-position: 50.00000% 50.00000%; }
+.lorebase-psn-trophy-art.is-silver { background-image: url('./assets/playstation/silver.png'); background-size: 85.79531% 85.79531%; background-position: 57.07804% 50.58984%; }
+.lorebase-psn-trophy-art.is-gold { background-image: url('./assets/playstation/gold.png'); background-size: 89.28749% 89.28749%; background-position: 70.34884% 50.00000%; }
+.lorebase-psn-trophy-art.is-platinum { background-image: url('./assets/playstation/platinum.png'); background-size: 98.93720% 98.93720%; background-position: 50.00000% 50.00000%; }
+@container psn-progress (max-width: 380px) { .lorebase-psn-trophy-art { width: 60px; height: 60px; } }
+@container psn-progress (max-width: 320px) { .lorebase-psn-trophies { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+/* Effects appear only on hover or keyboard focus, with a visible moving highlight. */
+.lorebase-psn-trophy { --psn-effect-primary: 233,149,101; --psn-effect-secondary: 171,104,65; --psn-ambient-strength: .18; --psn-drift-duration: 10s; --psn-sheen-duration: 5.5s; }
+.lorebase-psn-trophy.is-silver { --psn-effect-primary: 197,213,236; --psn-effect-secondary: 119,169,219; --psn-ambient-strength: .26; --psn-drift-duration: 8s; --psn-sheen-duration: 4.5s; }
+.lorebase-psn-trophy.is-gold { --psn-effect-primary: 255,212,92; --psn-effect-secondary: 234,149,51; --psn-ambient-strength: .29; --psn-drift-duration: 7s; --psn-sheen-duration: 4s; }
+.lorebase-psn-trophy.is-platinum { --psn-effect-primary: 140,120,255; --psn-effect-secondary: 90,200,255; --psn-ambient-strength: .38; --psn-drift-duration: 5s; --psn-sheen-duration: 3s; }
+.lorebase-psn-trophy-ambient { position: absolute; z-index: 0; inset: -65%; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 15% 25%,rgba(var(--psn-effect-primary),.9),transparent 52%), radial-gradient(ellipse at 85% 75%,rgba(var(--psn-effect-secondary),.85),transparent 52%); animation: lorebase-psn-background-drift var(--psn-drift-duration) ease-in-out infinite alternate paused; transition: opacity .25s; }
+.lorebase-psn-trophy-ambient::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg,transparent 32%,rgba(var(--psn-effect-secondary),.55) 48%,rgba(var(--psn-effect-primary),.35) 54%,transparent 68%); background-size: 250% 100%; animation: lorebase-psn-background-sheen var(--psn-sheen-duration) ease-in-out infinite paused; }
+.lorebase-psn-trophy:is(:hover,:focus-visible) .lorebase-psn-trophy-ambient { opacity: var(--psn-ambient-strength); animation-play-state: running; }
+.lorebase-psn-trophy:is(:hover,:focus-visible) .lorebase-psn-trophy-ambient::after { animation-play-state: running; }
+.lorebase-psn-trophy.is-platinum::before { content: ''; position: absolute; z-index: 0; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s; background: radial-gradient(320px circle at var(--psn-pointer-x,50%) var(--psn-pointer-y,50%),rgba(var(--psn-effect-primary),.22),transparent 60%); }
+.lorebase-psn-trophy.is-platinum::after { content: ''; position: absolute; z-index: 2; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none; opacity: 0; transition: opacity .25s; background: radial-gradient(220px circle at var(--psn-pointer-x,50%) var(--psn-pointer-y,50%),rgba(var(--psn-effect-secondary),.9),rgba(var(--psn-effect-primary),.5) 40%,transparent 70%); -webkit-mask: linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); mask-composite: exclude; }
+.lorebase-psn-trophy.is-platinum:is(:hover,:focus-visible)::before, .lorebase-psn-trophy.is-platinum:is(:hover,:focus-visible)::after { opacity: 1; }
+.lorebase-psn-trophy.is-platinum:is(:hover,:focus-visible) { box-shadow: 0 8px 26px rgba(var(--psn-effect-primary),.16); }
+@keyframes lorebase-psn-background-drift { from { transform: translate3d(-16%,-10%,0) rotate(-10deg); } to { transform: translate3d(16%,10%,0) rotate(10deg); } }
+@keyframes lorebase-psn-background-sheen { 0% { background-position: 140% 0; } 100% { background-position: -40% 0; } }
+/* Keep the hover shimmer gentle under reduced motion; avoid moving the whole light layer. */
+@media (prefers-reduced-motion: reduce) {
+    .lorebase-psn-trophy-ambient { animation-name: none; transform: none; }
+    .lorebase-psn-trophy-ambient::after { animation-duration: 8s; }
+    .lorebase-psn-platinum-particles span { animation-duration: 8s; }
+}
