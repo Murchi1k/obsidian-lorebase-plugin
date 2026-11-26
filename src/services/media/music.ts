@@ -77,7 +77,10 @@ export function normalizeMusicTracks(value: unknown): MusicTrack[] {
             id, title: String(v.title ?? ''), artist: String(v.artist ?? ''),
             artists: Array.isArray(v.artists) ? [...new Set<string>(v.artists.filter((name: unknown): name is string => typeof name === 'string' && !!name.trim()).map((name: string) => name.trim()))] : undefined,
             deezerArtistIds: v.deezerArtistIds && typeof v.deezerArtistIds === 'object' && !Array.isArray(v.deezerArtistIds)
-                ? Object.fromEntries(Object.entries(v.deezerArtistIds).filter(([name, id]) => name.trim() && typeof id === 'string' && /^\d+$/.test(id))) as Record<string, string> : undefined,
+                ? Object.fromEntries(Object.entries(v.deezerArtistIds as Record<string, unknown>).filter((entry): entry is [string, string] => {
+                    const [name, id] = entry;
+                    return !!name.trim() && typeof id === 'string' && /^\d+$/.test(id);
+                })) : undefined,
             duration: durationSeconds(v.duration ?? v.length), disc: Math.max(1, Math.floor(Number(v.disc) || 1)),
             listened: v.listened === true, favorite: v.favorite === true,
             userRating: v.userRating != null && Number.isFinite(rating) && rating >= 1 && rating <= 10 ? rating : null,
