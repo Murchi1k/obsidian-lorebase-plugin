@@ -166,7 +166,7 @@ describe('settings deep links', () => {
         document.body.append(container);
         const tab = {
             containerEl: container, openAccordionSections: new Set(), activeSettingsSection: 'general',
-            display() { container.innerHTML = '<details class="lorebase-settings-accordion-section is-customization"><summary>Cards</summary><details class="lorebase-status-plans-group"><summary>Statuses</summary></details></details>'; },
+            renderSettings() { container.innerHTML = '<details class="lorebase-settings-accordion-section is-customization"><summary>Cards</summary><details class="lorebase-status-plans-group"><summary>Statuses</summary></details></details>'; },
         };
         LorebaseSettingTab.prototype.openSection.call(tab as any, 'customization', '.lorebase-status-plans-group');
         await new Promise(resolve => requestAnimationFrame(resolve));

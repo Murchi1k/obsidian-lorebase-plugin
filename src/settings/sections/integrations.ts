@@ -7,7 +7,7 @@ import { getTmdbLanguageOptions } from '../../utils/tmdbLanguageOptions';
 import { renderProviderLegend } from './providerLegend';
 import { mt } from '../../localization/music';
 import { renderMusicProviderSettings } from './music';
-import { Notice, Setting, setIcon } from 'obsidian';
+import { Notice, requireApiVersion, Setting, setIcon } from 'obsidian';
 import { i18n, t, type TranslationKey } from '../../localization';
 import type { IntegrationTemplateSettings, NoteTemplateSettings } from '../../types';
 import { getSecretStorage } from '../../services/CredentialStore';
@@ -270,20 +270,19 @@ function renderProviders(context: SettingsSectionContext, container: HTMLElement
     setIcon(pacingSummary.createSpan({ attr: { 'aria-hidden': 'true' } }), 'timer');
     pacingSummary.createSpan({ text: t('settingsIntegrationsRequestCooldown') });
     setIcon(pacingSummary.createSpan({ cls: 'lorebase-provider-pacing-arrow', attr: { 'aria-hidden': 'true' } }), 'chevron-down');
-    new Setting(pacing)
-        .setDesc(t('settingsIntegrationsRequestCooldownDesc'))
-        .addSlider(slider => {
-            slider
-                .setLimits(0, 10, 0.5)
-                .setDynamicTooltip()
-                .setValue(Number.isFinite(integrations.requestCooldownSeconds)
-                    ? Math.min(10, Math.max(0, integrations.requestCooldownSeconds))
-                    : 1)
-                .onChange(async (value) => {
-                    integrations.requestCooldownSeconds = value;
-                    await context.plugin.saveSettings();
-                });
+    const cooldown = new Setting(pacing).setDesc(t('settingsIntegrationsRequestCooldownDesc'));
+    cooldown.addSlider(slider => {
+        slider.setLimits(0, 10, 0.5).setValue(Number.isFinite(integrations.requestCooldownSeconds)
+            ? Math.min(10, Math.max(0, integrations.requestCooldownSeconds))
+            : 1);
+        const readout = requireApiVersion('1.13.0') ? undefined
+            : cooldown.controlEl.createEl('output', { text: slider.getValuePretty(), attr: { 'aria-hidden': 'true' } });
+        slider.onChange(async (value) => {
+            if (readout) readout.value = slider.getValuePretty();
+            integrations.requestCooldownSeconds = value;
+            await context.plugin.saveSettings();
         });
+    });
 
     const providersBlock = container.createDiv({ cls: 'lorebase-settings-block lorebase-provider-directory' });
     providersBlock.createEl('h3', { cls: 'lorebase-settings-group-title', text: t('settingsIntegrationsProviders') });
@@ -330,8 +329,7 @@ function renderProviders(context: SettingsSectionContext, container: HTMLElement
     let selectedProviderId: string | null = null;
 
     const providerPicker = providerWorkspace.createDiv({ cls: 'lorebase-provider-picker' });
-    const providerDetails = providerWorkspace.ownerDocument.createElement('div');
-    providerDetails.className = 'lorebase-provider-details is-visible';
+    const providerDetails = providerWorkspace.ownerDocument.adoptNode(createDiv({ cls: 'lorebase-provider-details is-visible' }));
     const chipButtons = new Map<string, { chip: HTMLButtonElement; definition: ProviderSettingsDef; group: HTMLElement; category: ProviderCategory }>();
     const stateLabels = {
         en: { enabled: 'Enabled', disabled: 'Disabled', unconfigured: 'Setup required' },

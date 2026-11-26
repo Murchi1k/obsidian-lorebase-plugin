@@ -67,7 +67,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
         }
         this.activeSettingsSection = section;
         this.openAccordionSections.add(section);
-        this.display();
+        this.renderSettings();
         this.containerEl.ownerDocument.defaultView?.requestAnimationFrame(() => {
             const target = this.containerEl.querySelector<HTMLElement>(selector
                 ?? `#lorebase-settings-panel-${section}, .lorebase-settings-accordion-section.is-${section}`);
@@ -117,7 +117,12 @@ export class LorebaseSettingTab extends PluginSettingTab {
         return [];
     }
 
+    // Keep the imperative settings hook for compatibility with Obsidian 1.7.
     display(): void {
+        this.renderSettings();
+    }
+
+    private renderSettings(): void {
         this.renderLifetime.abort();
         this.renderLifetime = new AbortController();
         const scrollState = this.captureScrollState();
@@ -233,7 +238,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
                 this.plugin.settings.settingsLayoutMode = option.mode;
                 if (option.mode === 'accordion') this.openAccordionSections = new Set([this.activeSettingsSection]);
                 void this.plugin.saveSettings();
-                this.display();
+                this.renderSettings();
             });
         }
     }
@@ -393,7 +398,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
             signal: this.renderLifetime.signal,
             plugin: this.plugin,
             onMangaWorkTypesChanged: () => this.onMangaWorkTypesChanged?.(),
-            display: () => this.display(),
+            display: () => this.renderSettings(),
             createSectionHeader: (container, icon, text) => this.createSectionHeader(container, icon, text),
             createCollapsibleGroup: (container, title, description, open) => this.createCollapsibleGroup(container, title, description, open),
             getActiveMediaTab: (scope) => this.activeMediaTabs[scope],
