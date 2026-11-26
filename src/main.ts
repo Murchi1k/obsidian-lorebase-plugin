@@ -1963,7 +1963,7 @@ export default class LorebasePlugin extends Plugin {
                 const button = view instanceof LibraryView ? view.contentEl.querySelector<HTMLElement>('.lorebase-add-btn') : null;
                 if (!button) { new Notice(copy.failed); return false; }
                 settingsApi?.close();
-                requestAnimationFrame(() => highlightReleaseTarget(button));
+                button.ownerDocument.defaultView?.requestAnimationFrame(() => highlightReleaseTarget(button));
                 return true;
             }
             if (target === 'librarySearch') {
@@ -1973,7 +1973,7 @@ export default class LorebasePlugin extends Plugin {
                     ? view.contentEl.querySelector<HTMLInputElement>('.lorebase-search-input') : null;
                 if (!input) { new Notice(copy.failed); return false; }
                 settingsApi?.close();
-                requestAnimationFrame(() => highlightReleaseTarget(input));
+                input.ownerDocument.defaultView?.requestAnimationFrame(() => highlightReleaseTarget(input));
                 return true;
             }
             if (target === 'calendar' || target === 'groups') {

@@ -29,7 +29,8 @@ export class ReleaseCalendarModal extends Modal {
     private countEl: HTMLElement | null = null;
     private loading = true;
     private loadGeneration = 0;
-    private searchTimer: ReturnType<typeof setTimeout> | null = null;
+    private searchTimer: number | null = null;
+    private get view(): Window { return this.contentEl.ownerDocument.defaultView ?? window; }
 
     constructor(
         app: App,
@@ -57,7 +58,7 @@ export class ReleaseCalendarModal extends Modal {
 
     onClose(): void {
         this.loadGeneration++;
-        if (this.searchTimer !== null) clearTimeout(this.searchTimer);
+        if (this.searchTimer !== null) this.view.clearTimeout(this.searchTimer);
         this.searchTimer = null;
         this.contentEl.empty();
         this.bodyEl = null;
@@ -117,8 +118,8 @@ export class ReleaseCalendarModal extends Modal {
         input.value = this.query;
         input.addEventListener('input', () => {
             this.query = input.value;
-            if (this.searchTimer !== null) clearTimeout(this.searchTimer);
-            this.searchTimer = setTimeout(() => {
+            if (this.searchTimer !== null) this.view.clearTimeout(this.searchTimer);
+            this.searchTimer = this.view.setTimeout(() => {
                 this.searchTimer = null;
                 this.selectedDay = null;
                 this.renderBody(true);

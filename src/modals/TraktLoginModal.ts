@@ -53,9 +53,10 @@ export class TraktLoginModal extends Modal {
         } catch (error) { if (!this.controller.signal.aborted) fail(traktError(error, 'auth')); }
     }
     private delay(ms: number): Promise<void> {
+        const view = this.contentEl.ownerDocument.defaultView ?? window;
         return new Promise((resolve, reject) => {
-            const signal = this.controller.signal, abort = () => { clearTimeout(timer); reject(new DOMException('Cancelled', 'AbortError')); };
-            const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, ms);
+            const signal = this.controller.signal, abort = () => { view.clearTimeout(timer); reject(new DOMException('Cancelled', 'AbortError')); };
+            const timer = view.setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, ms);
             signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
         });
     }

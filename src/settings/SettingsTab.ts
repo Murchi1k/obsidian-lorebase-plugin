@@ -68,7 +68,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
         this.activeSettingsSection = section;
         this.openAccordionSections.add(section);
         this.display();
-        requestAnimationFrame(() => {
+        this.containerEl.ownerDocument.defaultView?.requestAnimationFrame(() => {
             const target = this.containerEl.querySelector<HTMLElement>(selector
                 ?? `#lorebase-settings-panel-${section}, .lorebase-settings-accordion-section.is-${section}`);
             if (!target) return;

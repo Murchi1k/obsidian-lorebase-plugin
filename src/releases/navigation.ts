@@ -65,9 +65,10 @@ export function highlightReleaseTarget(target: HTMLElement | null | undefined): 
     target.classList.add('lorebase-release-target-highlight');
     if (previousTabIndex === null) target.setAttribute('tabindex', '-1');
     target.focus({ preventScroll: true });
-    const timer = setTimeout(cleanup, 5000);
+    const view = target.ownerDocument.defaultView ?? window;
+    const timer = view.setTimeout(cleanup, 5000);
     function cleanup(): void {
-        clearTimeout(timer);
+        view.clearTimeout(timer);
         target!.classList.remove('lorebase-release-target-highlight');
         if (previousTabIndex === null) target!.removeAttribute('tabindex');
         highlights.delete(target!);

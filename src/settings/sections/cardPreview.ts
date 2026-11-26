@@ -430,7 +430,7 @@ export function createCardPreview(
             }
         }
         fit();
-        requestAnimationFrame(placeHandle);
+        drawing.ownerDocument.defaultView?.requestAnimationFrame(placeHandle);
     };
     return render;
 }

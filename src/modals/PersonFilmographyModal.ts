@@ -18,7 +18,8 @@ export class PersonFilmographyModal extends Modal {
     private results?: HTMLElement; private paging?: HTMLElement;
     private pending = new Set<string>();
     private findInLibrary?: ReturnType<PeopleService['libraryIndex']>;
-    private refreshTimer?: ReturnType<typeof setTimeout>;
+    private refreshTimer?: number;
+    private get view(): Window { return this.contentEl.ownerDocument.defaultView ?? window; }
     constructor(app: App, private service: PeopleService, private actor: CastMember | string, private languageMedia: 'movie' | 'series', private currentRole = '') { super(app); }
     onOpen(): void {
         if (!areOnlineExtrasEnabled()) { this.close(); return; }
@@ -31,10 +32,10 @@ export class PersonFilmographyModal extends Modal {
         this.cleanup.push(() => this.app.vault.offref(deleted), () => this.app.vault.offref(renamed));
         if (typeof this.actor === 'string') void this.search(this.actor); else void this.load(this.actor);
     }
-    onClose(): void { this.alive = false; this.generation++; if (this.refreshTimer) clearTimeout(this.refreshTimer); this.refreshTimer = undefined; this.findInLibrary = undefined; this.cleanup.splice(0).forEach(fn => fn()); this.contentEl.replaceChildren(); }
+    onClose(): void { this.alive = false; this.generation++; if (this.refreshTimer) this.view.clearTimeout(this.refreshTimer); this.refreshTimer = undefined; this.findInLibrary = undefined; this.cleanup.splice(0).forEach(fn => fn()); this.contentEl.replaceChildren(); }
     private scheduleLibraryRefresh(): void {
         if (!this.alive || !this.person || this.refreshTimer) return;
-        this.refreshTimer = setTimeout(() => {
+        this.refreshTimer = this.view.setTimeout(() => {
             this.refreshTimer = undefined; this.findInLibrary = undefined;
             if (this.alive) this.renderCredits();
         }, 100);

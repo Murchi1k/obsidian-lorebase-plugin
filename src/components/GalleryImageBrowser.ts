@@ -7,6 +7,7 @@ const PAGE_SIZE = 12;
 type Browser = { update(images: SourceImage[]): void; dispose(): void };
 
 export function createGalleryImageBrowser(root: HTMLElement, title: string, kind: GalleryImageKind): Browser {
+    const view = root.ownerDocument.defaultView ?? window;
     const preview = root.createDiv({ cls: 'lorebase-poster-gallery-preview' });
     const photo = preview.createEl('img', { attr: { decoding: 'async' } });
     const nav = root.createDiv({ cls: 'lorebase-poster-gallery-nav' });
@@ -23,7 +24,7 @@ export function createGalleryImageBrowser(root: HTMLElement, title: string, kind
     let drawn: SourceImage[] = [];
     let drawnPage = -1;
     let current: SourceImage | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: number | undefined;
     let original: HTMLImageElement | undefined;
 
     function control(icon: string, label: string, action: () => void): HTMLButtonElement {
@@ -34,7 +35,7 @@ export function createGalleryImageBrowser(root: HTMLElement, title: string, kind
     }
 
     function dispose(): void {
-        clearTimeout(timer);
+        view.clearTimeout(timer);
         if (original) {
             original.onload = null;
             original.removeAttribute('src');
@@ -49,7 +50,7 @@ export function createGalleryImageBrowser(root: HTMLElement, title: string, kind
         photo.alt = title + ' · ' + (selected + 1);
         photo.src = image.thumbnail;
         if (image.thumbnail === image.url) return;
-        timer = setTimeout(() => {
+        timer = view.setTimeout(() => {
             const pending = photo.ownerDocument.createElement('img');
             original = pending;
             pending.decoding = 'async';
