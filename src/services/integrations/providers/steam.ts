@@ -1,4 +1,5 @@
-import { GameDetails, SearchResult } from '../types';
+import { inferGameWorkType } from '../workTypeInference';
+import { GameDetails, SearchResult, type SourceImage } from '../types';
 import type { GameDlc } from '../../../types';
 import { JsonFetcher, asObject, getArray, getObject, getString, mapStringList, stripHtml, extractYear } from './common';
 import { getSteamLibraryPoster, getSteamVerticalImageCandidates } from '../steamImages';
@@ -87,9 +88,12 @@ export async function searchSteam(fetchJson: JsonFetcher, query: string, options
             id,
             title: getString(record, 'name') || 'Unknown',
             subtitle: released,
+            released,
             year: extractYear(released),
             image,
             provider: 'steam' as const,
+            workType: inferGameWorkType(record),
+            workTypeMedia: 'game' as const,
         };
     }))).filter((result): result is SearchResult => result !== null);
 
@@ -154,8 +158,7 @@ export async function getSteamDetails(
     url.searchParams.set('cc', 'us');
 
     const json = asObject(await fetchJson(url.toString()));
-    const appResult = getObject(json, id);
-    const data = getObject(appResult, 'data');
+    const data = getSteamAppData(json, id);
     if (!data) return null;
 
     const genres = mapStringList(getArray(data, 'genres'), (entry) => getString(asObject(entry), 'description'));
@@ -185,6 +188,7 @@ export async function getSteamDetails(
         poster,
         posterHorizontal,
         genres,
+        workType: inferGameWorkType(data),
         platforms,
         developers,
         publishers,
@@ -280,14 +284,47 @@ async function fetchSteamBasicAppDetails(fetchJson: JsonFetcher, id: string): Pr
         url.searchParams.set('cc', 'us');
 
         const json = asObject(await fetchJson(url.toString()));
-        const appResult = getObject(json, id);
-        return getObject(appResult, 'data');
+        return getSteamAppData(json, id);
     } catch (error) {
         if (isProviderBlockedError(error)) throw error;
         return null;
     }
 }
 
+function getSteamAppData(json: Record<string, unknown> | null, id: string): Record<string, unknown> | null {
+    const direct = getObject(json, id);
+    const directData = getObject(direct, 'data');
+    if (direct?.success !== false && directData) return directData;
+
+    // Steam may key an appdetails response by an edition ID while the
+    // payload still identifies the requested game. Never use unrelated data.
+    for (const value of Object.values(json ?? {})) {
+        const result = asObject(value);
+        const data = getObject(result, 'data');
+        if (result?.success !== false && data && getString(data, 'steam_appid') === id) {
+            return data;
+        }
+    }
+    return null;
+}
+
 function isLikelySteamExtraContent(title: string): boolean {
     return /\b(dlc|soundtrack|expansion pass|season pass|redkit|bonus content|add-?on)\b/i.test(title);
+}
+
+export async function getSteamGallery(fetchJson: JsonFetcher, id: string): Promise<SourceImage[]> {
+    if (!/^[1-9]\d*$/.test(id)) return [];
+    const params = new URLSearchParams({ appids: id, filters: 'screenshots' });
+    const data = getSteamAppData(asObject(await fetchJson(`https://store.steampowered.com/api/appdetails?${params}`)), id);
+    return getArray(data, 'screenshots').map(raw => {
+        const shot = asObject(raw);
+        return { url: getString(shot, 'path_full'), thumbnail: getString(shot, 'path_thumbnail') };
+    });
+}
+
+export async function getSteamTrailerEntries(fetchJson: JsonFetcher, id: string): Promise<unknown[]> {
+    if (!/^[1-9]\d*$/.test(id)) return [];
+    const params = new URLSearchParams({ appids: id, filters: 'movies' });
+    const data = getSteamAppData(asObject(await fetchJson(`https://store.steampowered.com/api/appdetails?${params}`)), id);
+    return getArray(data, 'movies');
 }

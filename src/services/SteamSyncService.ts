@@ -1,3 +1,6 @@
+import { orderTemplateContent } from './integrations/templateSchema';
+
+import { completeImportedMetadata } from './integrations/importMetadata';
 import { App, TFile } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../constants';
 import type { GameStatus, LorebaseSettings, SteamSyncSettings } from '../types';
@@ -8,6 +11,7 @@ import { buildSimpleTemplate, getDefaultTemplateFields, getEffectiveSimpleTempla
 import { extractYear } from './integrations/providers/common';
 import type { JsonFetcher } from './integrations/providers/common';
 import { localizeTemplateImages } from './integrations/imageStorage';
+import { OperationLifetime, isOperationCancelled, type BackgroundOperation } from './BackgroundOperation';
 import { MetadataService } from './MetadataService';
 import {
     ensureFolder,
@@ -20,6 +24,9 @@ import {
     shouldLoadHowLongToBeat,
 } from './integrations/shared';
 import { recordIntegrationDiagnostic } from './integrations/diagnostics';
+import { isSteamPlaceholderName } from './integrations/steamPreview';
+import { createLibraryMembership } from './integrations/libraryMembership';
+import { getSteamTracking, type SteamTrackingResult } from './integrations/providers/steamTracking';
 
 export interface SteamOwnedGame {
     appId: number;
@@ -48,6 +55,7 @@ export interface SteamSyncGame {
 }
 
 export interface SteamSyncResult {
+    cancelled?: boolean;
     created: number;
     updated: number;
     skipped: number;
@@ -122,6 +130,7 @@ export class SteamSyncController {
 }
 
 export interface SteamSyncOptions {
+    signal?: AbortSignal;
     onProgress?: (message: string) => void;
     onItemStart?: (candidate: SteamImportCandidate, index: number, total: number) => void;
     onItemResult?: (item: SteamSyncItemResult) => void;
@@ -141,16 +150,34 @@ export interface SteamImportCandidate {
     source: 'owned' | 'wishlist' | 'owned_wishlist';
     poster?: string;
     posterHorizontal?: string;
+    alreadyInLibrary?: boolean;
 }
 
 export class SteamSyncService {
+    private readonly previewContexts = new WeakMap<SteamImportCandidate, string>();
+    private previewContext(settings: LorebaseSettings | SteamSyncSettings): string {
+        return JSON.stringify([this.getSteamSettings(settings).steamId, this.getSteamSettings(settings).apiKey,
+            this.isLorebaseSettings(settings) ? settings.games.folderPath : '']);
+    }
+    private readonly operations = new OperationLifetime();
+    dispose(): void { this.operations.dispose(); }
+    private begin(settings: LorebaseSettings | SteamSyncSettings, signal?: AbortSignal, cancelled?: () => boolean): BackgroundOperation {
+        const expected = JSON.stringify([this.getSteamSettings(settings), this.isLorebaseSettings(settings) ? settings.games.folderPath : this.currentSettings?.().games.folderPath ?? '']);
+        return this.operations.begin(() => {
+            const live = this.currentSettings?.() ?? settings;
+            return JSON.stringify([this.getSteamSettings(live), this.isLorebaseSettings(live) ? live.games.folderPath : '']);
+        }, signal, cancelled, expected);
+    }
     private app: App;
     private metadataService: MetadataService;
     private jsonFetcher: JsonFetcher;
     private detailsCache = new Map<number, GameDetails | null>();
     private warnings: string[] = [];
+    private previewNames = new Map<number, string>();
+    private previewNameRetries = new Map<number, number>();
+    private previewNameRequests = new Map<string, Promise<void>>();
 
-    constructor(app: App, metadataService: MetadataService) {
+    constructor(app: App, metadataService: MetadataService, private readonly currentSettings?: () => LorebaseSettings) {
         this.app = app;
         this.metadataService = metadataService;
         this.jsonFetcher = getJsonFetcher((url, headers, method, body) => fetchJson(url, headers, method, body, {
@@ -269,10 +296,58 @@ export class SteamSyncService {
     }
 
     async previewImport(settings: LorebaseSettings | SteamSyncSettings): Promise<SteamImportCandidate[]> {
-        this.clearWarnings();
-        const steamSettings = this.getSteamSettings(settings);
-        const candidates = await this.loadCandidates(steamSettings);
-        return this.preparePreviewCandidates(candidates);
+        const operation = this.begin(settings);
+        try {
+            this.clearWarnings();
+            const steamSettings = this.getSteamSettings(settings);
+            const candidates = await operation.wait(() => this.loadCandidates(steamSettings));
+            if (this.isLorebaseSettings(settings)) {
+                const folder = settings.games.folderPath.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+                const contains = createLibraryMembership(this.app.vault.getFiles()
+                    .filter(file => file.extension === 'md' && (!folder || file.path.startsWith(`${folder}/`)))
+                    .map(file => ({ basename: file.basename, metadata: this.metadataService.resolveFrontmatter('game', this.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) })), 'games');
+                for (const candidate of candidates) candidate.alreadyInLibrary = contains({ provider: 'steam', id: String(candidate.appId), title: candidate.name });
+            }
+            const prepared = this.preparePreviewCandidates(candidates);
+            for (const candidate of prepared) this.previewContexts.set(candidate, this.previewContext(settings));
+            return prepared;
+        } finally { operation.close(); }
+    }
+
+    /** Resolve wishlist IDs in small batches without loading full app details or artwork. */
+    async resolvePreviewNames(appIds: number[]): Promise<Record<number, string>> {
+        const ids = [...new Set(appIds.filter(id => Number.isSafeInteger(id) && id > 0))].slice(0, 40);
+        for (const id of ids) {
+            const name = this.detailsCache.get(id)?.name;
+            if (name && !isSteamPlaceholderName(name)) this.previewNames.set(id, name);
+        }
+        const missing = ids.filter(id => !this.previewNames.has(id) && (this.previewNameRetries.get(id) ?? 0) <= Date.now()).sort((a, b) => a - b);
+        if (missing.length) {
+            const key = missing.join(',');
+            let request = this.previewNameRequests.get(key);
+            if (!request) {
+                request = (async () => {
+                    try {
+                        const url = new URL('https://api.steampowered.com/IStoreBrowseService/GetItems/v1/');
+                        url.searchParams.set('input_json', JSON.stringify({ ids: missing.map(appid => ({ appid })), context: { language: 'english', country_code: 'US' } }));
+                        const root = this.asObject(await this.jsonFetcher(url.toString()));
+                        for (const value of this.asArray(this.asObject(root?.response)?.store_items)) {
+                            const item = this.asObject(value);
+                            const id = this.toNumber(item?.appid ?? item?.id);
+                            const name = this.toString(item?.name).trim();
+                            if (missing.includes(id) && this.toNumber(item?.success) === 1 && !isSteamPlaceholderName(name)) this.previewNames.set(id, name);
+                        }
+                    } catch { /* Optional names must never prevent selection or importing. */ }
+                    finally {
+                        for (const id of missing) if (!this.previewNames.has(id)) this.previewNameRetries.set(id, Date.now() + 5 * 60_000);
+                    }
+                })();
+                this.previewNameRequests.set(key, request);
+                void request.finally(() => this.previewNameRequests.delete(key));
+            }
+            await request;
+        }
+        return Object.fromEntries(ids.flatMap(id => this.previewNames.has(id) ? [[id, this.previewNames.get(id)!]] : []));
     }
 
     async sync(settings: LorebaseSettings, options: SteamSyncOptions = {}): Promise<SteamSyncResult> {
@@ -280,101 +355,116 @@ export class SteamSyncService {
         this.clearWarnings();
 
         const result: SteamSyncResult = { created: 0, updated: 0, skipped: 0, failed: 0 };
-        options.onProgress?.('Loading Steam data...');
-
-        const allCandidates = options.candidates
-            ? options.candidates.map((candidate) => ({ ...candidate }))
-            : await this.loadCandidates(steamSettings);
-        const candidates = options.selectedAppIds
-            ? allCandidates.filter((candidate) => options.selectedAppIds?.has(candidate.appId))
-            : allCandidates;
-        const existingIndex = this.indexExistingGames(settings.games.folderPath);
-        const duplicateCount = candidates.filter((candidate) => this.findDuplicate(candidate, existingIndex) !== null).length;
-        let updateDuplicates = steamSettings.duplicateMode === 'update';
-
-        if (steamSettings.duplicateMode === 'ask' && duplicateCount > 0) {
-            updateDuplicates = options.confirmDuplicateUpdate
-                ? await options.confirmDuplicateUpdate(duplicateCount)
-                : await this.confirmDuplicateUpdate(duplicateCount);
-        }
-
-        const template = this.getGameTemplate(settings);
-        await ensureFolder(this.app, settings.games.folderPath);
-
-        let halted = false;
-        for (let index = 0; index < candidates.length; index++) {
-            const candidate = candidates[index];
-            if (options.control?.isCancelled()) {
-                options.onHalt?.('cancelled');
-                halted = true;
-                break;
+        const operation = this.begin(settings, options.signal, () => options.control?.isCancelled() ?? false);
+        try {
+            if (options.candidates?.some(candidate => this.previewContexts.has(candidate) && this.previewContexts.get(candidate) !== this.previewContext(settings))) {
+                result.cancelled = true; options.onHalt?.('cancelled'); return result;
             }
-            await options.control?.waitIfPaused();
-            if (options.control?.isCancelled()) {
-                options.onHalt?.('cancelled');
-                halted = true;
-                break;
+            options.onProgress?.('Loading Steam data...');
+
+            const allCandidates = options.candidates
+                ? options.candidates.map((candidate) => ({ ...candidate }))
+                : await operation.wait(() => this.loadCandidates(steamSettings));
+            const candidates = options.selectedAppIds
+                ? allCandidates.filter((candidate) => options.selectedAppIds?.has(candidate.appId))
+                : allCandidates;
+            const existingIndex = this.indexExistingGames(settings.games.folderPath);
+            const duplicateCount = candidates.filter((candidate) => this.findDuplicate(candidate, existingIndex) !== null).length;
+            let updateDuplicates = steamSettings.duplicateMode === 'update';
+
+            if (steamSettings.duplicateMode === 'ask' && duplicateCount > 0) {
+                updateDuplicates = options.confirmDuplicateUpdate
+                    ? await operation.wait(() => options.confirmDuplicateUpdate!(duplicateCount))
+                    : await operation.wait(() => this.confirmDuplicateUpdate(duplicateCount));
             }
 
-            const itemStartedAt = Date.now();
-            options.onItemStart?.(candidate, index, candidates.length);
-            try {
-                options.onProgress?.(`Importing ${candidate.name}...`);
-                const duplicate = this.findDuplicate(candidate, existingIndex);
-                if (duplicate && !updateDuplicates) {
-                    result.skipped++;
-                    this.emitItemResult(
-                        candidate,
-                        'skipped',
-                        itemStartedAt,
-                        options,
-                        this.getDuplicateSkippedReason(settings.language)
-                    );
-                    continue;
-                }
+            const template = this.getGameTemplate(settings);
+            operation.check();
+            await ensureFolder(this.app, settings.games.folderPath);
 
-                const details = await this.enrichGame(candidate.appId, settings) ?? this.buildFallbackDetails(candidate);
-                if (/^Steam App \d+$/.test(candidate.name) && details.name && details.name !== 'Unknown') {
-                    candidate.name = details.name;
-                }
-                const game = this.toSyncGame(candidate, details, steamSettings);
-
-                if (duplicate) {
-                    await this.updateExistingGame(duplicate, game, steamSettings);
-                    result.updated++;
-                    this.emitItemResult(candidate, 'updated', itemStartedAt, options);
-                    continue;
-                }
-
-                const fullPath = this.getUniquePath(settings.games.folderPath, game.details.name || game.name);
-                const content = await this.buildNewGameContent(template, game, steamSettings, settings);
-                await this.app.vault.create(fullPath, content);
-                const createdFile = this.app.vault.getAbstractFileByPath(fullPath);
-                if (createdFile instanceof TFile) {
-                    existingIndex.files.push(createdFile);
-                    this.addFileToIndex(createdFile, existingIndex);
-                }
-                result.created++;
-                this.emitItemResult(candidate, 'created', itemStartedAt, options);
-            } catch (error) {
-                console.error('[Steam Sync] Failed to import game', candidate, error);
-                result.failed++;
-                this.emitItemResult(candidate, 'failed', itemStartedAt, options, undefined, error);
-                if (isProviderBlockedError(error)) {
-                    this.addWarning(error instanceof Error
-                        ? error.message
-                        : 'Steam temporarily blocked requests. The remaining imports were paused.');
-                    options.onHalt?.('blocked');
+            let halted = false;
+            for (let index = 0; index < candidates.length; index++) {
+                const candidate = candidates[index];
+                if (isSteamPlaceholderName(candidate.name)) candidate.name = this.previewNames.get(candidate.appId) ?? candidate.name;
+                if (options.control?.isCancelled()) {
+                    result.cancelled = true;
+                    options.onHalt?.('cancelled');
                     halted = true;
                     break;
                 }
-            }
-        }
+                if (options.control) await operation.wait(() => options.control!.waitIfPaused());
+                if (options.control?.isCancelled()) {
+                    result.cancelled = true;
+                    options.onHalt?.('cancelled');
+                    halted = true;
+                    break;
+                }
 
-        if (!halted && options.control?.isCancelled()) {
-            options.onHalt?.('cancelled');
-        }
-        return result;
+                const itemStartedAt = Date.now();
+                options.onItemStart?.(candidate, index, candidates.length);
+                try {
+                    operation.check();
+                    options.onProgress?.(`Importing ${candidate.name}...`);
+                    const duplicate = this.findDuplicate(candidate, existingIndex);
+                    if (duplicate && !updateDuplicates) {
+                        result.skipped++;
+                        this.emitItemResult(
+                            candidate,
+                            'skipped',
+                            itemStartedAt,
+                            options,
+                            this.getDuplicateSkippedReason(settings.language)
+                        );
+                        continue;
+                    }
+
+                    const details = await operation.wait(() => this.enrichGame(candidate.appId, settings)) ?? this.buildFallbackDetails(candidate);
+                    if (/^Steam App \d+$/.test(candidate.name) && details.name && details.name !== 'Unknown') {
+                        candidate.name = details.name;
+                    }
+                    const game = this.toSyncGame(candidate, details, steamSettings);
+
+                    if (duplicate) {
+                        await this.updateExistingGame(duplicate, game, steamSettings, operation);
+                        result.updated++;
+                        this.emitItemResult(candidate, 'updated', itemStartedAt, options);
+                        continue;
+                    }
+
+                    const fullPath = this.getUniquePath(settings.games.folderPath, game.details.name || game.name);
+                    const content = await this.buildNewGameContent(template, game, steamSettings, settings, operation);
+                    operation.check();
+                    await this.app.vault.create(fullPath, content);
+                    const createdFile = this.app.vault.getAbstractFileByPath(fullPath);
+                    if (createdFile instanceof TFile) {
+                        existingIndex.files.push(createdFile);
+                        this.addFileToIndex(createdFile, existingIndex);
+                    }
+                    result.created++;
+                    this.emitItemResult(candidate, 'created', itemStartedAt, options);
+                } catch (error) {
+                    if (isOperationCancelled(error)) throw error;
+                    console.error('[Steam Sync] Failed to import game', candidate, error);
+                    result.failed++;
+                    this.emitItemResult(candidate, 'failed', itemStartedAt, options, undefined, error);
+                    if (isProviderBlockedError(error)) {
+                        this.addWarning(error instanceof Error
+                            ? error.message
+                            : 'Steam temporarily blocked requests. The remaining imports were paused.');
+                        options.onHalt?.('blocked');
+                        halted = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!halted && options.control?.isCancelled()) {
+                result.cancelled = true;
+                options.onHalt?.('cancelled');
+            }
+            return result;
+
+        } catch (error) { if (!isOperationCancelled(error)) throw error; result.cancelled = true; options.onHalt?.('cancelled'); return result; } finally { operation.close(); }
     }
 
     private emitItemResult(
@@ -452,34 +542,86 @@ export class SteamSyncService {
         const steamSettings = settings.steamSync;
 
         const result: SteamSyncResult = { created: 0, updated: 0, skipped: 0, failed: 0 };
-        const owned = await this.getOwnedGames(steamSettings.steamId, steamSettings.apiKey);
-        const existingIndex = this.indexExistingGames(settings.games.folderPath);
+        const operation = this.begin(settings);
+        try {
+            const owned = await operation.wait(() => this.getOwnedGames(steamSettings.steamId, steamSettings.apiKey));
+            const existingIndex = this.indexExistingGames(settings.games.folderPath);
 
-        for (const game of owned) {
-            const candidate: SteamImportCandidate = {
-                appId: game.appId,
-                name: game.name,
-                playtimeForever: game.playtimeForever,
-                source: 'owned',
-            };
-            const duplicate = this.findDuplicate(candidate, existingIndex);
-            if (!duplicate) {
-                result.skipped++;
-                continue;
+            for (const game of owned) {
+                operation.check();
+                const candidate: SteamImportCandidate = {
+                    appId: game.appId,
+                    name: game.name,
+                    playtimeForever: game.playtimeForever,
+                    source: 'owned',
+                };
+                const duplicate = this.findDuplicate(candidate, existingIndex);
+                if (!duplicate) {
+                    result.skipped++;
+                    continue;
+                }
+                try {
+                    await this.metadataService.updateMetadata(duplicate, {
+                        steamAppId: game.appId,
+                        playtime: game.playtimeForever,
+                    }, 'game', () => { operation.check(); return true; });
+                    result.updated++;
+                } catch (error) {
+                    if (isOperationCancelled(error)) throw error;
+                    console.error('[Steam Sync] Failed to update playtime', game, error);
+                    result.failed++;
+                }
             }
-            try {
-                await this.metadataService.updateMetadata(duplicate, {
-                    steamAppId: game.appId,
-                    playtime: game.playtimeForever,
-                });
-                result.updated++;
-            } catch (error) {
-                console.error('[Steam Sync] Failed to update playtime', game, error);
-                result.failed++;
-            }
-        }
 
-        return result;
+            return result;
+
+        } catch (error) { if (!isOperationCancelled(error)) throw error; result.cancelled = true; return result; } finally { operation.close(); }
+    }
+
+    async getGameTracking(settings: SteamSyncSettings, appId: string): Promise<SteamTrackingResult> {
+        const operation = this.begin(settings);
+        try {
+            if (!settings.apiKey.trim() || !settings.steamId.trim()) throw new Error('Steam tracking is not configured');
+            const steamId = /^\d{17}$/.test(settings.steamId.trim()) ? settings.steamId.trim() : await operation.wait(() => this.resolveSteamId(settings.steamId));
+            return await operation.wait(() => getSteamTracking((url) => operation.wait(() => fetchJson(url, {}, 'GET', undefined, { swallowErrors: false })), steamId, settings.apiKey, appId));
+        } finally { operation.close(); }
+    }
+
+    async syncTrackingForExisting(settings: LorebaseSettings, progress?: (index: number, total: number) => void): Promise<{ updated: number; partial: number; failed: number; skipped: number; cancelled?: boolean }> {
+        const result: { updated: number; partial: number; failed: number; skipped: number; cancelled?: boolean } = { updated: 0, partial: 0, failed: 0, skipped: 0 };
+        const operation = this.begin(settings);
+        try {
+            if (!settings.steamSync.apiKey.trim() || !settings.steamSync.steamId.trim()) throw new Error('Steam tracking is not configured');
+            const rawId = settings.steamSync.steamId.trim();
+            const steamId = /^\d{17}$/.test(rawId) ? rawId : await operation.wait(() => this.resolveSteamId(rawId));
+            const folder = settings.games.folderPath.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+            const files = this.app.vault.getMarkdownFiles().filter(file => !folder || file.path.startsWith(`${folder}/`));
+            const cache = new Map<string, SteamTrackingResult>();
+            const fetcher: JsonFetcher = url => operation.wait(() => fetchJson(url, {}, 'GET', undefined, { swallowErrors: false }));
+            for (let index = 0; index < files.length; index++) {
+                operation.check();
+                const file = files[index];
+                const fm = this.metadataService.resolveFrontmatter('game', this.app.metadataCache.getFileCache(file)?.frontmatter ?? {});
+                const appId = String(fm.steamAppId ?? fm.steam_appid ?? fm.appid ?? (fm.integration_provider === 'steam' ? fm.integration_id ?? '' : '')).trim();
+                if ((fm.type && fm.type !== 'game') || !/^[1-9]\d*$/.test(appId)) result.skipped++;
+                else {
+                    try {
+                        let data = cache.get(appId);
+                        if (!data) { data = await getSteamTracking(fetcher, steamId, settings.steamSync.apiKey, appId); cache.set(appId, data); }
+                        const updates: Record<string, unknown> = {};
+                        if (data.playtimeMinutes !== undefined) updates.playtime = data.playtimeMinutes;
+                        if (data.achievementsUnlocked !== undefined && data.achievementsTotal !== undefined) {
+                            updates.achievements_unlocked = data.achievementsUnlocked; updates.achievements_total = data.achievementsTotal;
+                        }
+                        await this.metadataService.updateMetadata(file, updates, 'game', () => { operation.check(); return true; });
+                        result.updated++; if (data.partial) result.partial++;
+                    } catch (error) { if (isOperationCancelled(error)) throw error; result.failed++; }
+                }
+                progress?.(index + 1, files.length);
+            }
+            return result;
+
+        } catch (error) { if (!isOperationCancelled(error)) throw error; result.cancelled = true; return result; } finally { operation.close(); }
     }
 
     mapOwnedStatus(playtimeForever: number, settings: SteamSyncSettings): GameStatus {
@@ -546,6 +688,8 @@ export class SteamSyncService {
 
     private preparePreviewCandidates(candidates: SteamImportCandidate[]): SteamImportCandidate[] {
         for (const candidate of candidates) {
+            if (!isSteamPlaceholderName(candidate.name)) this.previewNames.set(candidate.appId, candidate.name);
+            else candidate.name = this.previewNames.get(candidate.appId) ?? candidate.name;
             candidate.posterHorizontal = this.getSteamHeaderImage(candidate.appId);
         }
         return candidates.sort((a, b) => a.name.localeCompare(b.name));
@@ -679,12 +823,13 @@ export class SteamSyncService {
         template: string,
         game: SteamSyncGame,
         settings: SteamSyncSettings,
-        allSettings: LorebaseSettings
+        allSettings: LorebaseSettings,
+        operation?: BackgroundOperation
     ): Promise<string> {
-        const rawValues = await this.buildTemplateValues(game, settings, allSettings);
+        const rawValues = operation ? await operation.wait(() => this.buildTemplateValues(game, settings, allSettings)) : await this.buildTemplateValues(game, settings, allSettings);
         const title = this.toString(rawValues.name) || game.details.name || game.name || 'Untitled';
-        const values = await localizeTemplateImages(this.app, 'games', title, rawValues, allSettings.integrations?.imageStorage, template);
-        return renderTemplate(template, values);
+        const values = await localizeTemplateImages(this.app, 'games', title, rawValues, allSettings.integrations?.imageStorage, template, operation?.signal);
+        return orderTemplateContent(completeImportedMetadata(renderTemplate(template, { type: 'game', ...values }), 'games', values, template), template, { compact: allSettings.integrations?.compactTemplates });
     }
 
     private async buildTemplateValues(
@@ -726,7 +871,8 @@ export class SteamSyncService {
         };
     }
 
-    private async updateExistingGame(file: TFile, game: SteamSyncGame, settings: SteamSyncSettings): Promise<void> {
+    private async updateExistingGame(file: TFile, game: SteamSyncGame, settings: SteamSyncSettings, operation?: BackgroundOperation): Promise<void> {
+        operation?.check();
         const updates: Record<string, unknown> = {
             steamAppId: game.appId,
             url: game.details.url || `https://store.steampowered.com/app/${game.appId}/`,
@@ -743,7 +889,7 @@ export class SteamSyncService {
             updates.year = game.details.year || null;
         }
 
-        await this.metadataService.updateMetadata(file, updates);
+        await this.metadataService.updateMetadata(file, updates, 'game', () => { operation?.check(); return true; });
     }
 
     private indexExistingGames(folderPath: string): {
@@ -773,13 +919,14 @@ export class SteamSyncService {
         file: TFile,
         index: { byAppId: Map<number, TFile>; byUrl: Map<string, TFile>; byPath: Map<string, TFile> }
     ): void {
-        const frontmatter = this.asObject(this.app.metadataCache.getFileCache(file)?.frontmatter);
-        const appId = this.toNumber(frontmatter?.steamAppId) || this.toNumber(frontmatter?.appid);
+        const rawFrontmatter = this.asObject(this.app.metadataCache.getFileCache(file)?.frontmatter);
+        const frontmatter = this.metadataService.resolveFrontmatter('game', rawFrontmatter ?? {});
+        const appId = this.toNumber(frontmatter.steamAppId) || this.toNumber(frontmatter.appid);
         if (appId) {
             index.byAppId.set(appId, file);
         }
 
-        const url = this.normalizeSteamUrl(this.toString(frontmatter?.url));
+        const url = this.normalizeSteamUrl(this.toString(frontmatter.url));
         if (url) {
             index.byUrl.set(url, file);
         }
@@ -819,7 +966,7 @@ export class SteamSyncService {
         const selected = Array.isArray(media.templateFields) ? media.templateFields : getDefaultTemplateFields('games');
         return buildSimpleTemplate('games', getEffectiveSimpleTemplateFields('games', selected, {
             howLongToBeatEnabled: Boolean(media.howLongToBeatEnabled)
-        }));
+        }), media.fieldAliases, media.wikilinkFields);
     }
 
     private getUniquePath(folderPath: string, title: string): string {

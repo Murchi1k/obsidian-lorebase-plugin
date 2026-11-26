@@ -43,6 +43,48 @@ function createSteamSearchFetcher(): { fetchJson: JsonFetcher; calls: string[] }
 }
 
 describe('Steam provider', () => {
+    it('reads game details keyed by an edition ID using the payload app ID', async () => {
+        const fetchJson: JsonFetcher = async () => ({
+            2441600: { success: true, data: {
+                steam_appid: 1091500, name: 'Cyberpunk 2077',
+                short_description: 'An open-world RPG.',
+                genres: [{ description: 'RPG' }],
+                platforms: { windows: true, mac: false },
+                developers: ['CD PROJEKT RED'], publishers: ['CD PROJEKT RED'],
+                release_date: { date: 'Dec 10, 2020' }, header_image: 'https://example.com/header.jpg',
+            } },
+        });
+        const details = await getSteamDetails(fetchJson, '1091500');
+        expect(details).toMatchObject({
+            name: 'Cyberpunk 2077', description: 'An open-world RPG.',
+            genres: ['RPG'], platforms: ['windows'], developers: ['CD PROJEKT RED'],
+            publishers: ['CD PROJEKT RED'], released: 'Dec 10, 2020', year: '2020',
+            posterHorizontal: 'https://example.com/header.jpg',
+            url: 'https://store.steampowered.com/app/1091500/',
+        });
+    });
+
+    it('does not use another game or an unsuccessful payload as fallback details', async () => {
+        for (const data of [
+            { 2441600: { success: true, data: { steam_appid: 2441600, name: 'Other Game' } } },
+            { 2441600: { success: false, data: { steam_appid: 1091500, name: 'Cyberpunk 2077' } } },
+        ]) {
+            expect(await getSteamDetails(async () => data, '1091500')).toBeNull();
+        }
+    });
+
+    it('reads DLC lists and DLC details keyed by edition IDs', async () => {
+        const fetchJson: JsonFetcher = async (url) => {
+            const id = new URL(url).searchParams.get('appids');
+            return id === '99300'
+                ? { 99400: { success: true, data: { steam_appid: 99300, dlc: [99301] } } }
+                : { 99401: { success: true, data: { steam_appid: 99301, name: 'Expansion', header_image: 'header.jpg' } } };
+        };
+        const dlc = await getSteamDlcForGame(fetchJson, '99300');
+        expect(dlc).toHaveLength(1);
+        expect(dlc[0]).toMatchObject({ id: '99301', title: 'Expansion' });
+    });
+
     it('reuses existing DLC metadata instead of refetching every DLC', async () => {
         const calls: string[] = [];
         const fetchJson: JsonFetcher = async (url) => {

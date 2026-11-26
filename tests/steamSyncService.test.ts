@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TFile, TFolder, __setRequestUrlMock } from './mocks/obsidian';
 import { DEFAULT_SETTINGS } from '../src/constants';
 import { SteamSyncController, SteamSyncService } from '../src/services/SteamSyncService';
@@ -35,7 +35,9 @@ function mockVanityResolution(url: string): { json: unknown; text: string } | nu
 }
 
 function cloneSettings(): LorebaseSettings {
-    return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as LorebaseSettings;
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    settings.games.folderPath = 'Games';
+    return settings;
 }
 
 function createFile(path: string): TFile {
@@ -384,6 +386,41 @@ function mockVanityProfileWithWishlist(): void {
 }
 
 describe('SteamSyncService', () => {
+    it('resolves wishlist names in one StoreBrowse request and caches them without appdetails', async () => {
+        const service = createSteamSyncService();
+        const fetch = vi.fn(async () => ({ response: { store_items: [
+            { id: 1040200, appid: 1040200, success: 1, name: 'Crime Scene Cleaner' },
+            { id: 1118520, appid: 1118520, success: 1, name: 'Paralives' },
+            { id: 999, appid: 999, success: 1, name: 'Not requested' },
+        ] } }));
+        (service as any).jsonFetcher = fetch;
+        expect(await service.resolvePreviewNames([1118520, 1040200, 1040200])).toEqual({ 1040200: 'Crime Scene Cleaner', 1118520: 'Paralives' });
+        const request = new URL(fetch.mock.calls[0][0]);
+        expect(request.pathname).toBe('/IStoreBrowseService/GetItems/v1/');
+        expect(JSON.parse(request.searchParams.get('input_json')!)).toEqual({ ids: [{ appid: 1040200 }, { appid: 1118520 }], context: { language: 'english', country_code: 'US' } });
+        await service.resolvePreviewNames([1040200, 1118520]);
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+    it('deduplicates simultaneous name batches and keeps missing-name failures optional', async () => {
+        const service = createSteamSyncService();
+        let complete!: (data: unknown) => void;
+        const fetch = vi.fn(() => new Promise(resolve => { complete = resolve; }));
+        (service as any).jsonFetcher = fetch;
+        const first = service.resolvePreviewNames([10, 20]);
+        const second = service.resolvePreviewNames([20, 10]);
+        expect(fetch).toHaveBeenCalledOnce();
+        complete({ response: { store_items: [{ appid: 10, success: 1, name: 'Portal' }, { appid: 20, success: 2, name: '' }] } });
+        expect(await first).toEqual({ 10: 'Portal' });
+        expect(await second).toEqual({ 10: 'Portal' });
+        await service.resolvePreviewNames([20]);
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+    it('returns no names instead of breaking import when StoreBrowse fails', async () => {
+        const service = createSteamSyncService();
+        (service as any).jsonFetcher = vi.fn(async () => { throw new Error('offline'); });
+        await expect(service.resolvePreviewNames([10])).resolves.toEqual({});
+        await expect(service.resolvePreviewNames([0, -1, NaN])).resolves.toEqual({});
+    });
     beforeEach(() => {
         resetIntegrationRequestStateForTests();
         __setRequestUrlMock(null);
@@ -467,7 +504,7 @@ describe('SteamSyncService', () => {
             onHalt: (reason) => haltReasons.push(reason),
         });
 
-        expect(result).toEqual({ created: 0, updated: 0, skipped: 1, failed: 0 });
+        expect(result).toEqual({ created: 0, updated: 0, skipped: 1, failed: 0, cancelled: true });
         expect(enrichCalls).toBe(0);
         expect(itemResults).toEqual([{
             appId: 10,
@@ -509,8 +546,8 @@ describe('SteamSyncService', () => {
         expect(content).toContain('status: "not_started"');
         expect(content).toContain('integration_provider: "steam"');
         expect(content).toContain('integration_id: "10"');
-        expect(content).not.toContain('steamAppId:');
-        expect(content).not.toContain('playtime:');
+        expect(content).toContain('steamAppId: 10');
+        expect(content).toContain('playtime: 123');
     });
 
     it('fills HowLongToBeat fields during Steam import when enabled', async () => {
@@ -545,10 +582,16 @@ describe('SteamSyncService', () => {
                     },
                 };
             }
-            if (url.includes('/api/bleed/init')) {
+            if (url === 'https://howlongtobeat.com/') {
+                return { json: {}, text: '<script src="/_next/static/chunks/search.js"></script>' };
+            }
+            if (url.endsWith('/_next/static/chunks/search.js')) {
+                return { json: {}, text: 'const searchTerms=[];fetch("/api/current",{method:"POST",body:JSON.stringify(searchTerms)})' };
+            }
+            if (url.includes('/api/current/init')) {
                 return { json: { token: 'token-1', hpKey: 'ign_test', hpVal: 'hp-value' } };
             }
-            if (url === 'https://howlongtobeat.com/api/bleed') {
+            if (url === 'https://howlongtobeat.com/api/current') {
                 expect(typeof options === 'string' ? undefined : options.headers?.['x-auth-token']).toBe('token-1');
                 return {
                     json: {
@@ -809,4 +852,21 @@ describe('SteamSyncService', () => {
             'Steam profile must be a steamcommunity.com/profiles URL or steamcommunity.com/id URL.'
         );
     });
+});
+
+
+it('marks Steam preview membership in LOREBASE independently of ownership and wishlist source', async () => {
+    mockSteamResponses([{ appid: 10, name: 'Changed remote title' }, { appid: 20, name: 'New Game' }, { appid: 30, name: 'Other media' }]);
+    const app = createMockApp([
+        { path: 'Games/Renamed.md', frontmatter: { type: 'game', name: 'Local title', integration_provider: 'steam', integration_id: 10 } },
+        { path: 'Games/Film.md', frontmatter: { type: 'movie', name: 'Other media', integration_provider: 'steam', integration_id: 30 } },
+        { path: 'Elsewhere/New Game.md', frontmatter: { type: 'game', name: 'New Game', steamAppId: 20 } },
+    ]);
+    const settings = cloneSettings(); settings.steamSync.importWishlist = false;
+    settings.steamSync.steamId = `https://steamcommunity.com/profiles/${TEST_STEAM_ID64}/`;
+    const preview = await createSteamSyncService(app).previewImport(settings);
+    expect(preview.find(item => item.appId === 10)?.alreadyInLibrary).toBe(true);
+    expect(preview.find(item => item.appId === 20)?.alreadyInLibrary).toBe(false);
+    expect(preview.find(item => item.appId === 30)?.alreadyInLibrary).toBe(false);
+    expect(Object.keys(app.vault.created)).toHaveLength(0);
 });

@@ -1,454 +1,261 @@
+
+import { renderImportCardMetadata, createImportFilter, importReviewHint } from './importReviewControls';
 import { App, Modal, setIcon } from 'obsidian';
+import { t } from '../localization';
 import type { SteamImportCandidate } from '../services/SteamSyncService';
+import { getSteamVerticalImageCandidates } from '../services/integrations/steamImages';
+import { getSteamImportDisplayName, isSteamPlaceholderName, type SteamPreviewNameResolver } from '../services/integrations/steamPreview';
 import type { Language } from '../types';
+import type { InlineSyncPresentation } from './inlineSync';
 
-type SteamReviewFilter = 'all' | 'played' | 'wishlist' | 'selected';
-
-type SteamReviewTextKey =
-    | 'title'
-    | 'subtitle'
-    | 'searchPlaceholder'
-    | 'played'
-    | 'wishlist'
-    | 'all'
-    | 'clear'
-    | 'selected'
-    | 'shown'
-    | 'total'
-    | 'empty'
-    | 'cancel'
-    | 'import'
-    | 'library'
-    | 'libraryWishlist'
-    | 'hours';
-
-const STEAM_REVIEW_TEXT: Record<Language, Record<SteamReviewTextKey, string>> = {
-    en: {
-        title: 'Steam Sync',
-        subtitle: 'Nothing is selected by default. Pick only the games you want to create or update in LOREBASE.',
-        searchPlaceholder: 'Search games...',
-        played: 'Played',
-        wishlist: 'Wishlist',
-        all: 'All',
-        clear: 'Clear',
-        selected: 'Selected',
-        shown: 'shown',
-        total: 'total',
-        empty: 'No games match the current search.',
-        cancel: 'Cancel',
-        import: 'Import',
-        library: 'library',
-        libraryWishlist: 'library + wishlist',
-        hours: 'h',
-    },
-    ru: {
-        title: '\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f Steam',
-        subtitle: '\u041f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d\u043e. \u041e\u0442\u043c\u0435\u0442\u044c\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0438\u0433\u0440\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0443\u0436\u043d\u043e \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0438\u043b\u0438 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0432 LOREBASE.',
-        searchPlaceholder: '\u041f\u043e\u0438\u0441\u043a \u0438\u0433\u0440...',
-        played: '\u0421 \u043f\u0440\u043e\u0433\u0440\u0435\u0441\u0441\u043e\u043c',
-        wishlist: '\u0412\u0438\u0448\u043b\u0438\u0441\u0442',
-        all: '\u0412\u0441\u0435',
-        clear: '\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c',
-        selected: '\u0412\u044b\u0431\u0440\u0430\u043d\u043e',
-        shown: '\u043f\u043e\u043a\u0430\u0437\u0430\u043d\u043e',
-        total: '\u0432\u0441\u0435\u0433\u043e',
-        empty: '\u041d\u0435\u0442 \u0438\u0433\u0440 \u043f\u043e\u0434 \u0442\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u043e\u0438\u0441\u043a.',
-        cancel: '\u041e\u0442\u043c\u0435\u043d\u0430',
-        import: '\u0418\u043c\u043f\u043e\u0440\u0442',
-        library: '\u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430',
-        libraryWishlist: '\u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430 + \u0432\u0438\u0448\u043b\u0438\u0441\u0442',
-        hours: '\u0447',
-    },
-    uk: {
-        title: 'Синхронізація Steam',
-        subtitle: 'За замовчуванням нічого не вибрано. Позначте тільки ігри, які потрібно створити або оновити в LOREBASE.',
-        searchPlaceholder: 'Пошук ігор...',
-        played: 'З прогресом',
-        wishlist: 'Бажане',
-        all: 'Усе',
-        clear: 'Очистити',
-        selected: 'Вибрано',
-        shown: 'показано',
-        total: 'усього',
-        empty: 'Немає ігор під поточний пошук.',
-        cancel: 'Скасувати',
-        import: 'Імпорт',
-        library: 'бібліотека',
-        libraryWishlist: 'бібліотека + бажане',
-        hours: 'год',
-    },
+type SteamReviewFilter = 'all' | 'played' | 'wishlist';
+const PAGE_SIZE = 20;
+const LABELS = {
+    ru: { games: 'игр', loadingName: 'Получаем название…' }, uk: { games: 'ігор', loadingName: 'Отримуємо назву…' },
+    en: { games: 'games', loadingName: 'Loading title…' }, 'zh-CN': { games: '款游戏', loadingName: '正在获取名称…' },
+};
+const TEXT = {
+    en: { title: 'Steam Sync', subtitle: 'Choose the games to add or update. Nothing is selected automatically.', searchPlaceholder: 'Search your Steam library…', played: 'Played', wishlist: 'Wishlist', all: 'All', clear: 'Clear selection', selected: 'Selected', empty: 'No matching games.', cancel: 'Cancel', import: 'Import', library: 'In Steam', libraryWishlist: 'Steam + wishlist', hours: 'h', selectShown: 'Select matching games' },
+    ru: { title: 'Steam Sync', subtitle: 'Выберите игры для добавления или обновления. Автоматически ничего не выбрано.', searchPlaceholder: 'Поиск в библиотеке Steam…', played: 'Играл', wishlist: 'Вишлист', all: 'Все', clear: 'Снять выбор', selected: 'Выбрано', empty: 'Подходящих игр нет.', cancel: 'Отмена', import: 'Импорт', library: 'В Steam', libraryWishlist: 'Steam + вишлист', hours: 'ч', selectShown: 'Выбрать найденные' },
+    uk: { title: 'Steam Sync', subtitle: 'Виберіть ігри для додавання або оновлення. Автоматично нічого не вибрано.', searchPlaceholder: 'Пошук у бібліотеці Steam…', played: 'Грав', wishlist: 'Бажане', all: 'Усе', clear: 'Зняти вибір', selected: 'Вибрано', empty: 'Відповідних ігор немає.', cancel: 'Скасувати', import: 'Імпорт', library: 'У Steam', libraryWishlist: 'Steam + бажане', hours: 'год', selectShown: 'Вибрати знайдені' },
+    'zh-CN': { title: 'Steam 同步', subtitle: '选择要添加或更新的游戏，默认不选择任何游戏。', searchPlaceholder: '搜索 Steam 游戏库…', played: '玩过', wishlist: '愿望单', all: '全部', clear: '清除选择', selected: '已选择', empty: '没有匹配的游戏。', cancel: '取消', import: '导入', library: 'Steam 游戏库', libraryWishlist: 'Steam + 愿望单', hours: '小时', selectShown: '选择匹配的游戏' },
 };
 
 export class SteamSyncReviewModal extends Modal {
-    private candidates: SteamImportCandidate[];
-    private language: Language;
     private selected = new Set<number>();
     private resolve?: (value: Set<number> | null) => void;
     private hasResolved = false;
     private query = '';
     private activeFilter: SteamReviewFilter = 'all';
+    private page = 1;
     private listEl?: HTMLElement;
     private countEl?: HTMLElement;
     private filterEl?: HTMLElement;
+    private paginationEl?: HTMLElement;
     private importBtn?: HTMLButtonElement;
-    private searchTimerId: number | null = null;
+    private selectAllButton?: HTMLButtonElement;
+    private clearButton?: HTMLButtonElement;
     private rows = new Map<number, HTMLElement>();
-    private filterCounts = new Map<SteamReviewFilter, HTMLElement>();
+    private pendingNames = new Set<number>();
+    private namesStarted = false;
+    private inline?: InlineSyncPresentation;
+    private removeAbort?: () => void;
 
-    constructor(app: App, candidates: SteamImportCandidate[], language: Language = 'en') {
+    constructor(app: App, private candidates: SteamImportCandidate[], private language: Language = 'en', private nameResolver?: SteamPreviewNameResolver) {
         super(app);
-        this.candidates = candidates;
-        this.language = language;
+        if (nameResolver) candidates.filter(item => isSteamPlaceholderName(item.name)).forEach(item => this.pendingNames.add(item.appId));
     }
+    private get root(): HTMLElement { return this.inline?.host ?? this.contentEl; }
+    private text(key: keyof typeof TEXT.en): string { return TEXT[this.language][key]; }
 
     openAndGetValue(): Promise<Set<number> | null> {
+        return new Promise(resolve => { this.resolve = resolve; this.open(); });
+    }
+
+    mountInline(presentation: InlineSyncPresentation): Promise<Set<number> | null> {
+        this.inline = presentation;
         return new Promise(resolve => {
             this.resolve = resolve;
-            this.open();
+            const abort = () => this.onClose();
+            presentation.signal.addEventListener('abort', abort, { once: true });
+            this.removeAbort = () => presentation.signal.removeEventListener('abort', abort);
+            if (presentation.signal.aborted) { this.onClose(); return; }
+            this.render();
         });
     }
 
     onOpen(): void {
-        this.modalEl.addClass('lorebase-steam-review-modal-container');
+        this.modalEl.addClass('lorebase-select-modal-container');
+        this.contentEl.addClass('lorebase-select-modal', 'lorebase-add-workspace');
         this.render();
     }
 
     onClose(): void {
-        if (this.searchTimerId !== null) {
-            window.clearTimeout(this.searchTimerId);
-            this.searchTimerId = null;
-        }
-        this.modalEl.removeClass('lorebase-steam-review-modal-container');
-        if (!this.hasResolved) {
-            this.resolve?.(null);
-        }
-        this.contentEl.empty();
+        this.removeAbort?.();
+        if (!this.hasResolved) { this.hasResolved = true; this.resolve?.(null); }
+        this.rows.clear();
+        this.root.empty();
+    }
+
+    private finish(value: Set<number> | null): void {
+        if (this.hasResolved) return;
+        this.hasResolved = true;
+        this.removeAbort?.();
+        this.resolve?.(value);
+        if (!this.inline) this.close();
     }
 
     private render(): void {
-        this.contentEl.empty();
-        this.contentEl.addClass('lorebase-steam-review-modal');
-
-        const header = this.contentEl.createDiv({ cls: 'lorebase-sr-header' });
-        const titleRow = header.createDiv({ cls: 'lorebase-sr-title-row' });
-        const titleIcon = titleRow.createSpan({ cls: 'lorebase-sr-title-icon' });
-        setIcon(titleIcon, 'download');
-        titleRow.createSpan({ cls: 'lorebase-sr-title-text', text: this.text('title') });
-        header.createDiv({
-            cls: 'lorebase-sr-subtitle',
-            text: this.text('subtitle'),
-        });
-
-        const toolbar = this.contentEl.createDiv({ cls: 'lorebase-sr-toolbar' });
-        const searchWrap = toolbar.createDiv({ cls: 'lorebase-sr-search-wrap' });
-        const searchIcon = searchWrap.createSpan({ cls: 'lorebase-sr-search-icon' });
-        setIcon(searchIcon, 'search');
-        const search = searchWrap.createEl('input', {
-            cls: 'lorebase-sr-search',
-            attr: { type: 'text', placeholder: this.text('searchPlaceholder') },
-        });
+        const root = this.root;
+        root.empty();
+        root.addClass('lorebase-steam-sync-review');
+        if (!this.inline) {
+            const header = root.createDiv({ cls: 'lorebase-select-header' });
+            const title = header.createDiv({ cls: 'lorebase-select-title-row' });
+            setIcon(title.createSpan({ cls: 'lorebase-select-title-icon' }), 'download');
+            title.createEl('h2', { cls: 'lorebase-select-title', text: this.text('title') });
+        }
+        const shell = root.createDiv({ cls: 'lorebase-select-search-shell' });
+        const wrap = shell.createDiv({ cls: 'lorebase-select-search-wrap' });
+        const field = wrap.createDiv({ cls: 'lorebase-select-search-field' });
+        setIcon(field.createSpan({ cls: 'lorebase-select-search-icon' }), 'search');
+        const search = field.createEl('input', { cls: 'lorebase-select-search', attr: { type: 'search', placeholder: this.text('searchPlaceholder'), 'aria-label': this.text('searchPlaceholder') } });
         search.value = this.query;
-        search.addEventListener('input', () => {
-            this.query = search.value.trim().toLowerCase();
-            if (this.searchTimerId !== null) window.clearTimeout(this.searchTimerId);
-            this.searchTimerId = window.setTimeout(() => {
-                this.searchTimerId = null;
-                this.renderList();
-            }, 100);
-        });
+        search.addEventListener('input', () => { this.query = search.value.trim().toLocaleLowerCase(); this.page = 1; this.renderList(); });
 
-        const actions = toolbar.createDiv({ cls: 'lorebase-sr-actions' });
-        this.createActionPill(actions, 'gamepad-2', this.text('played'), () => {
-            this.selected.clear();
-            for (const c of this.candidates) {
-                if (c.playtimeForever > 0) this.selected.add(c.appId);
-            }
-            this.refresh();
-        });
-        this.createActionPill(actions, 'heart', this.text('wishlist'), () => {
-            this.selected.clear();
-            for (const c of this.candidates) {
-                if (c.source === 'wishlist' || c.source === 'owned_wishlist') this.selected.add(c.appId);
-            }
-            this.refresh();
-        });
-        this.createActionPill(actions, 'check-check', this.text('all'), () => {
-            for (const c of this.candidates) this.selected.add(c.appId);
-            this.refresh();
-        });
-        this.createActionPill(actions, 'x', this.text('clear'), () => {
-            this.selected.clear();
-            this.refresh();
-        });
-
-        this.filterEl = this.contentEl.createDiv({ cls: 'lorebase-sr-filters' });
+        const controls = shell.createDiv({ cls: 'lorebase-steam-sync-controls' });
+        this.filterEl = controls.createDiv({ cls: 'lorebase-select-providers lorebase-steam-filters' });
         this.renderFilters();
+        const actions = controls.createDiv({ cls: 'lorebase-steam-bulk-actions' });
+        this.selectAllButton = this.action(actions, 'check-check', this.text('selectShown'), () => {
+            this.getFilteredCandidates().forEach(candidate => this.selected.add(candidate.appId));
+            this.refreshSelection();
+        });
+        this.clearButton = this.action(actions, 'x', this.text('clear'), () => { this.selected.clear(); this.refreshSelection(); });
 
-        this.countEl = this.contentEl.createDiv({ cls: 'lorebase-sr-count' });
-
-        this.listEl = this.contentEl.createDiv({ cls: 'lorebase-sr-list' });
+        this.listEl = root.createDiv({ cls: 'lorebase-select-grid lorebase-select-search-grid lorebase-steam-gallery' });
+        this.paginationEl = root.createDiv({ cls: 'lorebase-select-pagination' });
+        const footer = root.createDiv({ cls: 'lorebase-modal-actions lorebase-select-footer' });
+        this.countEl = footer.createDiv({ cls: 'lorebase-steam-selection-count', attr: { 'aria-live': 'polite', title: this.text('subtitle') } });
+        const cancel = this.action(footer, 'x', this.text('cancel'), () => this.finish(null), 'lorebase-flow-btn lorebase-flow-btn-secondary');
+        cancel.dataset.action = 'cancel-steam';
+        this.importBtn = this.action(footer, 'download', this.text('import'), () => this.finish(new Set(this.selected)), 'lorebase-flow-btn lorebase-flow-btn-primary');
+        this.importBtn.dataset.action = 'import-steam';
         this.renderList();
-
-        const footer = this.contentEl.createDiv({ cls: 'lorebase-sr-footer lorebase-select-footer' });
-        const cancelBtn = footer.createEl('button', {
-            cls: 'lorebase-flow-btn lorebase-flow-btn-secondary',
-            attr: { type: 'button' },
-        });
-        const cancelIcon = cancelBtn.createSpan({ cls: 'lorebase-flow-btn-icon' });
-        setIcon(cancelIcon, 'x');
-        cancelBtn.createSpan({ cls: 'lorebase-flow-btn-label', text: this.text('cancel') });
-        this.importBtn = footer.createEl('button', {
-            cls: 'lorebase-flow-btn lorebase-flow-btn-primary lorebase-sr-btn-import',
-            attr: { type: 'button' },
-        });
-        this.updateImportButton();
-
-        cancelBtn.addEventListener('click', () => {
-            this.hasResolved = true;
-            this.resolve?.(null);
-            this.close();
-        });
-
-        this.importBtn.addEventListener('click', () => {
-            this.hasResolved = true;
-            this.resolve?.(new Set(this.selected));
-            this.close();
-        });
-
         search.focus();
+        void this.hydrateNames();
     }
 
-    private renderList(): void {
-        if (!this.listEl || !this.countEl) return;
-
-        const filtered = this.getFilteredCandidates();
-        this.countEl.setText(`${this.selected.size} ${this.text('selected').toLowerCase()} В· ${filtered.length} ${this.text('shown')} В· ${this.candidates.length} ${this.text('total')}`);
-        this.updateCount(filtered.length);
-        this.listEl.empty();
-        this.rows.clear();
-
-        if (!filtered.length) {
-            const empty = this.listEl.createDiv({ cls: 'lorebase-sr-empty' });
-            const emptyIcon = empty.createSpan({ cls: 'lorebase-sr-empty-icon' });
-            setIcon(emptyIcon, 'search-x');
-            empty.createSpan({ text: this.text('empty') });
-            return;
-        }
-
-        for (const candidate of filtered) {
-            const checked = this.selected.has(candidate.appId);
-            const row = this.listEl.createDiv({
-                cls: 'lorebase-sr-row',
-                attr: {
-                    role: 'checkbox',
-                    tabindex: '0',
-                    'aria-checked': String(checked),
-                },
-            });
-            row.toggleClass('is-selected', checked);
-            this.rows.set(candidate.appId, row);
-
-            const thumb = row.createDiv({ cls: 'lorebase-sr-thumb' });
-            const imageUrls = this.getImageUrls(candidate);
-            const img = thumb.createEl('img', {
-                attr: {
-                    src: imageUrls[0] ?? '',
-                    alt: candidate.name,
-                    loading: 'lazy',
-                },
-            });
-            let imageIndex = 0;
-            img.addEventListener('error', () => {
-                imageIndex++;
-                const nextUrl = imageUrls[imageIndex];
-                if (nextUrl) {
-                    img.src = nextUrl;
-                    return;
-                }
-                img.addClass('is-hidden');
-                thumb.addClass('is-fallback');
-                if (!thumb.querySelector('.lorebase-sr-thumb-fallback')) {
-                    const fallbackIcon = thumb.createSpan({ cls: 'lorebase-sr-thumb-fallback' });
-                    setIcon(fallbackIcon, 'gamepad-2');
-                }
-            });
-
-            const body = row.createDiv({ cls: 'lorebase-sr-body' });
-            body.createDiv({ cls: 'lorebase-sr-game-title', text: candidate.name });
-
-            const metaRow = body.createDiv({ cls: 'lorebase-sr-meta' });
-
-            const sourceBadge = metaRow.createSpan({ cls: 'lorebase-sr-badge' });
-            const sourceLabel = this.formatSource(candidate.source);
-            if (candidate.source === 'wishlist' || candidate.source === 'owned_wishlist') {
-                sourceBadge.addClass('is-wishlist');
-            }
-            sourceBadge.setText(sourceLabel);
-
-            const ptBadge = metaRow.createSpan({ cls: 'lorebase-sr-badge is-playtime' });
-            const ptIcon = ptBadge.createSpan({ cls: 'lorebase-sr-badge-icon' });
-            setIcon(ptIcon, 'clock');
-            ptBadge.createSpan({ text: candidate.playtimeForever > 0 ? this.formatPlaytime(candidate.playtimeForever) : `0${this.text('hours')}` });
-
-            const checkbox = row.createDiv({ cls: 'lorebase-sr-checkbox' });
-            checkbox.toggleClass('is-checked', checked);
-            const checkIcon = checkbox.createSpan({ cls: 'lorebase-sr-check-icon' });
-            setIcon(checkIcon, 'check');
-
-            const toggle = (): void => {
-                if (this.selected.has(candidate.appId)) {
-                    this.selected.delete(candidate.appId);
-                } else {
-                    this.selected.add(candidate.appId);
-                }
-                this.updateSelectedRow(candidate.appId, row);
-            };
-
-            row.addEventListener('click', toggle);
-            row.addEventListener('keydown', (event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
-                event.preventDefault();
-                toggle();
-            });
-        }
+    private action(host: HTMLElement, iconName: string, label: string, click: () => void, cls = 'lorebase-steam-bulk-action'): HTMLButtonElement {
+        const button = host.createEl('button', { cls, attr: { type: 'button', title: label === this.text('selectShown') ? importReviewHint(this.language, 'select') : label === this.text('clear') ? importReviewHint(this.language, 'clear') : label, 'aria-label': label } });
+        setIcon(button.createSpan({ cls: 'lorebase-flow-btn-icon' }), iconName);
+        button.createSpan({ cls: 'lorebase-flow-btn-label', text: label });
+        button.addEventListener('click', click);
+        return button;
     }
 
     private renderFilters(): void {
         if (!this.filterEl) return;
         this.filterEl.empty();
-        this.filterCounts.clear();
-        const filters: Array<{ id: SteamReviewFilter; label: string; count: number; icon: string }> = [
-            { id: 'all', label: this.text('all'), count: this.candidates.length, icon: 'layout-grid' },
-            { id: 'played', label: this.text('played'), count: this.candidates.filter(c => c.playtimeForever > 0).length, icon: 'gamepad-2' },
-            { id: 'wishlist', label: this.text('wishlist'), count: this.candidates.filter(c => c.source === 'wishlist' || c.source === 'owned_wishlist').length, icon: 'heart' },
-            { id: 'selected', label: this.text('selected'), count: this.selected.size, icon: 'check-circle' },
-        ];
-
-        for (const filter of filters) {
-            const chip = this.filterEl.createEl('button', {
-                cls: 'lorebase-sr-filter-chip',
-                attr: { type: 'button' },
-            });
-            chip.toggleClass('is-active', filter.id === this.activeFilter);
-
-            const chipLabel = chip.createSpan({ text: filter.label });
-            chipLabel.addClass('lorebase-sr-filter-label');
-
-            const count = chip.createSpan({ cls: 'lorebase-sr-filter-count', text: String(filter.count) });
-            this.filterCounts.set(filter.id, count);
-
-            chip.addEventListener('click', () => {
-                this.activeFilter = filter.id;
-                this.renderFilters();
-                this.renderList();
-            });
+        const counts = {
+            all: this.candidates.length, played: this.candidates.filter(c => c.playtimeForever > 0).length,
+            wishlist: this.candidates.filter(c => c.source !== 'owned').length,
+        };
+        for (const id of ['all', 'played', 'wishlist'] as const) {
+            createImportFilter(this.filterEl, { id, label: this.text(id), count: counts[id],
+                icon: id === 'all' ? 'layers-2' : id === 'played' ? 'gamepad-2' : 'heart',
+                active: id === this.activeFilter, hint: importReviewHint(this.language, id),
+                select: () => { this.activeFilter = id; this.page = 1; this.renderFilters(); this.renderList(); } });
         }
     }
 
-    private refresh(): void {
-        this.renderFilters();
-        if (this.activeFilter === 'selected') {
-            this.renderList();
-        } else {
-            for (const [appId, row] of this.rows) {
-                const checked = this.selected.has(appId);
-                row.toggleClass('is-selected', checked);
-                row.setAttr('aria-checked', String(checked));
-                row.querySelector<HTMLElement>('.lorebase-sr-checkbox')?.toggleClass('is-checked', checked);
+    private renderList(): void {
+        if (!this.listEl) return;
+        const filtered = this.getFilteredCandidates();
+        const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        this.page = Math.min(this.page, pages);
+        this.listEl.empty();
+        this.rows.clear();
+        if (!filtered.length) this.listEl.createDiv({ cls: 'lorebase-select-empty', text: this.text('empty') });
+        for (const candidate of filtered.slice((this.page - 1) * PAGE_SIZE, this.page * PAGE_SIZE)) {
+            const checked = this.selected.has(candidate.appId);
+            const name = this.displayName(candidate);
+            const card = this.listEl.createEl('button', { cls: 'lorebase-select-card', attr: { type: 'button', 'data-app-id': String(candidate.appId), 'aria-label': name, 'aria-pressed': String(checked), title: name } });
+            card.toggleClass('is-picked', checked);
+            this.rows.set(candidate.appId, card);
+            const art = card.createDiv({ cls: 'lorebase-select-card-image is-empty' });
+            setIcon(art.createSpan({ cls: 'lorebase-select-empty-poster-icon', attr: { 'aria-hidden': 'true' } }), 'image');
+            const urls = Array.from(new Set([candidate.poster, ...getSteamVerticalImageCandidates(candidate.appId), candidate.posterHorizontal,
+                `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${candidate.appId}/header.jpg`].filter((url): url is string => !!url)));
+            const image = art.createEl('img', { cls: 'lorebase-steam-poster', attr: { src: urls[0], loading: 'lazy', alt: '' } });
+            let imageIndex = 0;
+            image.addEventListener('load', () => art.removeClass('is-empty'));
+            image.addEventListener('error', () => { const next = urls[++imageIndex]; if (next) image.src = next; else { image.remove(); art.addClass('is-empty'); } });
+            const source = candidate.source === 'owned' ? this.text('library') : candidate.source === 'owned_wishlist' ? this.text('libraryWishlist') : this.text('wishlist');
+            if (this.activeFilter === 'all') art.createSpan({ cls: 'lorebase-select-classification', text: source });
+            card.createDiv({ cls: 'lorebase-select-card-check' });
+            const body = card.createDiv({ cls: 'lorebase-select-card-body' });
+            body.createDiv({ cls: 'lorebase-select-card-title', text: name });
+            card.toggleClass('is-title-loading', this.pendingNames.has(candidate.appId));
+            const hours = Math.round(candidate.playtimeForever / 6) / 10;
+            renderImportCardMetadata(card, art, body, Boolean(candidate.alreadyInLibrary), hours > 0 ? `${hours} ${this.text('hours')}` : '');
+            card.addEventListener('click', () => {
+                if (this.selected.has(candidate.appId)) this.selected.delete(candidate.appId);
+                else this.selected.add(candidate.appId);
+                card.toggleClass('is-picked', this.selected.has(candidate.appId));
+                card.setAttribute('aria-pressed', String(this.selected.has(candidate.appId)));
+                this.updateCount();
+            });
+        }
+        if (this.paginationEl) {
+            this.paginationEl.empty();
+            this.paginationEl.hidden = pages <= 1;
+            if (pages > 1) {
+                const previous = this.action(this.paginationEl, 'chevron-left', t('promptPreviousPage'), () => { this.page--; this.renderList(); });
+                previous.disabled = this.page <= 1;
+                this.paginationEl.createSpan({ text: `${this.page} / ${pages}` });
+                const next = this.action(this.paginationEl, 'chevron-right', t('promptNextPage'), () => { this.page++; this.renderList(); });
+                next.disabled = this.page >= pages;
             }
-            this.updateCount();
         }
-        this.updateImportButton();
-    }
-
-    private updateSelectedRow(appId: number, row: HTMLElement): void {
-        const checked = this.selected.has(appId);
-        row.toggleClass('is-selected', checked);
-        row.setAttr('aria-checked', String(checked));
-        row.querySelector<HTMLElement>('.lorebase-sr-checkbox')?.toggleClass('is-checked', checked);
-
-        if (this.activeFilter === 'selected' && !checked) {
-            row.remove();
-            this.rows.delete(appId);
-        }
-
-        this.filterCounts.get('selected')?.setText(String(this.selected.size));
         this.updateCount();
-        this.updateImportButton();
+        this.listEl.scrollTop = 0;
     }
 
-    private updateCount(filteredCount = this.getFilteredCandidates().length): void {
-        if (!this.countEl) return;
-        this.countEl.setText([
-            `${this.selected.size} ${this.text('selected').toLowerCase()}`,
-            `${filteredCount} ${this.text('shown')}`,
-            `${this.candidates.length} ${this.text('total')}`,
-        ].join(' / '));
+    private refreshSelection(): void {
+        for (const [appId, card] of this.rows) {
+            card.toggleClass('is-picked', this.selected.has(appId));
+            card.setAttribute('aria-pressed', String(this.selected.has(appId)));
+        }
+        this.updateCount();
     }
 
-    private updateImportButton(): void {
-        if (!this.importBtn) return;
-        const count = this.selected.size;
-        this.importBtn.empty();
-        const icon = this.importBtn.createSpan({ cls: 'lorebase-flow-btn-icon lorebase-sr-btn-icon' });
-        setIcon(icon, 'download');
-        const label = this.text('import');
-        this.importBtn.createSpan({ cls: 'lorebase-flow-btn-label', text: count > 0 ? `${label} (${count})` : label });
-        this.importBtn.disabled = count === 0;
+    private updateCount(): void {
+        if (this.clearButton) this.clearButton.disabled = this.selected.size === 0;
+        if (this.selectAllButton) this.selectAllButton.disabled = !this.getFilteredCandidates().some(item => !this.selected.has(item.appId));
+        this.countEl?.setText(`${this.getFilteredCandidates().length} ${LABELS[this.language].games}`);
+        if (this.importBtn) {
+            this.importBtn.disabled = this.selected.size === 0;
+            this.importBtn.querySelector('.lorebase-flow-btn-label')?.setText(`${this.text('import')}${this.selected.size ? ` (${this.selected.size})` : ''}`);
+        }
     }
 
     private getFilteredCandidates(): SteamImportCandidate[] {
-        return this.candidates.filter((candidate) => {
-            if (this.activeFilter === 'selected' && !this.selected.has(candidate.appId)) return false;
+        return this.candidates.filter(candidate => {
             if (this.activeFilter === 'played' && candidate.playtimeForever <= 0) return false;
-            if (this.activeFilter === 'wishlist' && candidate.source !== 'wishlist' && candidate.source !== 'owned_wishlist') return false;
-            if (!this.query) return true;
-            return candidate.name.toLowerCase().includes(this.query)
-                || String(candidate.appId).includes(this.query);
+            if (this.activeFilter === 'wishlist' && candidate.source === 'owned') return false;
+            return !this.query || candidate.name.toLocaleLowerCase().includes(this.query) || String(candidate.appId).includes(this.query);
         });
     }
 
-    private createActionPill(container: HTMLElement, iconName: string, text: string, onClick: () => void): void {
-        const btn = container.createEl('button', { cls: 'lorebase-sr-action-pill', attr: { type: 'button' } });
-        const icon = btn.createSpan({ cls: 'lorebase-sr-action-icon' });
-        setIcon(icon, iconName);
-        btn.createSpan({ text });
-        btn.addEventListener('click', onClick);
+    private displayName(candidate: SteamImportCandidate): string {
+        return this.pendingNames.has(candidate.appId) ? LABELS[this.language].loadingName : getSteamImportDisplayName(candidate.name, this.language);
     }
 
-    private formatSource(source: SteamImportCandidate['source']): string {
-        if (source === 'owned_wishlist') return this.text('libraryWishlist');
-        if (source === 'wishlist') return this.text('wishlist').toLowerCase();
-        return this.text('library');
-    }
-
-    private formatPlaytime(minutes: number): string {
-        const hours = Math.round((minutes / 60) * 10) / 10;
-        return `${hours}${this.text('hours')}`;
-    }
-
-    private getImageUrls(candidate: SteamImportCandidate): string[] {
-        return [
-            candidate.poster,
-            candidate.posterHorizontal,
-            this.getCdnImageUrl(candidate.appId, 'header.jpg'),
-            this.getStoreAssetImageUrl(candidate.appId, 'header.jpg'),
-            this.getCdnImageUrl(candidate.appId, 'capsule_616x353.jpg'),
-            this.getStoreAssetImageUrl(candidate.appId, 'capsule_616x353.jpg'),
-            this.getCdnImageUrl(candidate.appId, 'capsule_231x87.jpg'),
-            this.getStoreAssetImageUrl(candidate.appId, 'capsule_231x87.jpg'),
-        ].filter((url, index, urls): url is string => Boolean(url) && urls.indexOf(url) === index);
-    }
-
-    private getCdnImageUrl(appId: number, fileName: string): string {
-        return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/${fileName}`;
-    }
-
-    private getStoreAssetImageUrl(appId: number, fileName: string): string {
-        return `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/${fileName}`;
-    }
-
-    private text(key: SteamReviewTextKey): string {
-        return STEAM_REVIEW_TEXT[this.language]?.[key] ?? STEAM_REVIEW_TEXT.en[key];
+    private async hydrateNames(): Promise<void> {
+        if (!this.nameResolver || this.namesStarted) return;
+        this.namesStarted = true;
+        const ids = [...this.pendingNames];
+        for (let offset = 0; offset < ids.length && !this.hasResolved && !this.inline?.signal.aborted; offset += 40) {
+            const batch = ids.slice(offset, offset + 40);
+            const names = await this.nameResolver(batch).catch(() => ({} as Record<number, string>));
+            if (this.hasResolved || this.inline?.signal.aborted) return;
+            for (const candidate of this.candidates) {
+                if (!batch.includes(candidate.appId)) continue;
+                const name = names[candidate.appId];
+                if (name && !isSteamPlaceholderName(name)) candidate.name = name;
+                this.pendingNames.delete(candidate.appId);
+                const card = this.rows.get(candidate.appId);
+                if (card) {
+                    const title = this.displayName(candidate);
+                    card.querySelector('.lorebase-select-card-title')?.setText(title);
+                    card.setAttribute('aria-label', title);
+                    card.setAttribute('title', title);
+                    card.removeClass('is-title-loading');
+                }
+            }
+            // Searching also finds titles which arrived after the query was entered.
+            if (this.query) this.renderList();
+        }
     }
 }
