@@ -1,0 +1,44 @@
+/* AniList shares the add dialog's poster cards and import receipt. */
+.modal.lorebase-select-modal-container.lorebase-anilist-link-modal { width: 920px; max-width: 94vw; }
+.lorebase-add-workspace.lorebase-anilist-link-workspace { gap: 16px; }
+.lorebase-anilist-link-workspace .lorebase-anilist-link-kinds { margin: 0; padding: 0; border: 0; gap: 18px; border-radius: 0; background: transparent; }
+.lorebase-anilist-link-workspace .lorebase-anilist-link-kinds button.lorebase-anilist-link-kind { flex: 0 0 auto; padding: 7px 0; gap: 7px; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; }
+.lorebase-anilist-link-workspace .lorebase-anilist-link-kinds button.lorebase-anilist-link-kind.is-active { border-bottom-color: var(--lorebase-accent); color: var(--text-normal); box-shadow: none; }
+.lorebase-anilist-link-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px; min-height: 0; }
+.lorebase-anilist-local, .lorebase-anilist-remote { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.lorebase-anilist-local { border-inline-end: 1px solid var(--background-modifier-border); padding-inline-end: 20px; }
+.lorebase-anilist-pane-label { color: var(--text-muted); font-size: 12px; font-weight: 500; }
+.lorebase-anilist-local-poster { position: relative; aspect-ratio: 2 / 3; max-width: 140px; overflow: hidden; border-radius: 7px; background: var(--background-secondary); }
+.lorebase-anilist-local-poster .lorebase-select-empty-poster-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
+.lorebase-anilist-local-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lorebase-anilist-local-title { margin-top: 10px; font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.lorebase-anilist-local-provider { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; }
+.lorebase-anilist-link-workspace .lorebase-anilist-link-source { margin-top: auto; line-height: 1.5; }
+.lorebase-anilist-link-search { display: flex; gap: 8px; align-items: stretch; }
+.lorebase-anilist-link-search .lorebase-select-search-field { flex: 1 1 auto; min-width: 0; }
+.lorebase-anilist-link-search .lorebase-flow-btn { flex: 0 0 auto; min-width: 0; padding-inline: 12px; }
+.lorebase-add-workspace.lorebase-anilist-link-workspace .lorebase-anilist-match-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: 42vh; overflow-y: auto; }
+.lorebase-anilist-match-grid .lorebase-select-empty { grid-column: 1 / -1; min-height: 180px; }
+.lorebase-anilist-link-help { font-size: 12px; color: var(--text-muted); }
+.lorebase-anilist-link-help summary { cursor: pointer; width: fit-content; padding: 5px 0; }
+.lorebase-anilist-link-help p { margin: 7px 0 0; max-width: 720px; line-height: 1.6; }
+.lorebase-anilist-link-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--background-modifier-border); }
+.lorebase-anilist-link-confirmation { flex: 1; min-width: 0; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-anilist-link-confirmation[role="alert"] { color: var(--text-error); white-space: normal; }
+.lorebase-anilist-link-workspace .lorebase-anilist-note-dropdown .lorebase-settings-dropdown-panel { position: absolute; top: 100%; margin-top: 6px; box-shadow: var(--shadow-s); min-width: 230px; max-width: min(400px, 80vw); }
+.lorebase-anilist-link-workspace .lorebase-anilist-note-dropdown .lorebase-settings-dropdown-btn { width: 100%; font-size: 12px; min-height: 38px; }
+@media (max-width: 620px) {
+    .modal.lorebase-select-modal-container.lorebase-anilist-link-modal { width: calc(100vw - 20px); max-width: none; }
+    .lorebase-anilist-link-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    .lorebase-anilist-local { border: 0; padding: 0; }
+    .lorebase-anilist-local-preview { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 4px 12px; align-items: center; }
+    .lorebase-anilist-local-poster { grid-row: 1 / 3; }
+    .lorebase-anilist-local-title, .lorebase-anilist-local-provider { margin: 0; }
+    .lorebase-anilist-local-title { align-self: end; }
+    .lorebase-anilist-local-provider { align-self: start; }
+    .lorebase-anilist-link-workspace .lorebase-anilist-link-source { display: none; }
+    .lorebase-add-workspace.lorebase-anilist-link-workspace .lorebase-anilist-match-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 32vh; }
+    .lorebase-anilist-link-search .lorebase-flow-btn-label { display: none; }
+    .lorebase-anilist-link-footer { flex-wrap: wrap; }
+    .lorebase-anilist-link-confirmation { flex-basis: 100%; }
+}
