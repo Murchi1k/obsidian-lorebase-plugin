@@ -1,0 +1,22 @@
+.modal.has-workspace-inline-close > :is(.modal-header-button, .modal-close-button) { display: none; }
+.has-workspace-inline-close .lorebase-workspace-close {
+    display: inline-flex;
+    flex: 0 0 34px;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    box-shadow: none;
+    cursor: pointer;
+}
+.has-workspace-inline-close .lorebase-workspace-close svg { width: 18px; height: 18px; }
+.has-workspace-inline-close .lorebase-workspace-close:hover { color: var(--text-error); background: color-mix(in srgb, var(--text-error) 12%, var(--background-secondary)); }
+.has-workspace-inline-close .lorebase-workspace-close:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }

@@ -1,10 +1,38 @@
+import { mountStatusReason } from '../components/StatusReasonField';
+import { focusNotesContent, syncNotesReader } from '../components/NotesReader';
+import { normalizeStatusReasons, type StatusReasons } from '../utils/statusReasons';
+import { mountDiscovery } from '../components/DiscoveryContext';
+import { mountReleaseDate } from '../components/ReleaseDateField';
+import { normalizeReleaseDate } from '../utils/releaseDates';
+import type { MediaPriority } from '../types';
+import { normalizePriority } from '../utils/priority';
+import { bindPriority } from '../components/PriorityControl';
+import { normalizePersonalDate } from '../utils/personalDates';
+
+import { renderCountriesControl, validateCountriesControl } from '../components/CountriesControl';
+import { getDlcDisplayTitle } from '../utils/dlcTitle';
+import { preserveScroll } from '../utils/preserveScroll';
+import { GameTrackingPanel, type RefreshGameTracking } from '../components/GameTrackingPanel';
+import type { RefreshPlayStationTracking } from '../components/PlayStationProgressPanel';
+import type { PlayStationProgressPreference } from '../components/PlayStationProgressPreference';
+import { gt } from '../localization/gameTracking';
+import { compactGameText } from '../localization/compactGameEditor';
+import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildEditorHeaderActions, buildEditorTimestampRows, formatCompactEditorRating } from './compactEditorLayout';
+import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
+import { bindTrackingStatus, syncTrackingStatus, finishTrackingPanel } from '../components/EditTrackingPanel';
+import { renderCompactGamePlatforms, renderGamePlatformChips } from '../components/GamePlatformChips';
+import { normalizePlatformPlaythroughs, totalPlatformRepeats, type PlatformPlaythrough } from '../utils/repeatTracking';
+import { trackingText } from '../components/RepeatTrackingControl';
+import { renderWorkTypeControl } from '../components/MediaWorkTypeControl';
+import { DetailedRatingEditor } from './DetailedRatingEditor';
+import { mountPartRating } from '../components/PartRatingControl';
 ﻿/**
  * LOREBASE - Edit Modal
  * Cinematic edit mode for game properties
  */
 
 import { App, Menu, Modal, Notice, TFile, setIcon } from 'obsidian';
-import { GameDlc, GameItem, GameStatus, RelatedMediaLink, TagPreset, UserRating } from '../types';
+import { GameDlc, GameItem, GameStatus, RatingScaleSettings, RelatedMediaLink, TagPreset, UserRating } from '../types';
 import { DEFAULT_COVER, DEFAULT_GAME_TAG_PRESETS, STATUS_CONFIG } from '../constants';
 import { i18n, t } from '../localization';
 import { GenreEditModal } from './GenreEditModal';
@@ -14,15 +42,20 @@ import { extractMarkdownSection } from '../services/GameService';
 import { normalizeObsidianTag } from '../settings/settingsNormalization';
 import { RelatedMediaEditor } from './RelatedMediaEditor';
 import { HierarchicalDatePicker, validateDatePickers } from './HierarchicalDatePicker';
+import { CLASSIC_RATING_SETTINGS, getRatingFromStarPosition, getRatingInputHint, getRatingMax, getRatingStarValues } from '../utils/rating';
+import { mountTenthsRating, paintRatingStar, updateRatingReadout, validateRatingInputs } from '../components/RatingInput';
 
 type GameDlcRefresh = (existing: GameDlc[]) => Promise<GameDlc[] | null>;
 type NotesMode = 'description' | 'myNotes';
 type RegularGameStatus = Exclude<GameStatus, 'wishlist'>;
+type ReleasedGameFallbackStatus = Exclude<GameStatus, 'wishlist' | 'to_be_released'>;
 
 /**
  * Modal for editing game properties
  */
 export class EditModal extends Modal {
+    private countries?: string[];
+    private trackingPanel?: GameTrackingPanel;
     private game: GameItem;
     private onSave: (updates: Partial<GameItem>) => Promise<void>;
     private onDelete?: () => void;
@@ -32,9 +65,15 @@ export class EditModal extends Modal {
     private tagPresets: TagPreset[];
 
     private selectedRating: UserRating;
+    private detailedRatingEditor: DetailedRatingEditor;
+    private statusReasons?: StatusReasons;
+    private discovery?: import('../types').DiscoveryContext;
+    private selectedPriority: MediaPriority = 'normal';
     private selectedStatus: GameStatus;
     private statusBeforeWishlist: RegularGameStatus;
+    private statusBeforeRelease: ReleasedGameFallbackStatus;
     private favorite: boolean;
+    private workType: string;
     private title: string;
     private year: number | null;
     private description: string;
@@ -55,6 +94,8 @@ export class EditModal extends Modal {
     private dlcExpanded = false;
     private relatedMediaEditor: RelatedMediaEditor;
     private datePickers: HierarchicalDatePicker[] = [];
+    private ratingSettings: RatingScaleSettings;
+    private compactChips?: ReturnType<typeof bindCompactEditorChips>;
 
     private onKeydown = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
@@ -86,7 +127,13 @@ export class EditModal extends Modal {
         relatedCandidates: RelatedMediaLink[] = [],
         incomingRelated: RelatedMediaLink[] = [],
         private readonly onRefreshSource?: MediaSourceAction,
-        private readonly onChangeSource?: MediaSourceAction
+        private readonly onChangeSource?: MediaSourceAction,
+        ratingSettings: RatingScaleSettings = CLASSIC_RATING_SETTINGS,
+        private readonly onManageWorkTypes?: (onChanged: () => void) => void,
+        private readonly onRefreshGameTracking?: RefreshGameTracking,
+        private readonly compactGameEditor = false,
+        private readonly onRefreshPlayStation?: RefreshPlayStationTracking,
+        private readonly playstationProgressPreference?: PlayStationProgressPreference,
     ) {
         super(app);
         this.game = game;
@@ -96,20 +143,29 @@ export class EditModal extends Modal {
         this.tagPresets = tagPresets;
         this.onRefreshCommunityRating = onRefreshCommunityRating;
         this.onRefreshDlc = onRefreshDlc;
+        this.ratingSettings = ratingSettings;
 
         this.selectedRating = game.userRating;
+        this.detailedRatingEditor = new DetailedRatingEditor(game.detailedRatings, game.type, ratingSettings);
         this.selectedStatus = game.status;
+        this.selectedPriority = normalizePriority(game.priority);
+        this.discovery = game.discovery ? { ...game.discovery } : undefined;
+        this.statusReasons = normalizeStatusReasons(game.statusReasons);
         this.statusBeforeWishlist = game.status === 'wishlist' ? 'not_started' : game.status;
+        this.statusBeforeRelease = game.status === 'to_be_released' || game.status === 'wishlist'
+            ? 'not_started'
+            : game.status;
         this.favorite = game.favorite;
+        this.workType = game.workType || 'Game';
         this.title = game.displayName;
         this.year = game.year;
         this.description = game.description;
         this.myNotes = game.myNotes ?? '';
         this.gameSeries = game.gameSeries;
-        this.started = this.normalizeDateInput(game.started);
-        this.finished = this.normalizeDateInput(game.finished);
+        this.started = normalizePersonalDate(game.started);
+        this.finished = normalizePersonalDate(game.finished);
         this.isAdult = game.isAdult;
-        this.releaseDate = this.normalizeDateInput(game.releaseDate);
+        this.releaseDate = normalizeReleaseDate(game.releaseDate);
         this.publisher = game.publisher ?? '';
         this.developer = game.developer ?? '';
         this.tags = this.normalizeTags(game.tags ?? []);
@@ -121,9 +177,13 @@ export class EditModal extends Modal {
             game.filePath,
             game.relatedMedia ?? [],
             relatedCandidates,
-            incomingRelated
+            incomingRelated,
+            compactGameEditor
         );
     }
+
+    private platformPlaythroughs: PlatformPlaythrough[] = [];
+    private unassignedRepeats = 0;
 
     onOpen(): void {
         const { contentEl } = this;
@@ -134,14 +194,29 @@ export class EditModal extends Modal {
         this.modalEl.addEventListener('keydown', this.onKeydown);
 
         const root = contentEl.createDiv({ cls: 'lorebase-editmode-root lorebase-modal-panel' });
+        root.toggleClass('lorebase-compact-game-editor', this.compactGameEditor);
         root.appendChild(this.createTemplateFragment(this.buildTemplate()));
+        if (this.compactGameEditor) bindCompactEditorChrome(root, this.modalEl, () => this.close());
+        this.platformPlaythroughs = normalizePlatformPlaythroughs(this.game.platformPlaythroughs, this.game.playedOn, this.game.repeatCount);
+        this.unassignedRepeats = Math.max(0, (this.game.repeatCount ?? 0) - totalPlatformRepeats(this.platformPlaythroughs));
+        const tracking = root.querySelector<HTMLElement>('[data-role="personal-game-tracking"]');
+        if (tracking) {
+            this.trackingPanel = new GameTrackingPanel(tracking, this.game, this.onRefreshGameTracking, this.compactGameEditor, this.onRefreshPlayStation, this.playstationProgressPreference);
+            if (this.compactGameEditor) tracking.appendChild(this.createTemplateFragment(`
+                <div class="lorebase-played-platforms" data-role="compact-played-platforms">
+                    <div data-role="platform-chips"></div>
+                    ${this.buildPlatformAddRow()}
+                </div>`));
+        }
         this.bindStaticContent(root);
+        renderCountriesControl(root, this.game, codes => this.countries = codes);
         this.bindHeader(root);
         this.bindMobileNavigation(root);
         this.bindQuickSettings(root);
         this.bindStatus(root);
         this.bindRating(root);
         this.bindFields(root);
+        renderWorkTypeControl(root, 'game', this.workType, value => this.workType = value, this.onManageWorkTypes);
         this.bindPlayDates(root);
         this.bindDlc(root);
         this.relatedMediaEditor.bind(root);
@@ -159,6 +234,9 @@ export class EditModal extends Modal {
     }
 
     onClose(): void {
+        this.trackingPanel?.destroy();
+        this.compactChips?.destroy();
+        this.compactChips = undefined;
         const { contentEl } = this;
         this.datePickers.forEach((picker) => picker.destroy());
         this.datePickers = [];
@@ -177,6 +255,25 @@ export class EditModal extends Modal {
     }
 
     private buildTemplate(): string {
+        const compact = this.compactGameEditor;
+        const timestampRows = buildEditorTimestampRows();
+        const notesPanel = `
+                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-notes lorebase-editmode-game-notes is-collapsed" data-component="NotesEditor" data-mobile-pane="${compact ? 'general' : 'personal'}">
+                            <div class="lorebase-editmode-panel-title-row">
+                                <h3 class="lorebase-editmode-panel-title" data-role="notes-title">${compact ? compactGameText('descriptionNotes') : t('editDescription')}</h3>
+                                <div class="lorebase-editmode-note-tabs" role="tablist">
+                                    <button type="button" class="lorebase-editmode-note-tab is-active" data-mode="description">${t('editDescription')}</button>
+                                    <button type="button" class="lorebase-editmode-note-tab" data-mode="myNotes">${compact ? compactGameText('myNotes') : t('editMyNotes')}</button>
+                                </div>
+                            </div>
+                            <div class="lorebase-editmode-notes-shell">
+                                <textarea class="lorebase-editmode-notes-input" data-field="notes" rows="9"></textarea>
+                            </div>
+                            <div class="lorebase-editmode-notes-footer">
+                                <span class="lorebase-editmode-saved-indicator" data-role="saved-indicator"><span class="lorebase-editmode-saved-dot" aria-hidden="true"></span><span data-role="saved-text">${t('editSaved')}</span></span>
+                                <span class="lorebase-editmode-char-count" data-role="char-count">0 ${t('editCharsShort')}</span>
+                            </div>
+                        </section>`;
         return `
             <div class="lorebase-editmode-view" data-mobile-tab="general">
                 <header class="lorebase-editmode-header">
@@ -184,9 +281,7 @@ export class EditModal extends Modal {
                         <span class="lorebase-editmode-breadcrumb" data-role="breadcrumb"></span>
                     </div>
                     <div class="lorebase-editmode-header-right">
-                        <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost" data-action="discard">${t('editCancel')}</button>
-                        <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-primary" data-action="save">${t('editSave')}</button>
-                        <button type="button" class="lorebase-editmode-icon-btn" data-action="overflow" aria-label="${t('editOverflow')}">...</button>
+                        ${buildEditorHeaderActions(compact)}
                     </div>
                 </header>
 
@@ -205,17 +300,20 @@ export class EditModal extends Modal {
                             <div class="lorebase-editmode-poster-frame">
                                 <img class="lorebase-editmode-poster-image" data-role="poster" alt="${t('templateFieldPoster')}" />
                             </div>
-                            <div class="lorebase-editmode-mobile-summary">
+                            ${compact ? buildCompactCoverIdentity() : `<div class="lorebase-editmode-mobile-summary">
                                 <strong data-role="mobile-summary-title"></strong>
                                 <span data-role="mobile-summary-meta"></span>
-                            </div>
+                            </div>`}
+                            ${compact ? `<div class="lorebase-classification-panel lorebase-game-cover-type" data-role="cover-work-type" role="group" aria-label="${t('templateFieldWorkType')}">
+                                <div class="lorebase-editmode-dropdown" data-field="work-type"></div>
+                            </div>` : ''}
                         </section>
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-quick-settings" data-component="QuickSettings" data-mobile-pane="personal">
                             <div class="lorebase-editmode-panel-title-row">
                                 <h3 class="lorebase-editmode-panel-title">${t('editQuickSettings')}</h3>
                             </div>
-                            <div class="lorebase-editmode-toggle-list">
+                            ${compact ? this.buildCompactQuickSettings() : `<div class="lorebase-editmode-toggle-list">
                                 <label class="lorebase-editmode-switch-row">
                                     <span class="lorebase-editmode-switch-label">${t('editFavorite')}</span>
                                     <button type="button" class="lorebase-editmode-switch lorebase-editmode-switch-favorite" data-toggle="favorite" aria-label="${t('editFavorite')}" aria-pressed="false"><span class="lorebase-editmode-switch-thumb"></span></button>
@@ -227,6 +325,10 @@ export class EditModal extends Modal {
                                         <span class="lorebase-editmode-switch-tooltip" id="lorebase-game-adult-tooltip" role="tooltip">${t('editAdultVisibilityHint')}</span>
                                     </button>
                                 </label>
+                                <label class="lorebase-editmode-switch-row">
+                                    <span class="lorebase-editmode-switch-label">${t('statusToBeReleased')}</span>
+                                    <button type="button" class="lorebase-editmode-switch lorebase-editmode-switch-release" data-toggle="release" aria-label="${t('statusToBeReleased')}" aria-pressed="false"><span class="lorebase-editmode-switch-thumb"></span></button>
+                                </label>
                                 <div class="lorebase-editmode-switch-row">
                                     <span class="lorebase-editmode-switch-label-row">
                                         <span class="lorebase-editmode-switch-label" id="lorebase-wishlist-label">${t('statusWishlist')}</span>
@@ -237,7 +339,7 @@ export class EditModal extends Modal {
                                     </span>
                                     <button type="button" class="lorebase-editmode-switch lorebase-editmode-switch-wishlist" data-toggle="wishlist" aria-labelledby="lorebase-wishlist-label" aria-pressed="false"><span class="lorebase-editmode-switch-thumb"></span></button>
                                 </div>
-                            </div>
+                            </div>`}
                         </section>
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-plan-tags" data-component="PlanTags" data-mobile-pane="personal">
@@ -250,7 +352,7 @@ export class EditModal extends Modal {
                     </aside>
 
                     <main class="lorebase-editmode-column lorebase-editmode-column-center">
-                        <section class="lorebase-editmode-panel lorebase-editmode-title-meta" data-component="TitleMeta" data-mobile-pane="general">
+                        ${compact ? '' : `<section class="lorebase-editmode-panel lorebase-editmode-title-meta" data-component="TitleMeta" data-mobile-pane="general">
                             <div class="lorebase-editmode-title-row">
                                 <input class="lorebase-editmode-title-input" data-field="title" type="text" aria-label="${t('templateFieldName')}" />
                             </div>
@@ -273,28 +375,13 @@ export class EditModal extends Modal {
                                     </button>
                                 </div>
                             </div>
-                        </section>
+                        </section>`}
 
-                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-notes lorebase-editmode-game-notes is-collapsed" data-component="NotesEditor" data-mobile-pane="personal">
-                            <div class="lorebase-editmode-panel-title-row">
-                                <h3 class="lorebase-editmode-panel-title" data-role="notes-title">${t('editDescription')}</h3>
-                                <div class="lorebase-editmode-note-tabs" role="tablist">
-                                    <button type="button" class="lorebase-editmode-note-tab is-active" data-mode="description">${t('editDescription')}</button>
-                                    <button type="button" class="lorebase-editmode-note-tab" data-mode="myNotes">${t('editMyNotes')}</button>
-                                </div>
-                            </div>
-                            <div class="lorebase-editmode-notes-shell">
-                                <textarea class="lorebase-editmode-notes-input" data-field="notes" rows="9"></textarea>
-                            </div>
-                            <div class="lorebase-editmode-notes-footer">
-                                <span class="lorebase-editmode-saved-indicator" data-role="saved-indicator"><span class="lorebase-editmode-saved-dot" aria-hidden="true"></span><span data-role="saved-text">${t('editSaved')}</span></span>
-                                <span class="lorebase-editmode-char-count" data-role="char-count">0 ${t('editCharsShort')}</span>
-                            </div>
-                        </section>
+                        ${compact ? '' : notesPanel}
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-status-rating" data-component="StatusRating" data-mobile-pane="general">
                             <div class="lorebase-editmode-panel-title-row">
-                                <h3 class="lorebase-editmode-panel-title">${t('editStatus')} & ${t('editRating')}</h3>
+                                <h3 class="lorebase-editmode-panel-title">${compact ? compactGameText('statusRating') : `${t('editStatus')} & ${t('editRating')}`}</h3>
                                 <span class="lorebase-editmode-status-hint">${t('editTracking')}</span>
                             </div>
                             <div class="lorebase-editmode-status-shell">
@@ -327,7 +414,7 @@ export class EditModal extends Modal {
                                     <span class="lorebase-editmode-rating-caption">${t('editPersonalRating')}</span>
                                     <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-editmode-btn-tight" data-action="clear-rating">${t('editClear')}</button>
                                 </div>
-                                <div class="lorebase-editmode-stars" data-role="stars"></div>
+                                <div class="lorebase-editmode-stars" data-role="stars" role="group" aria-label="${t('editPersonalRating')}" title="${getRatingInputHint(this.ratingSettings, i18n.getLanguage())}"></div>
                                 <div class="lorebase-editmode-rating-meta">
                                     <span class="lorebase-editmode-rating-value" data-role="rating-value">0.0 / 5.0</span>
                                     <span class="lorebase-editmode-rating-hint">${t('editRatingHint')}</span>
@@ -358,10 +445,12 @@ export class EditModal extends Modal {
                             </div>
                         </section>
 
+                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass" data-role="personal-game-tracking" data-mobile-pane="personal"></section>
+                        ${compact ? notesPanel : ''}
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-dlc" data-component="DlcPanel" data-mobile-pane="more">
                             <div class="lorebase-editmode-panel-title-row">
                                 <h3 class="lorebase-editmode-panel-title">${t('editDlc')}</h3>
-                                <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-tight" data-action="refresh-dlc">${t('editRefreshDlc')}</button>
+                                <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-tight" data-action="refresh-dlc">${compact ? `<span data-icon="refresh-cw" aria-hidden="true"></span><span>${t('editRefreshDlc')}</span>` : t('editRefreshDlc')}</button>
                             </div>
                             <div class="lorebase-editmode-related-list lorebase-editmode-dlc-list" data-role="dlc-list"></div>
                             <div class="lorebase-editmode-dlc-toggle-row" data-role="dlc-toggle"></div>
@@ -379,7 +468,7 @@ export class EditModal extends Modal {
 
                     <aside class="lorebase-editmode-column lorebase-editmode-column-right">
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-progress" data-component="ProgressPanel" data-mobile-pane="more">
-                            <div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${t('editProgress')}</h3></div>
+                            <div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${compact ? 'HLTB' : gt('estimates')}</h3></div>
                             <div class="lorebase-editmode-kv-list">
                                 <div class="lorebase-editmode-kv-row">
                                     <span class="lorebase-editmode-kv-key">${t('editProgressMain')}</span>
@@ -402,17 +491,15 @@ export class EditModal extends Modal {
                                 <span class="lorebase-editmode-collapsible-caret" aria-hidden="true">v</span>
                             </summary>
                             <div class="lorebase-editmode-advanced-grid">
-                                <div class="lorebase-editmode-field lorebase-editmode-platforms-field">
-                                    <span class="lorebase-editmode-field-label">${t('templateFieldPlatforms')}</span>
+                                ${compact ? `<label class="lorebase-editmode-field lorebase-game-series">
+                                    <span class="lorebase-editmode-field-label">${t('editSeries')}</span>
+                                    <div class="lorebase-editmode-combobox" data-field="series"></div>
+                                </label><div data-role="compact-countries"></div>` : ''}
+                                ${compact ? '' : `<div class="lorebase-editmode-field lorebase-editmode-platforms-field">
+                                    <span class="lorebase-editmode-field-label">${trackingText('availablePlatforms')}</span>
                                     <div class="lorebase-editmode-platform-chips" data-role="platform-chips"></div>
-                                    <div class="lorebase-editmode-platform-add-row">
-                                        <span class="lorebase-editmode-platform-add-icon" data-role="platform-add-icon" aria-hidden="true"></span>
-                                        <input class="lorebase-editmode-input lorebase-editmode-platform-input" data-field="new-platform" type="text" placeholder="${t('editPlatformPlaceholder')}" />
-                                        <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-editmode-platform-add" data-action="add-platform" aria-label="${t('editAddPlatform')}">
-                                            <span data-role="platform-add-button-icon" aria-hidden="true"></span>
-                                        </button>
-                                    </div>
-                                </div>
+                                    ${this.buildPlatformAddRow()}
+                                </div>`}
                                 <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('editReleaseDate')}</span><input class="lorebase-editmode-input" data-field="release-date" type="date" /></label>
                                 <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('editPublisher')}</span><input class="lorebase-editmode-input" data-field="publisher" type="text" placeholder="${t('editPublisher')}" /></label>
                                 <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('editDeveloper')}</span><input class="lorebase-editmode-input" data-field="developer" type="text" placeholder="${t('editDeveloper')}" /></label>
@@ -421,24 +508,22 @@ export class EditModal extends Modal {
                                     <code class="lorebase-editmode-local-path" data-role="local-path"></code>
                                     <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-editmode-btn-tight" data-action="browse-file">${t('editOpen')}</button>
                                 </div>
+                                ${compact ? timestampRows : ''}
                             </div>
                         </details>
 
                         <section class="lorebase-editmode-panel lorebase-editmode-tags" data-component="TagsBlock" data-mobile-pane="personal">
-                            <div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${t('tags')}</h3></div>
+                            ${compact ? buildCompactEditorChips() : `<div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${t('tags')}</h3></div>
                             <div class="lorebase-editmode-chip-row" data-role="tag-chips"></div>
-                            <input class="lorebase-editmode-input lorebase-editmode-tag-input" type="text" data-field="new-tag" placeholder="${t('editTagPlaceholder')}" />
+                            <input class="lorebase-editmode-input lorebase-editmode-tag-input" type="text" data-field="new-tag" placeholder="${t('editTagPlaceholder')}" />`}
                         </section>
 
-                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-timestamps" data-mobile-pane="more">
+                        ${compact ? '' : `<section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-timestamps" data-mobile-pane="more">
                             <div class="lorebase-editmode-panel-title-row">
                                 <h3 class="lorebase-editmode-panel-title">${t('editDates')}</h3>
                             </div>
-                            <div class="lorebase-editmode-kv-list">
-                                <div class="lorebase-editmode-kv-row"><span class="lorebase-editmode-kv-key">${t('editAdded')}</span><span class="lorebase-editmode-kv-val" data-role="ts-added">-</span></div>
-                                <div class="lorebase-editmode-kv-row"><span class="lorebase-editmode-kv-key">${t('editUpdated')}</span><span class="lorebase-editmode-kv-val" data-role="ts-updated">-</span></div>
-                            </div>
-                        </section>
+                            ${timestampRows}
+                        </section>`}
 
                     </aside>
                 </div>
@@ -447,6 +532,26 @@ export class EditModal extends Modal {
                 </footer>
             </div>
         `;
+    }
+
+    private buildCompactQuickSettings(): string {
+        const buttons = [
+            { key: 'favorite', label: t('editFavorite'), icon: 'heart' },
+            { key: 'adult', label: t('editAdult'), hint: t('editAdultVisibilityHint') },
+            { key: 'release', label: t('statusToBeReleased'), icon: 'calendar-clock' },
+            { key: 'wishlist', label: t('statusWishlist'), icon: 'list-plus', hint: t('editWishlistStatusLock') },
+        ];
+        return buildCompactQuickSettings(buttons);
+    }
+
+    private buildPlatformAddRow(): string {
+        return `<div class="lorebase-editmode-platform-add-row">
+            <span class="lorebase-editmode-platform-add-icon" data-role="platform-add-icon" aria-hidden="true"></span>
+            <input class="lorebase-editmode-input lorebase-editmode-platform-input" data-field="new-platform" type="text" placeholder="${this.compactGameEditor ? compactGameText('searchPlatforms') : t('editPlatformPlaceholder')}" aria-label="${this.compactGameEditor ? compactGameText('searchPlatforms') : t('editAddPlatform')}" />
+            <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-editmode-platform-add" data-action="add-platform" aria-label="${t('editAddPlatform')}">
+                <span data-role="platform-add-button-icon" aria-hidden="true"></span>
+            </button>
+        </div>`;
     }
 
     private bindStaticContent(root: HTMLElement): void {
@@ -493,7 +598,8 @@ export class EditModal extends Modal {
         const releaseDateInput = this.qs<HTMLInputElement>(root, '[data-field="release-date"]');
         if (releaseDateInput) {
             const releaseDateValue = this.releaseDate || this.getFrontmatterValue(frontmatter, ['releaseDate', 'release_date', 'released', 'release']) || '';
-            releaseDateInput.value = this.normalizeDateInput(releaseDateValue);
+            releaseDateInput.type = 'text';
+            releaseDateInput.value = normalizeReleaseDate(releaseDateValue);
             this.releaseDate = releaseDateInput.value;
         }
 
@@ -529,6 +635,8 @@ export class EditModal extends Modal {
 
     private bindHeader(root: HTMLElement): void {
         this.qs<HTMLButtonElement>(root, '[data-action="discard"]')?.addEventListener('click', () => this.close());
+        const dlcIcon = this.qs<HTMLElement>(root, '[data-action="refresh-dlc"] [data-icon]');
+        if (dlcIcon) setIcon(dlcIcon, 'refresh-cw');
         root.querySelectorAll<HTMLButtonElement>('[data-action="save"]').forEach((button) => {
             button.addEventListener('click', () => void this.save());
         });
@@ -568,11 +676,19 @@ export class EditModal extends Modal {
     }
 
     private bindQuickSettings(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-switch').forEach(btn => {
+        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-quick-settings [data-toggle]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const key = btn.dataset.toggle;
                 if (key === 'favorite') this.favorite = !this.favorite;
                 if (key === 'adult') this.isAdult = !this.isAdult;
+                if (key === 'release' && this.selectedStatus !== 'wishlist') {
+                    if (this.selectedStatus === 'to_be_released') {
+                        this.selectedStatus = this.statusBeforeRelease;
+                    } else {
+                        this.statusBeforeRelease = this.selectedStatus;
+                        this.selectedStatus = 'to_be_released';
+                    }
+                }
                 if (key === 'wishlist') {
                     if (this.selectedStatus === 'wishlist') {
                         this.selectedStatus = this.statusBeforeWishlist;
@@ -589,45 +705,59 @@ export class EditModal extends Modal {
     }
 
     private bindStatus(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-segment').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (this.selectedStatus === 'wishlist') return;
-                const status = btn.dataset.status as GameStatus | undefined;
-                if (!status) return;
-                this.selectedStatus = status;
-                if (status === 'completed' && !this.finished) {
-                    this.finished = this.getTodayDateInput();
-                    const finished = this.qs<HTMLInputElement>(root, '[data-field="finished-date"]');
-                    if (finished) this.syncDateInput(finished, this.finished);
-                }
-                this.updateStatusUI(root);
-            });
+        bindTrackingStatus(root, 'game', this.selectedStatus, status => {
+            if (this.selectedStatus === 'wishlist') return;
+            this.selectedStatus = status;
+            if (status !== 'to_be_released' && status !== 'wishlist') this.statusBeforeRelease = status;
+            this.updateStatusUI(root);
+        });
+        if (this.compactGameEditor) root.querySelectorAll<HTMLButtonElement>('.lorebase-tracking-status button').forEach(button => {
+            button.title = button.textContent?.trim() ?? '';
         });
     }
 
     private bindRating(root: HTMLElement): void {
+        const ratingWrap = root.querySelector<HTMLElement>('.lorebase-editmode-rating-wrap');
+        if (ratingWrap) this.detailedRatingEditor.mount(ratingWrap);
+        mountTenthsRating(this.qs<HTMLElement>(root, '[data-role="rating-value"]'), this.ratingSettings,
+            () => this.selectedRating, value => {
+                this.selectedRating = value;
+                this.updateRatingUI(root);
+            }, t('editPersonalRating'));
         const stars = this.qs<HTMLElement>(root, '[data-role="stars"]');
         if (stars) {
-            for (let i = 1; i <= 5; i++) {
+            stars.toggleClass('is-custom-scale', this.ratingSettings.mode === 'custom');
+            for (const i of getRatingStarValues(this.ratingSettings)) {
                 const btn = stars.createEl('button', {
                     cls: 'lorebase-editmode-star',
                     attr: { type: 'button', 'aria-label': `${t('editRating')} ${i}` }
                 });
                 btn.textContent = String.fromCharCode(9733);
                 btn.dataset.rating = String(i);
-                btn.addEventListener('click', () => {
-                    this.selectedRating = i as UserRating;
+                btn.addEventListener('click', (event) => {
+                    const rect = btn.getBoundingClientRect();
+                    this.selectedRating = event.detail === 0
+                        ? i
+                        : getRatingFromStarPosition(i, event.clientX - rect.left, rect.width, this.ratingSettings);
                     this.updateRatingUI(root);
                 });
             }
         }
 
-        this.qs<HTMLButtonElement>(root, '[data-action="clear-rating"]')?.addEventListener('click', () => {
+        const clear = this.qs<HTMLButtonElement>(root, '[data-action="clear-rating"]');
+        if (this.compactGameEditor && clear) {
+            clear.textContent = compactGameText('reset');
+        }
+        clear?.addEventListener('click', () => {
             this.selectedRating = null;
             this.updateRatingUI(root);
         });
 
         this.updateRatingUI(root);
+        finishTrackingPanel(root);
+        bindPriority(root, this.selectedPriority, value => { this.selectedPriority = value; });
+        mountDiscovery(root, this.discovery, value => this.discovery = value, this.app);
+        mountStatusReason(root,this.statusReasons,this.selectedStatus,value=>this.statusReasons=value,this.app);
     }
 
     private bindFields(root: HTMLElement): void {
@@ -676,7 +806,8 @@ export class EditModal extends Modal {
                 started,
                 startedTrigger,
                 () => this.started,
-                (value) => { this.started = value; }
+                (value) => { this.started = value; },
+                { allowPartial: true }
             );
             startedPicker.syncInput(this.started);
             this.datePickers.push(startedPicker);
@@ -687,7 +818,8 @@ export class EditModal extends Modal {
                 finished,
                 finishedTrigger,
                 () => this.finished,
-                (value) => { this.finished = value; }
+                (value) => { this.finished = value; },
+                { allowPartial: true, allowUnknown: true }
             );
             finishedPicker.syncInput(this.finished);
             this.datePickers.push(finishedPicker);
@@ -735,7 +867,12 @@ export class EditModal extends Modal {
             this.notesExpanded = !this.notesExpanded;
             this.updateNotesDisclosureUI(root);
             if (this.notesExpanded) {
-                window.setTimeout(() => this.qs<HTMLTextAreaElement>(root, '[data-field="notes"]')?.focus(), 0);
+                window.setTimeout(() => {
+                    focusNotesContent(root, this.compactGameEditor);
+                    if (this.compactGameEditor) {
+                        this.qs<HTMLElement>(root, '[data-component="NotesEditor"]')?.scrollIntoView({ block: 'nearest' });
+                    }
+                }, 0);
             }
         });
     }
@@ -796,7 +933,7 @@ export class EditModal extends Modal {
             button.toggleClass('is-active', mode === this.notesMode);
         });
         const title = this.qs<HTMLElement>(root, '[data-role="notes-title"]');
-        if (title) title.textContent = this.notesMode === 'description' ? t('editDescription') : t('editMyNotes');
+        if (title && !this.compactGameEditor) title.textContent = this.notesMode === 'description' ? t('editDescription') : t('editMyNotes');
         const notes = this.qs<HTMLTextAreaElement>(root, '[data-field="notes"]');
         if (notes) this.updateNotesPlaceholder(notes);
         const panel = this.qs<HTMLElement>(root, '[data-component="NotesEditor"]');
@@ -835,15 +972,32 @@ export class EditModal extends Modal {
     }
 
     private bindTags(root: HTMLElement): void {
+        if (this.compactGameEditor) {
+            const planTags = new Set(this.tagPresets.map(preset => preset.tag));
+            this.compactChips = bindCompactEditorChips(root, {
+                tags: {
+                    read: () => this.tags,
+                    write: values => { this.tags = values; this.renderPlanTagChips(root); },
+                    normalize: value => this.normalizeTag(value),
+                    visible: value => !planTags.has(value),
+                },
+                genres: {
+                    read: () => this.genres,
+                    write: values => { this.genres = values; },
+                    normalize: value => this.normalizeGenre(value),
+                },
+            });
+            return;
+        }
         const input = this.qs<HTMLInputElement>(root, '[data-field="new-tag"]');
         input?.addEventListener('keydown', event => {
             if (event.key !== 'Enter') return;
             event.preventDefault();
-            const normalized = this.normalizeTag(input.value);
-            if (!normalized || this.tags.includes(normalized)) return;
-            this.tags.push(normalized);
-            this.renderTagChips(root);
+            const value = this.normalizeTag(input.value);
+            if (!value || this.tags.includes(value)) return;
+            this.tags.push(value);
             input.value = '';
+            this.renderTagChips(root);
         });
     }
 
@@ -886,11 +1040,7 @@ export class EditModal extends Modal {
             void this.app.workspace.getLeaf(true).openFile(file);
         });
 
-        const releaseDateInput = this.qs<HTMLInputElement>(root, '[data-field="release-date"]');
-        releaseDateInput?.addEventListener('change', () => {
-            this.releaseDate = this.normalizeDateInput(releaseDateInput.value);
-            releaseDateInput.value = this.releaseDate;
-        });
+        this.datePickers.push(mountReleaseDate(root, () => this.releaseDate, value => this.releaseDate = value));
 
         const publisherInput = this.qs<HTMLInputElement>(root, '[data-field="publisher"]');
         publisherInput?.addEventListener('input', () => {
@@ -935,7 +1085,8 @@ export class EditModal extends Modal {
             cls: 'lorebase-editmode-input lorebase-editmode-combobox-input',
             attr: {
                 type: 'text',
-                placeholder: t('editSeries'),
+                placeholder: this.compactGameEditor ? t('editNoSeries') : t('editSeries'),
+                'aria-label': t('editSeries'),
                 'aria-haspopup': 'listbox',
                 'aria-expanded': 'false',
             },
@@ -974,12 +1125,13 @@ export class EditModal extends Modal {
         const selectValue = (value: string): void => {
             this.gameSeries = value.trim();
             input.value = this.gameSeries;
+            if (this.compactGameEditor) input.focus({ preventScroll: true });
             close();
         };
 
-        const renderOptions = (): void => {
+        const renderOptions = (showAll = false): void => {
             panel.empty();
-            const query = input.value.trim().toLowerCase();
+            const query = showAll ? '' : input.value.trim().toLowerCase();
             const values = uniqueSeries.filter((series) => series.toLowerCase().includes(query));
             const clear = panel.createDiv({
                 cls: 'lorebase-settings-dropdown-option',
@@ -1032,15 +1184,27 @@ export class EditModal extends Modal {
             open();
         });
         input.addEventListener('focus', () => {
-            renderOptions();
+            renderOptions(this.compactGameEditor);
             open();
         });
         toggle.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
-            renderOptions();
+            renderOptions(this.compactGameEditor);
             if (panel.hasClass('is-open')) close();
             else open();
+        });
+        if (this.compactGameEditor) host.addEventListener('keydown', event => {
+            if (!panel.hasClass('is-open')) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                input.focus({ preventScroll: true });
+                close();
+            } else if (event.key === 'ArrowDown' && event.target === input) {
+                event.preventDefault();
+                panel.querySelector<HTMLElement>('[role="option"]')?.focus();
+            }
         });
 
         const onDocumentClick = (event: MouseEvent): void => {
@@ -1101,6 +1265,7 @@ export class EditModal extends Modal {
     private renderTagChips(root: HTMLElement): void {
         const container = this.qs<HTMLElement>(root, '[data-role="tag-chips"]');
         if (!container) return;
+        if (this.compactGameEditor) { this.compactChips?.render(); return; }
         container.empty();
         const planTags = new Set(this.tagPresets.map((preset) => preset.tag));
 
@@ -1165,37 +1330,25 @@ export class EditModal extends Modal {
     private renderPlatformChips(root: HTMLElement): void {
         const container = this.qs<HTMLElement>(root, '[data-role="platform-chips"]');
         if (!container) return;
-        container.empty();
-
-        if (!this.platforms.length) {
-            container.createSpan({
-                cls: 'lorebase-editmode-platform-empty',
-                text: t('editNoPlatforms'),
-            });
-            return;
-        }
-
-        for (const platform of this.platforms) {
-            const family = this.getPlatformFamily(platform);
-            const chip = container.createEl('button', {
-                cls: 'lorebase-editmode-platform-chip',
-                attr: {
-                    type: 'button',
-                    title: t('editRemoveHint'),
-                    'data-platform-family': family,
-                    'aria-label': `${platform}: ${t('editRemoveHint')}`,
-                },
-            });
-            const icon = chip.createSpan({ cls: 'lorebase-editmode-platform-chip-icon', attr: { 'aria-hidden': 'true' } });
-            setIcon(icon, this.getPlatformIcon(family));
-            chip.createSpan({ cls: 'lorebase-editmode-platform-chip-label', text: platform });
-            const remove = chip.createSpan({ cls: 'lorebase-editmode-platform-chip-remove', attr: { 'aria-hidden': 'true' } });
-            setIcon(remove, 'x');
-            chip.addEventListener('click', () => {
-                this.platforms = this.platforms.filter((entry) => entry !== platform);
+        const options = {
+            family: (platform: string) => this.getPlatformFamily(platform),
+            icon: (family: string) => this.getPlatformIcon(family),
+            onChange: (entries: PlatformPlaythrough[], refresh?: boolean) => {
+                if (this.unassignedRepeats > 0) {
+                    const selected = entries.find(entry => entry.selected);
+                    if (selected) { selected.repeatCount += this.unassignedRepeats; this.unassignedRepeats = 0; }
+                }
+                this.platformPlaythroughs = entries;
+                if (refresh) this.renderPlatformChips(root);
+            },
+            onRemove: (platform: string) => {
+                this.platforms = this.platforms.filter(entry => entry !== platform);
                 this.renderPlatformChips(root);
-            });
-        }
+            },
+        };
+        const played = this.qs<HTMLElement>(root, '[data-role="compact-played-platforms"]');
+        if (played) renderCompactGamePlatforms(container, this.platforms, this.platformPlaythroughs, options);
+        else renderGamePlatformChips(container, this.platforms, this.platformPlaythroughs, options);
     }
 
     private getPlatformFamily(platform: string): string {
@@ -1219,9 +1372,15 @@ export class EditModal extends Modal {
     }
 
     private renderDlc(root: HTMLElement): void {
+        preserveScroll(root.querySelector<HTMLElement>('[data-role="dlc-list"]') ?? root, () => this.renderDlcContent(root));
+    }
+    private renderDlcContent(root: HTMLElement): void {
         const container = this.qs<HTMLElement>(root, '[data-role="dlc-list"]');
         if (!container) return;
+        const previousScroll = container.scrollTop;
         container.empty();
+        const compact = this.compactGameEditor;
+        container.classList.toggle('is-portrait-grid', this.dlc.length > 0 && this.dlc.every(item => item.provider === 'igdb'));
 
         if (!this.dlc.length) {
             container.createDiv({ cls: 'lorebase-editmode-related-empty', text: t('editNoDlc') });
@@ -1230,39 +1389,43 @@ export class EditModal extends Modal {
         }
 
         const visibleCount = this.dlcExpanded ? this.dlc.length : Math.min(this.dlc.length, this.getDlcCollapsedCount(container));
+        const updateCoverGrid = (): void => {
+            const rows = Array.from(container.querySelectorAll('.lorebase-editmode-dlc-item'));
+            container.classList.toggle('is-portrait-grid', rows.length > 0 && rows.every(row => row.classList.contains('is-portrait')));
+        };
         for (const item of this.dlc.slice(0, visibleCount)) {
             const row = container.createDiv({
-                cls: 'lorebase-editmode-related-item lorebase-editmode-dlc-item',
+                cls: 'lorebase-editmode-related-item lorebase-editmode-dlc-item' + (item.provider === 'igdb' ? ' is-portrait' : ''),
                 attr: { title: item.url || item.title },
             });
             const image = row.createDiv({
                 cls: `lorebase-editmode-related-image lorebase-editmode-dlc-image ${item.provider === 'igdb' ? 'is-poster' : 'is-wide'}`,
             });
             const imageUrl = item.imageUrl || DEFAULT_COVER;
-            image.setCssStyles({
-                backgroundImage: `url("${imageUrl.replace(/"/g, '\\"')}")`,
+            const cover = image.createEl('img', { attr: { src: imageUrl, alt: '', loading: 'lazy', decoding: 'async' } });
+            cover.addEventListener('load', () => {
+                if (compact && cover.getAttribute('src') === DEFAULT_COVER) return;
+                if (!cover.naturalWidth || !cover.naturalHeight) return;
+                row.style.setProperty('--lorebase-dlc-cover-ratio', cover.naturalWidth + ' / ' + cover.naturalHeight);
+                const portrait = cover.naturalHeight > cover.naturalWidth * 1.15;
+                row.classList.toggle('is-portrait', portrait);
+                image.classList.toggle('is-poster', portrait);
+                image.classList.toggle('is-wide', !portrait);
+                updateCoverGrid();
+            });
+            cover.addEventListener('error', () => {
+                if (cover.getAttribute('src') !== DEFAULT_COVER) cover.src = DEFAULT_COVER;
             });
             image.createSpan({ cls: 'lorebase-editmode-related-type', text: t('editDlc') });
 
-            const title = row.createSpan({ cls: 'lorebase-editmode-related-title', text: item.title });
+            const info = row.createDiv({ cls: 'lorebase-editmode-dlc-info' });
+            const title = info.createEl(item.url ? 'button' : 'span', { cls: 'lorebase-editmode-related-title', text: getDlcDisplayTitle(item.title, this.game?.displayName ?? ''), attr: { title: item.title, 'aria-label': item.title, ...(item.url ? { type: 'button' } : {}) } });
             title.addEventListener('click', () => {
                 if (item.url) window.open(item.url, '_blank', 'noopener');
             });
 
-            const rating = row.createDiv({ cls: 'lorebase-editmode-dlc-rating', attr: { 'aria-label': t('editPersonalRating') } });
-            for (let value = 1; value <= 5; value++) {
-                const star = rating.createEl('button', {
-                    cls: 'lorebase-editmode-dlc-star',
-                    text: String.fromCharCode(9733),
-                    attr: { type: 'button', 'aria-label': `${t('editRating')} ${value}` },
-                });
-                star.toggleClass('is-active', item.userRating !== null && item.userRating !== undefined && value <= item.userRating);
-                star.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    item.userRating = item.userRating === value ? null : value as UserRating;
-                    this.renderDlc(root);
-                });
-            }
+            mountPartRating(info, { ...this.ratingSettings, classicPreset: 'standard' }, item.userRating ?? null, `${t('editRating')}: ${item.title}`,
+                rating => { item.userRating = rating; }, compact && this.ratingSettings.mode !== 'classic');
 
             const remove = row.createEl('button', {
                 cls: 'lorebase-editmode-related-remove',
@@ -1276,6 +1439,8 @@ export class EditModal extends Modal {
             });
         }
 
+        updateCoverGrid();
+        container.scrollTop = previousScroll;
         this.renderDlcToggle(root, this.dlc.length - visibleCount);
     }
 
@@ -1300,16 +1465,15 @@ export class EditModal extends Modal {
         button.addEventListener('click', () => {
             this.dlcExpanded = !this.dlcExpanded;
             this.renderDlc(root);
+            if (this.compactGameEditor) container.querySelector('button')?.focus({ preventScroll: true });
         });
     }
 
     private getDlcCollapsedCount(container: HTMLElement | null): number {
-        if (!container) return 4;
-        const columns = getComputedStyle(container).gridTemplateColumns
-            .split(' ')
-            .filter((column) => column.trim().length > 0).length;
-        if (columns > 0 && getComputedStyle(container).gridTemplateColumns !== 'none') return columns;
-        return 4;
+        if (this.compactGameEditor) return 4;
+        if (!container) return 3;
+        const columns = getComputedStyle(container).gridTemplateColumns;
+        return columns && columns !== 'none' ? Math.max(1, columns.split(' ').filter(Boolean).length) : 3;
     }
 
     private createRemovableChip(container: HTMLElement, label: string, onRemove: () => void): void {
@@ -1337,7 +1501,10 @@ export class EditModal extends Modal {
     private updateQuickSettingSwitches(root: HTMLElement): void {
         this.updateSwitch(root, 'favorite', this.favorite);
         this.updateSwitch(root, 'wishlist', this.selectedStatus === 'wishlist');
+        this.updateSwitch(root, 'release', this.selectedStatus === 'to_be_released');
         this.updateSwitch(root, 'adult', this.isAdult);
+        const release = this.qs<HTMLButtonElement>(root, '[data-toggle="release"]');
+        if (release) release.disabled = this.selectedStatus === 'wishlist';
     }
 
     private updateSwitch(root: HTMLElement, key: string, value: boolean): void {
@@ -1349,13 +1516,7 @@ export class EditModal extends Modal {
 
     private updateStatusUI(root: HTMLElement): void {
         const locked = this.selectedStatus === 'wishlist';
-        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-segment').forEach(btn => {
-            const selected = btn.dataset.status === this.selectedStatus;
-            btn.toggleClass('is-active', selected);
-            btn.setAttr('aria-pressed', String(selected));
-            btn.disabled = locked;
-            btn.setAttr('aria-disabled', String(locked));
-        });
+        syncTrackingStatus(root, this.selectedStatus);
         const shell = this.qs<HTMLElement>(root, '.lorebase-editmode-status-shell');
         shell?.toggleClass('is-wishlist-locked', locked);
         const note = this.qs<HTMLElement>(root, '[data-role="status-lock-note"]');
@@ -1363,22 +1524,28 @@ export class EditModal extends Modal {
     }
 
     private updateRatingUI(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-star').forEach(btn => {
+        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-star:not(.lorebase-criterion-star)').forEach(btn => {
             const value = Number(btn.dataset.rating ?? '0');
-            const selected = this.selectedRating !== null && value <= this.selectedRating;
-            btn.toggleClass('is-active', selected);
+            paintRatingStar(btn, value, this.selectedRating, this.ratingSettings, 'game');
         });
 
         const ratingValue = this.qs<HTMLElement>(root, '[data-role="rating-value"]');
         const ratingLine = this.qs<HTMLElement>(root, '[data-role="rating-line"]');
+        const ratingHint = this.qs<HTMLElement>(root, '.lorebase-editmode-rating-hint');
 
         const numeric = this.selectedRating ?? 0;
-        const pct = Math.round((numeric / 5) * 100);
-        if (ratingValue) ratingValue.textContent = `${numeric.toFixed(1)} / 5.0`;
+        const max = getRatingMax(this.ratingSettings);
+        const pct = Math.round((numeric / max) * 100);
+        const ratingText = this.compactGameEditor
+            ? formatCompactEditorRating(this.selectedRating, max)
+            : `${numeric.toFixed(1)} / ${max.toFixed(1)}`;
+        updateRatingReadout(ratingValue, this.selectedRating, ratingText);
+        if (ratingHint) ratingHint.textContent = getRatingInputHint(this.ratingSettings, i18n.getLanguage());
         if (ratingLine) ratingLine.style.width = `${pct}%`;
     }
 
     private updateCharCount(root: HTMLElement): void {
+        syncNotesReader(root);
         const count = this.qs<HTMLElement>(root, '[data-role="char-count"]');
         if (count) count.textContent = `${this.getCurrentNotesValue().length} ${t('editCharsShort')}`;
     }
@@ -1462,21 +1629,17 @@ export class EditModal extends Modal {
         return `${year}-${month}-${day}`;
     }
 
-    private normalizeDateInput(value: string | null | undefined): string {
-        if (!value) return '';
-        const trimmed = value.trim();
-        if (!trimmed) return '';
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        const parsed = Date.parse(trimmed);
-        return Number.isNaN(parsed) ? '' : this.formatDateForInput(parsed);
-    }
 
     private syncDateInput(input: HTMLInputElement, value: string): void {
         const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-        const isDayFirst = i18n.getLanguage() === 'ru' || i18n.getLanguage() === 'uk';
-        input.placeholder = isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
+        const language = i18n.getLanguage();
+        const isDayFirst = language === 'ru' || language === 'uk';
+        const isYearFirst = language === 'zh-CN';
+        input.placeholder = isYearFirst ? '年-月-日' : isDayFirst ? 'дд.мм.гггг' : 'mm/dd/yyyy';
         input.value = match
-            ? isDayFirst
+            ? isYearFirst
+                ? `${match[1]}-${match[2]}-${match[3]}`
+                : isDayFirst
                 ? `${match[3]}.${match[2]}.${match[1]}`
                 : `${match[2]}/${match[3]}/${match[1]}`
             : '';
@@ -1485,7 +1648,7 @@ export class EditModal extends Modal {
 
     private formatHumanDate(timestamp: number): string {
         if (!Number.isFinite(timestamp)) return t('editUnknown');
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         return new Intl.DateTimeFormat(locale, {
             year: 'numeric',
             month: 'short',
@@ -1507,11 +1670,32 @@ export class EditModal extends Modal {
     }
 
     private async save(): Promise<boolean> {
+        if (!validateRatingInputs(this.contentEl)) return false;
+        if (!validateCountriesControl(this.contentEl)) return false;
+        if (this.trackingPanel && !this.trackingPanel.validate()) return false;
         if (!validateDatePickers(this.datePickers)) return false;
+        const invalidDlc = Array.from(this.contentEl.querySelectorAll<HTMLInputElement>('.lorebase-game-dlc-score input'))
+            .find(input => !input.validity.valid);
+        if (invalidDlc) {
+            this.qs<HTMLButtonElement>(this.contentEl, '[data-mobile-tab-target="more"]')?.click();
+            invalidDlc.reportValidity();
+            invalidDlc.focus();
+            return false;
+        }
+        this.compactChips?.commit();
         const updates: Partial<GameItem> = {
+            ...(this.countries !== undefined ? { countries: this.countries } : {}),
+            ...this.trackingPanel?.getValue(),
             userRating: this.selectedRating,
+            detailedRatings: this.detailedRatingEditor.getValue(),
             status: this.selectedStatus,
             favorite: this.favorite,
+            priority: this.selectedPriority,
+            statusReasons: this.statusReasons,
+            ...(this.discovery || this.game.discovery ? { discovery: this.discovery } : {}),
+            repeatCount: totalPlatformRepeats(this.platformPlaythroughs) + this.unassignedRepeats,
+            platformPlaythroughs: this.platformPlaythroughs,
+            workType: this.workType,
             displayName: this.title || this.game.displayName,
             year: this.year,
             description: this.description,
@@ -1529,10 +1713,6 @@ export class EditModal extends Modal {
             relatedMedia: this.relatedMediaEditor.getValue(),
             myNotes: this.myNotes,
         };
-
-        if (this.selectedStatus === 'completed') {
-            updates.finished = updates.finished || this.getTodayDateInput();
-        }
 
         await this.onSave(updates);
         this.close();

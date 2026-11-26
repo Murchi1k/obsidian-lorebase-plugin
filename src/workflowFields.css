@@ -1,0 +1,34 @@
+.lorebase-personal-note { display:contents; }
+.lorebase-personal-note[hidden] { display:none; }
+.lorebase-editmode-root .lorebase-personal-note-trigger { grid-row:1; display:inline-flex; align-items:center; gap:7px; width:fit-content; min-width:0; max-width:100%; min-height:28px; margin:0; padding:4px 7px; border:1px solid transparent; border-radius:6px; background:transparent; box-shadow:none; color:var(--text-muted); text-align:left; font:inherit; line-height:1.4; cursor:pointer; }
+.lorebase-editmode-root .lorebase-personal-note-trigger:hover { background:var(--background-modifier-hover); color:var(--text-normal); }
+.lorebase-personal-note-trigger:focus-visible { outline:2px solid var(--lorebase-accent); outline-offset:2px; }
+.lorebase-personal-note-icon { display:inline-flex; flex:0 0 14px; align-items:center; justify-content:center; width:14px; height:14px; color:var(--text-muted); }
+.lorebase-personal-note-icon svg { width:14px; height:14px; }
+.lorebase-personal-note-copy { display:flex; align-items:center; gap:8px; min-width:0; }
+.lorebase-personal-note-title { flex-shrink:0; font-size:12px; font-weight:500; line-height:1.4; white-space:nowrap; color:inherit; }
+.lorebase-personal-note-caret { display:inline-flex; flex:0 0 12px; color:var(--text-faint); transition:transform .15s; }
+.lorebase-personal-note-caret svg { width:12px; height:12px; }
+.lorebase-personal-note.is-open .lorebase-personal-note-caret { transform:rotate(180deg); }
+.lorebase-editmode-root .lorebase-personal-note.is-open > .lorebase-personal-note-trigger { background:color-mix(in srgb,var(--lorebase-accent) 10%,transparent); color:var(--text-normal); }
+.lorebase-personal-note.is-open .lorebase-personal-note-icon { color:var(--lorebase-accent); }
+.lorebase-personal-note.has-value .lorebase-personal-note-icon { color:var(--lorebase-accent); }
+.lorebase-editmode-root .lorebase-personal-note.is-disabled > .lorebase-personal-note-trigger { background:transparent; color:var(--text-faint); cursor:not-allowed; }
+.lorebase-personal-note.is-disabled .lorebase-personal-note-icon,.lorebase-personal-note.is-disabled .lorebase-personal-note-caret { color:var(--text-faint); }
+.lorebase-personal-note-body { grid-column:1 / -1; grid-row:2; display:grid; grid-template-columns:148px minmax(0,1fr); gap:12px; justify-self:start; width:min(100%,620px); min-width:0; box-sizing:border-box; margin:2px 0 6px; padding:3px 0 3px 12px; border:0; border-left:2px solid color-mix(in srgb,var(--lorebase-accent) 28%,transparent); border-radius:0; background:transparent; }
+.lorebase-personal-note-body[hidden] { display:none; }
+.lorebase-personal-note-body > label { padding-top:8px; color:var(--text-muted); font-size:12px; font-weight:500; line-height:1.5; }
+.lorebase-editmode-root .lorebase-personal-note-body :is(input,textarea) { width:100%; min-width:0; box-sizing:border-box; margin:0; padding:7px 10px; border:1px solid color-mix(in srgb,var(--background-modifier-border) 65%,transparent); border-radius:6px; background:color-mix(in srgb,var(--background-primary) 55%,transparent); color:var(--text-normal); box-shadow:none; font-family:var(--font-interface); font-size:13px; font-weight:400; line-height:1.45; }
+.lorebase-editmode-root .lorebase-personal-note-body input { height:34px; }
+.lorebase-editmode-root .lorebase-personal-note-body :is(input,textarea)::placeholder { color:var(--text-faint); }
+.lorebase-editmode-root .lorebase-personal-note-body :is(input,textarea):focus { border-color:color-mix(in srgb,var(--lorebase-accent) 65%,var(--background-modifier-border)); outline:0; box-shadow:0 0 0 2px color-mix(in srgb,var(--lorebase-accent) 8%,transparent); }
+@container (max-width:480px) {
+    .lorebase-personal-note-body { grid-template-columns:minmax(0,1fr); gap:6px; }
+    .lorebase-personal-note-body > label { padding-top:0; }
+}
+@container (max-width:340px) {
+    .lorebase-personal-note-title { white-space:normal; flex-shrink:1; }
+    .lorebase-editmode-root .lorebase-personal-note-trigger { align-self:stretch; }
+}
+.lorebase-date-precision { flex-wrap:wrap; }
+.lorebase-date-picker-grid.is-quarters { grid-template-columns:repeat(2,minmax(0,1fr)); }

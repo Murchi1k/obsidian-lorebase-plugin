@@ -1,0 +1,86 @@
+/* Local relations share the poster cards and controls of the Add workspace. */
+.modal.lorebase-related-picker-container {
+    width: min(1040px, calc(100vw - 40px));
+    max-width: 1040px;
+    max-height: 90dvh;
+    padding: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    background: var(--background-primary);
+    overflow: hidden;
+}
+.lorebase-related-picker-container .modal-content { margin: 0; padding: 22px; overflow: hidden; }
+.lorebase-related-picker.lorebase-select-modal {
+    height: min(720px, calc(90dvh - 46px));
+    max-height: none;
+    gap: 14px;
+    background: transparent;
+}
+.lorebase-related-picker > :not(.lorebase-related-picker-grid) { flex-shrink: 0; }
+.lorebase-related-picker .lorebase-select-title-row > .lorebase-workspace-close { margin-inline-start: auto; }
+.lorebase-related-picker .is-game { --related-color: #eba065; }
+.lorebase-related-picker .is-anime { --related-color: #df83b5; }
+.lorebase-related-picker .is-movie { --related-color: #a4a1ed; }
+.lorebase-related-picker .is-series { --related-color: #79b6e7; }
+.lorebase-related-picker .is-book { --related-color: #d1b073; }
+.lorebase-related-picker .is-manga { --related-color: #9dbf79; }
+.lorebase-related-picker .is-music { --related-color: #b49cde; }
+.lorebase-related-picker-filters { display: flex; flex-wrap: wrap; gap: 7px; }
+.lorebase-related-picker-filter {
+    --related-color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 5px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.lorebase-related-picker-filter > span { display: inline-flex; align-items: center; }
+.lorebase-related-picker-filter svg { width: 15px; height: 15px; color: var(--related-color); }
+.lorebase-related-picker-filter:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.lorebase-related-picker-filter.is-active {
+    color: var(--text-normal);
+    border-color: color-mix(in srgb, var(--related-color) 60%, var(--background-modifier-border));
+    background: color-mix(in srgb, var(--related-color) 9%, var(--background-primary));
+}
+.lorebase-related-picker-filter:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.lorebase-related-picker.lorebase-add-workspace .lorebase-select-search-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+.lorebase-related-picker .lorebase-select-card-image img { width: 100%; height: 100%; object-fit: cover; }
+.lorebase-related-picker.lorebase-add-workspace .lorebase-select-card-body { min-height: 20px; }
+.lorebase-related-picker .lorebase-related-picker-card-type {
+    --lorebase-type-color: var(--related-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.lorebase-related-picker-card-type > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lorebase-related-picker-card-type > span:first-child { display: inline-flex; flex: 0 0 auto; }
+.lorebase-related-picker-card-type svg { width: 12px; height: 12px; }
+.lorebase-related-picker-empty { grid-column: 1 / -1; padding: 40px 12px; text-align: center; }
+.lorebase-related-picker-footer.lorebase-select-footer {
+    position: static;
+    justify-content: space-between;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--background-modifier-border);
+    background: transparent;
+}
+.lorebase-related-picker-selected { min-height: 1.2em; color: var(--text-muted); font-size: 0.78rem; }
+.lorebase-related-picker-actions { display: inline-flex; gap: 8px; margin-inline-start: auto; }
+.lorebase-related-picker-actions .lorebase-flow-btn { min-height: 38px; box-shadow: none; }

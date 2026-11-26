@@ -1,33 +1,87 @@
-import { App, Menu, Modal, setIcon, TFile } from 'obsidian';
-import { DEFAULT_COVER, STATUS_CONFIG } from '../constants';
+import { mountStatusReason } from '../components/StatusReasonField';
+import { syncNotesReader } from '../components/NotesReader';
+import { normalizeStatusReasons, type StatusReasons } from '../utils/statusReasons';
+import { catalogSource, inspectPartCatalog, applyContinuations } from '../services/media/partCatalog';
+import { renderContinuationNotice } from '../components/ContinuationNotice';
+import { mountDiscovery } from '../components/DiscoveryContext';
+import { normalizeReleaseDate } from '../utils/releaseDates';
+import type { MediaPriority } from '../types';
+import { normalizePriority } from '../utils/priority';
+import { bindPriority } from '../components/PriorityControl';
+import { normalizePersonalDate } from '../utils/personalDates';
+
+import { renderCountriesControl, validateCountriesControl } from '../components/CountriesControl';
+import { bindTrackingStatus, syncTrackingStatus, finishTrackingPanel } from '../components/EditTrackingPanel';
+import { PartEpisodesControl, EpisodeLoader } from '../components/PartEpisodesControl';
+import { VideoCastPanel } from '../components/VideoCastPanel';
+import { RecommendationsPanel } from '../components/RecommendationsPanel';
+import type { RecommendationsService } from '../services/RecommendationsService';
+import type { PeopleService } from '../services/PeopleService';
+import { bindEpisodeDuration, bindMovieDuration, commonEpisodeDuration, fillMissingEpisodeDurations, syncEpisodeDuration } from '../components/ViewingDuration';
+import { PosterMode } from '../types';
+import { getPartPoster, normalizePosterMode } from '../services/media/partPoster';
+import { cancelPosterLoad, setSmoothPoster } from '../components/SmoothPoster';
+import { buildTitlePartsProgress, buildTitlePartsHeader, buildTitlePartEditor, bindTitlePartEditor, bindTitlePartRating, createTitlePartDropdown, updateTitlePartTracking, updateTitlePartPresentation, updatePartEditorActions, updateTitlePartCard, updateTitlePartStatusAppearance } from '../components/TitlePartEditor';
+import { LorebaseDropdownHandle } from '../components/LorebaseDropdown';
+import { renderRepeatTracking } from '../components/RepeatTrackingControl';
+import { renderWorkTypeControl } from '../components/MediaWorkTypeControl';
+import { DetailedRatingEditor } from './DetailedRatingEditor';
+import { getStatusOptionsForMediaType } from '../views/library/viewOptions';
+import { getStatusAppearance } from '../statusPresentation';
+import { App, Menu, Modal, Notice, setIcon, TFile } from 'obsidian';
+import { DEFAULT_COVER } from '../constants';
 import { i18n, t } from '../localization';
-import { MovieItem, RelatedMediaLink, SeriesItem, UserRating, VideoPart, VideoStatus } from '../types';
+import { MovieItem, RatingScaleSettings, RelatedMediaLink, SeriesItem, UserRating, VideoPart, VideoStatus } from '../types';
 import { GenreEditModal } from './GenreEditModal';
 import { CommunityRatingRefresh, renderCommunityRatingPanel } from './CommunityRatingPanel';
 import { MediaSourceAction, renderMediaSourcePanel } from './MediaSourcePanel';
 import { setupMobileEditor } from './mobileEditor';
+import { compactGameText } from '../localization/compactGameEditor';
+import { et } from '../localization/episodes';
+import { bindCompactEditorChrome, buildCompactCoverIdentity, buildCompactQuickSettings, buildCompactWorkTypeBadge, buildEditorHeaderActions, buildEditorTimestampRows, buildSummaryNotesPanel, focusSummaryNotes, formatCompactEditorRating } from './compactEditorLayout';
+import { bindCompactEditorChips, buildCompactEditorChips } from './compactEditorChips';
+import { RelatedMediaEditor } from './RelatedMediaEditor';
 import { bindSourceUrlButton } from './sourceUrlButton';
 import { extractMarkdownSection } from '../services/markdownSections';
 import { HierarchicalDatePicker, validateDatePickers } from './HierarchicalDatePicker';
+import { CLASSIC_RATING_SETTINGS, getRatingFromStarPosition, getRatingInputHint, getRatingMax, getRatingStarValues } from '../utils/rating';
+import { mountTenthsRating, paintRatingStar, updateRatingReadout, validateRatingInputs } from '../components/RatingInput';
+import { setVideoPartStatus, setPartEpisodeCurrent } from '../services/media/videoProgress';
+import { renderPartTabs, renderWatchProgress, resolvePartPoster, watchCopy } from '../components/WatchProgress';
+import { parseEpisodeDuration } from '../services/media/watchProgress';
+import { mergeEpisodeDetails } from '../services/media/episodeTracking';
+import type { SeriesPartsRefresh } from '../services/EpisodeMetadataService';
 
 type VideoItem = MovieItem | SeriesItem;
 type VideoUpdates = Partial<VideoItem> & Record<string, unknown>;
 type PartDraft = VideoPart;
 type RelatedCandidate = RelatedMediaLink;
 type NotesMode = 'description' | 'myNotes';
+type VideoReleaseFallbackStatus = Exclude<VideoStatus, 'to_be_released'>;
 
 export class VideoEditModal extends Modal {
+    private countries?: string[];
+    private episodeControl?: PartEpisodesControl;
+    private castPanel?: VideoCastPanel;
+    private recommendationsPanel?: RecommendationsPanel;
     private item: VideoItem;
     private onSave: (updates: VideoUpdates) => Promise<void>;
     private onDelete: () => void;
     private onRefreshCommunityRating?: CommunityRatingRefresh;
 
+    private workType: string;
     private title: string;
     private poster: string;
     private horizontalPoster: string;
     private year: number | null;
+    private statusReasons?: StatusReasons;
+    private discovery?: import('../types').DiscoveryContext;
+    private partCatalog?: import('../types').PartCatalog;
+    private selectedPriority: MediaPriority = 'normal';
     private selectedStatus: VideoStatus;
+    private statusBeforeRelease: VideoReleaseFallbackStatus;
     private selectedRating: UserRating;
+    private detailedRatingEditor: DetailedRatingEditor;
     private favorite: boolean;
     private summary: string;
     private myNotes = '';
@@ -36,6 +90,8 @@ export class VideoEditModal extends Modal {
     private started: string;
     private finished: string;
     private sourceUrl: string;
+    private compactChips?: ReturnType<typeof bindCompactEditorChips>;
+    private compactRelated?: RelatedMediaEditor;
     private genres: string[];
     private tags: string[];
 
@@ -48,6 +104,11 @@ export class VideoEditModal extends Modal {
     private studios: string[];
     private parts: PartDraft[];
     private activePartId: string | null;
+    private editedPartId: string | null;
+    private posterMode: PosterMode;
+    private partKindDropdown?: LorebaseDropdownHandle<PartDraft['kind']>;
+    private partStatusDropdown?: LorebaseDropdownHandle<VideoStatus>;
+    private partRatingControl?: ReturnType<typeof bindTitlePartRating>;
     private relatedMedia: RelatedMediaLink[];
     private relatedCandidates: RelatedCandidate[];
     private incomingRelated: RelatedMediaLink[];
@@ -55,6 +116,7 @@ export class VideoEditModal extends Modal {
     private startedDatePicker?: HierarchicalDatePicker;
     private finishedDatePicker?: HierarchicalDatePicker;
     private releaseDatePicker?: HierarchicalDatePicker;
+    private ratingSettings: RatingScaleSettings;
 
     private onKeydown = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
@@ -77,29 +139,44 @@ export class VideoEditModal extends Modal {
         incomingRelated: RelatedMediaLink[] = [],
         relatedCandidates: RelatedCandidate[] = [],
         private readonly onRefreshSource?: MediaSourceAction,
-        private readonly onChangeSource?: MediaSourceAction
+        private readonly onChangeSource?: MediaSourceAction,
+        ratingSettings: RatingScaleSettings = CLASSIC_RATING_SETTINGS,
+        private readonly onManageWorkTypes?: (onChanged: () => void) => void,
+        private readonly peopleService?: PeopleService,
+        private readonly episodeLoader?: EpisodeLoader,
+        private readonly recommendationsService?: RecommendationsService,
+        private readonly compact = false,
+        private readonly onRefreshSeriesParts?: () => Promise<SeriesPartsRefresh>
     ) {
         super(app);
         this.item = item;
+        this.partCatalog = item.partCatalog ? structuredClone(item.partCatalog) : undefined;
         this.onSave = onSave;
         this.onDelete = onDelete;
         this.onRefreshCommunityRating = onRefreshCommunityRating;
+        this.ratingSettings = ratingSettings;
 
+        this.workType = item.workType || (this.item.type === 'movie' ? 'Movie' : this.item.type === 'series' ? 'Series' : 'Game');
         this.title = item.displayName;
-        this.poster = item.imageUrl;
+        this.poster = item.type === 'series' ? item.titleImageUrl || item.imageUrl : item.imageUrl;
         this.horizontalPoster = item.horizontalImageUrl ?? '';
         this.year = item.year;
         this.selectedStatus = item.status;
+        this.selectedPriority = normalizePriority(item.priority);
+        this.discovery = item.discovery ? { ...item.discovery } : undefined;
+        this.statusReasons = normalizeStatusReasons(item.statusReasons);
+        this.statusBeforeRelease = item.status === 'to_be_released' ? 'planned' : item.status;
         this.selectedRating = item.userRating;
+        this.detailedRatingEditor = new DetailedRatingEditor(item.detailedRatings, item.type, ratingSettings);
         this.favorite = item.favorite;
         this.summary = item.summary || item.description || '';
-        this.started = this.normalizeDateInput(item.started);
-        this.finished = this.normalizeDateInput(item.finished);
+        this.started = normalizePersonalDate(item.started);
+        this.finished = normalizePersonalDate(item.finished);
         this.sourceUrl = item.sourceUrl ?? '';
         this.genres = this.normalizeList(item.genres ?? []);
         this.tags = this.normalizeList(item.tags ?? []);
 
-        this.releaseDate = this.normalizeDateInput(item.releaseDate);
+        this.releaseDate = normalizeReleaseDate(item.releaseDate);
         this.runtime = item.runtime ?? '';
         this.director = item.director ?? '';
         this.actors = item.actors ?? '';
@@ -107,13 +184,19 @@ export class VideoEditModal extends Modal {
         this.networks = item.type === 'series' ? this.normalizeList(item.networks ?? []) : [];
         this.studios = item.type === 'series' ? this.normalizeList(item.studios ?? []) : [];
         this.parts = this.normalizeParts(item);
+        fillMissingEpisodeDurations(this.parts);
         this.relatedMedia = this.normalizeRelatedMedia(item.relatedMedia ?? []);
         this.relatedCandidates = relatedCandidates.filter((candidate) => candidate.path !== item.filePath);
         this.incomingRelated = incomingRelated;
+        if (compact) this.compactRelated = new RelatedMediaEditor(app, item.filePath, this.relatedMedia, this.relatedCandidates, incomingRelated, true);
         this.activePartId = this.parts.some((part) => part.id === item.activePartId)
             ? item.activePartId ?? this.parts[0]?.id ?? null
             : this.parts[0]?.id ?? null;
+        this.editedPartId = this.activePartId;
+        this.posterMode = normalizePosterMode(item.type === 'series' ? item.posterMode : 'title');
     }
+
+    private repeatCount = 0;
 
     onOpen(): void {
         const { contentEl } = this;
@@ -125,12 +208,21 @@ export class VideoEditModal extends Modal {
 
         const root = contentEl.createDiv({ cls: 'lorebase-editmode-root lorebase-editmode-video-root lorebase-modal-panel' });
         root.appendChild(this.createTemplateFragment(this.buildTemplate()));
+        if (this.compact) bindCompactEditorChrome(root, this.modalEl, () => this.close());
         this.bindStaticContent(root);
+        renderCountriesControl(root, this.item, codes => this.countries = codes);
+        const castHost = root.querySelector<HTMLElement>('[data-role="cast-panel"]');
+        if (castHost && this.peopleService) this.castPanel = new VideoCastPanel(this.app, castHost, this.item, this.peopleService);
+        const recommendationsHost = root.querySelector<HTMLElement>('[data-role="recommendations-panel"]');
+        if (recommendationsHost && this.recommendationsService) this.recommendationsPanel = new RecommendationsPanel(recommendationsHost, this.item, this.recommendationsService);
         this.bindHeader(root);
         this.bindQuickSettings(root);
         this.bindStatus(root);
+        this.repeatCount = this.item.repeatCount ?? 0;
+        renderRepeatTracking(root, this.item, this.repeatCount, value => this.repeatCount = value);
         this.bindRating(root);
         this.bindFields(root);
+        renderWorkTypeControl(root, this.item.type, this.workType, value => this.workType = value, this.onManageWorkTypes);
         bindSourceUrlButton(root);
         this.bindParts(root);
         this.bindNotesDisclosure(root);
@@ -138,8 +230,11 @@ export class VideoEditModal extends Modal {
         this.bindNotes(root);
         void this.loadMyNotes(root);
         this.bindTags(root);
-        this.bindRelatedMedia(root);
-        this.renderRelatedMedia(root);
+        if (this.compactRelated) this.compactRelated.bind(root);
+        else {
+            this.bindRelatedMedia(root);
+            this.renderRelatedMedia(root);
+        }
         this.bindDates(root);
         if (this.onRefreshCommunityRating) {
             renderCommunityRatingPanel(root, this.item, this.onRefreshCommunityRating);
@@ -149,6 +244,13 @@ export class VideoEditModal extends Modal {
     }
 
     onClose(): void {
+        this.compactChips?.destroy();
+        this.compactChips = undefined;
+        this.episodeControl?.destroy();
+        this.castPanel?.destroy();
+        this.recommendationsPanel?.destroy();
+        const poster = this.contentEl.querySelector<HTMLImageElement>('[data-role="poster"]');
+        if (poster) cancelPosterLoad(poster);
         this.startedDatePicker?.destroy();
         this.finishedDatePicker?.destroy();
         this.releaseDatePicker?.destroy();
@@ -161,6 +263,9 @@ export class VideoEditModal extends Modal {
     }
 
     private buildTemplate(): string {
+        const compact = this.compact;
+        const notes = buildSummaryNotesPanel(compact);
+        const duration = this.item.type === 'movie' ? '<div class="lorebase-movie-duration-meta" data-role="movie-duration"></div>' : '';
         return `
             <div class="lorebase-editmode-view">
                 <header class="lorebase-editmode-header">
@@ -168,9 +273,7 @@ export class VideoEditModal extends Modal {
                         <span class="lorebase-editmode-breadcrumb" data-role="breadcrumb"></span>
                     </div>
                     <div class="lorebase-editmode-header-right">
-                        <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost" data-action="discard">${t('editCancel')}</button>
-                        <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-primary" data-action="save">${t('editSave')}</button>
-                        <button type="button" class="lorebase-editmode-icon-btn" data-action="overflow" aria-label="${t('editOverflow')}">...</button>
+                        ${buildEditorHeaderActions(compact)}
                     </div>
                 </header>
 
@@ -183,23 +286,31 @@ export class VideoEditModal extends Modal {
                             <div class="lorebase-editmode-poster-frame">
                                 <img class="lorebase-editmode-poster-image" data-role="poster" alt="${t('templateFieldPoster')}" />
                             </div>
+                            ${compact ? `${buildCompactCoverIdentity(duration)}${buildCompactWorkTypeBadge()}` : ''}
                         </section>
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-quick-settings">
                             <div class="lorebase-editmode-panel-title-row">
                                 <h3 class="lorebase-editmode-panel-title">${t('editQuickSettings')}</h3>
                             </div>
-                            <div class="lorebase-editmode-toggle-list">
+                            ${compact ? buildCompactQuickSettings([
+                                { key: 'favorite', label: t('editFavorite'), icon: 'heart' },
+                                { key: 'release', label: t('statusToBeReleased'), icon: 'calendar-clock' },
+                            ]) : `<div class="lorebase-editmode-toggle-list">
                                 <label class="lorebase-editmode-switch-row">
                                     <span class="lorebase-editmode-switch-label">${t('editFavorite')}</span>
                                     <button type="button" class="lorebase-editmode-switch lorebase-editmode-switch-favorite" data-toggle="favorite" aria-label="${t('editFavorite')}" aria-pressed="false"><span class="lorebase-editmode-switch-thumb"></span></button>
                                 </label>
-                            </div>
+                                <label class="lorebase-editmode-switch-row">
+                                    <span class="lorebase-editmode-switch-label">${t('statusToBeReleased')}</span>
+                                    <button type="button" class="lorebase-editmode-switch lorebase-editmode-switch-release" data-toggle="release" aria-label="${t('statusToBeReleased')}" aria-pressed="false"><span class="lorebase-editmode-switch-thumb"></span></button>
+                                </label>
+                            </div>`}
                         </section>
                     </aside>
 
                     <main class="lorebase-editmode-column lorebase-editmode-column-center">
-                        <section class="lorebase-editmode-panel lorebase-editmode-title-meta">
+                        ${compact ? '' : `<section class="lorebase-editmode-panel lorebase-editmode-title-meta">
                             <div class="lorebase-editmode-title-row">
                                 <input class="lorebase-editmode-title-input" data-field="title" type="text" aria-label="${t('templateFieldName')}" />
                             </div>
@@ -208,6 +319,7 @@ export class VideoEditModal extends Modal {
                                     <span class="lorebase-editmode-field-label">${t('year')}</span>
                                     <input class="lorebase-editmode-input" data-field="year" type="number" inputmode="numeric" placeholder="2026" />
                                 </label>
+                                ${duration}
                             </div>
                             <div class="lorebase-editmode-field lorebase-editmode-genres-field">
                                 <div class="lorebase-editmode-chip-row" data-role="genre-chips"></div>
@@ -218,28 +330,13 @@ export class VideoEditModal extends Modal {
                                     </button>
                                 </div>
                             </div>
-                        </section>
+                        </section>`}
 
-                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-notes is-collapsed" data-component="NotesEditor">
-                            <div class="lorebase-editmode-panel-title-row">
-                                <h3 class="lorebase-editmode-panel-title" data-role="notes-title">${t('editDescription')}</h3>
-                                <div class="lorebase-editmode-note-tabs" role="tablist">
-                                    <button type="button" class="lorebase-editmode-note-tab is-active" data-mode="description">${t('editDescription')}</button>
-                                    <button type="button" class="lorebase-editmode-note-tab" data-mode="myNotes">${t('editMyNotes')}</button>
-                                </div>
-                            </div>
-                            <div class="lorebase-editmode-notes-shell">
-                                <textarea class="lorebase-editmode-notes-input" data-field="summary" rows="9"></textarea>
-                            </div>
-                            <div class="lorebase-editmode-notes-footer">
-                                <span class="lorebase-editmode-saved-indicator" data-role="saved-indicator">${t('editSaved')}</span>
-                                <span class="lorebase-editmode-char-count" data-role="char-count">0 ${t('editCharsShort')}</span>
-                            </div>
-                        </section>
+                        ${compact ? '' : notes}
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-status-rating">
                             <div class="lorebase-editmode-panel-title-row">
-                                <h3 class="lorebase-editmode-panel-title">${t('editStatus')} & ${t('editRating')}</h3>
+                                <h3 class="lorebase-editmode-panel-title">${compact ? compactGameText('statusRating') : `${t('editStatus')} & ${t('editRating')}`}</h3>
                                 <span class="lorebase-editmode-status-hint">${t('editTracking')}</span>
                             </div>
                             <div class="lorebase-editmode-status-shell">
@@ -248,9 +345,9 @@ export class VideoEditModal extends Modal {
                             <div class="lorebase-editmode-rating-wrap">
                                 <div class="lorebase-editmode-rating-head">
                                     <span class="lorebase-editmode-rating-caption">${t('editPersonalRating')}</span>
-                                    <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-editmode-btn-tight" data-action="clear-rating">${t('editClear')}</button>
+                                    <button type="button" class="lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-editmode-btn-tight" data-action="clear-rating">${compact ? compactGameText('reset') : t('editClear')}</button>
                                 </div>
-                                <div class="lorebase-editmode-stars" data-role="stars"></div>
+                                <div class="lorebase-editmode-stars" data-role="stars" role="group" aria-label="${t('editPersonalRating')}" title="${getRatingInputHint(this.ratingSettings, i18n.getLanguage())}"></div>
                                 <div class="lorebase-editmode-rating-meta">
                                     <span class="lorebase-editmode-rating-value" data-role="rating-value">0.0 / 5.0</span>
                                     <span class="lorebase-editmode-rating-hint">${t('editRatingHint')}</span>
@@ -281,6 +378,9 @@ export class VideoEditModal extends Modal {
                             </div>
                         </section>
 
+                        ${compact ? notes : ''}
+                        <div data-role="cast-panel"></div>
+                        <div data-role="recommendations-panel"></div>
                         ${this.buildPartsSection()}
 
                         <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-related lorebase-editmode-related-main">
@@ -297,18 +397,15 @@ export class VideoEditModal extends Modal {
                         ${this.buildAdditionalPanel()}
 
                         <section class="lorebase-editmode-panel lorebase-editmode-tags">
-                            <div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${t('tags')}</h3></div>
+                            ${compact ? buildCompactEditorChips() : `<div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${t('tags')}</h3></div>
                             <div class="lorebase-editmode-chip-row" data-role="tag-chips"></div>
-                            <input class="lorebase-editmode-input lorebase-editmode-tag-input" type="text" data-field="new-tag" placeholder="${t('editTagPlaceholder')}" />
+                            <input class="lorebase-editmode-input lorebase-editmode-tag-input" type="text" data-field="new-tag" placeholder="${t('editTagPlaceholder')}" />`}
                         </section>
 
-                        <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-timestamps">
+                        ${compact ? '' : `<section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-timestamps">
                             <div class="lorebase-editmode-panel-title-row"><h3 class="lorebase-editmode-panel-title">${t('editDates')}</h3></div>
-                            <div class="lorebase-editmode-kv-list">
-                                <div class="lorebase-editmode-kv-row"><span class="lorebase-editmode-kv-key">${t('editAdded')}</span><span class="lorebase-editmode-kv-val" data-role="ts-added">-</span></div>
-                                <div class="lorebase-editmode-kv-row"><span class="lorebase-editmode-kv-key">${t('editUpdated')}</span><span class="lorebase-editmode-kv-val" data-role="ts-updated">-</span></div>
-                            </div>
-                        </section>
+                            ${buildEditorTimestampRows()}
+                        </section>`}
                     </aside>
                 </div>
             </div>
@@ -318,57 +415,13 @@ export class VideoEditModal extends Modal {
     private buildPartsSection(): string {
         if (this.item.type === 'movie') return '';
         return `
-            <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-anime-parts lorebase-editmode-series-parts">
-                <div class="lorebase-editmode-panel-title-row">
-                    <h3 class="lorebase-editmode-panel-title">${t('templateFieldSeriesParts')}</h3>
-                </div>
+            <section class="lorebase-editmode-panel lorebase-editmode-panel-glass lorebase-editmode-anime-parts lorebase-editmode-series-parts${this.compact ? ' lorebase-title-composition' : ''}">
+                ${buildTitlePartsHeader(t('templateFieldSeriesParts'), et('refreshSeasons'))}
                 <div class="lorebase-editmode-anime-parts-navigation">
-                    <div class="lorebase-editmode-chip-row lorebase-editmode-part-strip" data-role="part-strip"></div>
-                    <div class="lorebase-editmode-anime-part-inline-actions">
-                        <button type="button" class="lorebase-editmode-anime-parts-icon-action" data-action="add-part" aria-label="${t('editAddPart')}"></button>
-                        <button type="button" class="lorebase-editmode-anime-parts-icon-action is-danger" data-action="remove-part" aria-label="${t('editRemovePart')}"></button>
-                    </div>
+                    <div class="lorebase-part-tabs" data-role="part-strip"></div>
                 </div>
-                <div class="lorebase-editmode-anime-part-summary">
-                    <div class="lorebase-editmode-anime-part-stat">
-                        <span class="lorebase-editmode-anime-part-stat-label">${t('editTotalEpisodes')}</span>
-                        <strong class="lorebase-editmode-anime-part-stat-value" data-role="progress-total">-</strong>
-                    </div>
-                    <div class="lorebase-editmode-anime-part-stat">
-                        <span class="lorebase-editmode-anime-part-stat-label">${t('editActivePart')}</span>
-                        <strong class="lorebase-editmode-anime-part-stat-value" data-role="active-part-name">-</strong>
-                    </div>
-                </div>
-                <div class="lorebase-editmode-anime-part-editor" data-role="part-editor">
-                    <div class="lorebase-editmode-anime-part-identity-row">
-                        <label class="lorebase-editmode-field lorebase-editmode-anime-part-title-field">
-                            <span class="lorebase-editmode-field-label">${t('templateFieldName')}</span>
-                            <input class="lorebase-editmode-input" data-field="part-title" type="text" />
-                        </label>
-                        <div class="lorebase-editmode-anime-part-meta-rail">
-                            <label class="lorebase-editmode-field lorebase-editmode-anime-part-meta-field lorebase-editmode-anime-part-season-field">
-                                <span class="lorebase-editmode-field-label">${t('editSeasonCurrent')}</span>
-                                <input class="lorebase-editmode-input" data-field="part-season" type="number" inputmode="numeric" />
-                            </label>
-                            <div class="lorebase-editmode-field lorebase-editmode-anime-part-meta-field lorebase-editmode-anime-episodes-field">
-                                <span class="lorebase-editmode-field-label">${t('editEpisodes')}</span>
-                                <div class="lorebase-editmode-anime-episode-stepper">
-                                    <button type="button" class="lorebase-editmode-anime-stepper-button" data-action="episode-dec" aria-label="${t('editEpisodeCurrent')}">−</button>
-                                    <input class="lorebase-editmode-input lorebase-editmode-anime-stepper-input" data-field="part-episode-current" type="number" inputmode="numeric" aria-label="${t('editEpisodeCurrent')}" />
-                                    <span class="lorebase-editmode-anime-slash">/</span>
-                                    <input class="lorebase-editmode-input lorebase-editmode-anime-stepper-input" data-field="part-episode-total" type="number" inputmode="numeric" aria-label="${t('editEpisodeTotal')}" />
-                                    <button type="button" class="lorebase-editmode-anime-stepper-button" data-action="episode-inc" aria-label="${t('editEpisodeInc')}">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="lorebase-editmode-anime-part-tracking-row">
-                        <div class="lorebase-editmode-anime-part-status-field">
-                            <span class="lorebase-editmode-field-label">${t('editStatus')}</span>
-                            <div class="lorebase-editmode-segmented lorebase-editmode-part-status" data-role="part-status-segments"></div>
-                        </div>
-                    </div>
-                </div>
+                ${this.compact ? buildTitlePartsProgress() : '<div data-role="watch-progress"></div>'}
+                ${buildTitlePartEditor(this.compact)}
             </section>
         `;
     }
@@ -383,8 +436,10 @@ export class VideoEditModal extends Modal {
                     <h3 class="lorebase-editmode-panel-title">${t('editAdvanced')}</h3>
                     <span class="lorebase-editmode-collapsible-caret">⌄</span>
                 </summary>
-                <div class="lorebase-editmode-kv-list lorebase-editmode-video-advanced-fields">
+                <div class="lorebase-editmode-kv-list lorebase-editmode-video-advanced-fields${this.compact ? ' lorebase-editmode-advanced-grid' : ''}">
+                    ${this.compact ? '<div data-role="compact-countries"></div>' : ''}
                     ${body}
+                    ${this.compact ? buildEditorTimestampRows() : ''}
                 </div>
             </details>
         `;
@@ -393,7 +448,6 @@ export class VideoEditModal extends Modal {
     private buildMovieAdditionalFields(): string {
         return `
             ${this.buildReleaseDateField()}
-            <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('templateFieldRuntime')}</span><input class="lorebase-editmode-input" data-field="runtime" type="text" /></label>
             <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('templateFieldDirector')}</span><input class="lorebase-editmode-input" data-field="director" type="text" placeholder="Director A, Director B" /></label>
             <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('templateFieldActors')}</span><input class="lorebase-editmode-input" data-field="actors" type="text" placeholder="Actor A, Actor B" /></label>
         `;
@@ -402,7 +456,6 @@ export class VideoEditModal extends Modal {
     private buildSeriesAdditionalFields(): string {
         return `
             ${this.buildReleaseDateField()}
-            <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('templateFieldRuntime')}</span><input class="lorebase-editmode-input" data-field="runtime" type="text" /></label>
             <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('templateFieldDirector')}</span><input class="lorebase-editmode-input" data-field="director" type="text" placeholder="Director A, Director B" /></label>
             <label class="lorebase-editmode-field"><span class="lorebase-editmode-field-label">${t('templateFieldActors')}</span><input class="lorebase-editmode-input" data-field="actors" type="text" placeholder="Actor A, Actor B" /></label>
         `;
@@ -430,7 +483,7 @@ export class VideoEditModal extends Modal {
     }
 
     private bindStaticContent(root: HTMLElement): void {
-        this.setText(root, '[data-role="breadcrumb"]', `${this.item.type === 'movie' ? t('settingsMovies') : t('settingsSeries')} / ${this.item.displayName}`);
+        this.updateBreadcrumb(root);
         const poster = this.qs<HTMLImageElement>(root, '[data-role="poster"]');
         if (poster) {
             poster.src = this.poster;
@@ -443,7 +496,6 @@ export class VideoEditModal extends Modal {
         this.setInput(root, '[data-field="started-date"]', this.started);
         this.setInput(root, '[data-field="finished-date"]', this.finished);
         this.setInput(root, '[data-field="released"]', this.releaseDate);
-        this.setInput(root, '[data-field="runtime"]', this.runtime);
         this.setInput(root, '[data-field="director"]', this.director);
         this.setInput(root, '[data-field="actors"]', this.actors);
         this.setInput(root, '[data-field="seasons"]', this.seasons);
@@ -451,11 +503,13 @@ export class VideoEditModal extends Modal {
         this.setInput(root, '[data-field="episode-total"]', this.item.type === 'series' ? this.item.episodeTotal : null);
         this.setInput(root, '[data-field="studios"]', this.studios.join(', '));
 
-        this.renderStatusSegments(root, '[data-role="status-segments"]', this.getVideoStatusOptions());
-        this.renderStatusSegments(root, '[data-role="part-status-segments"]', this.getVideoStatusOptions().filter((entry) => entry.status !== 'dropped' && entry.status !== 'paused'));
+        this.renderStatusSegments(root, '[data-role="status-segments"]', this.getVideoStatusOptions().filter((entry) => entry.status !== 'to_be_released'));
+        this.renderStatusSegments(root, '[data-role="part-status-segments"]', this.getVideoStatusOptions());
         this.renderStars(root);
-        this.renderGenreChips(root);
-        this.renderTagChips(root);
+        if (!this.compact) {
+            this.renderGenreChips(root);
+            this.renderTagChips(root);
+        }
         this.renderPartKindOptions(root);
         this.renderPartStrip(root);
         this.renderActivePartEditor(root);
@@ -484,31 +538,48 @@ export class VideoEditModal extends Modal {
     }
 
     private bindQuickSettings(root: HTMLElement): void {
-        this.qs<HTMLButtonElement>(root, '[data-toggle="favorite"]')?.addEventListener('click', () => {
-            this.favorite = !this.favorite;
+        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-quick-settings [data-toggle]').forEach((button) => button.addEventListener('click', () => {
+            if (button.dataset.toggle === 'favorite') this.favorite = !this.favorite;
+            if (button.dataset.toggle === 'release') {
+                if (this.selectedStatus === 'to_be_released') this.selectedStatus = this.statusBeforeRelease;
+                else {
+                    this.statusBeforeRelease = this.selectedStatus;
+                    this.selectedStatus = 'to_be_released';
+                }
+            }
             this.updateQuickSettingSwitches(root);
-        });
+            this.updateStatusUI(root);
+        }));
     }
 
     private bindStatus(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('[data-role="status-segments"] .lorebase-editmode-segment').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const status = btn.dataset.status as VideoStatus | undefined;
-                if (!status) return;
-                this.selectedStatus = status;
-                if (status === 'completed' && !this.finished) {
-                    this.finished = this.getTodayDateInput();
-                    this.finishedDatePicker?.syncInput(this.finished);
-                }
-                this.updateStatusUI(root);
-            });
+        bindTrackingStatus(root, this.item.type, this.selectedStatus, status => {
+            this.selectedStatus = status;
+            if (status !== 'to_be_released') this.statusBeforeRelease = status;
+            if (status === 'completed') {
+                for (const part of this.parts) setVideoPartStatus(part, 'completed');
+                this.refreshPartsUi(root);
+            }
+            this.updateStatusUI(root);
+            this.updateProgressSummary(root);
         });
     }
 
     private bindRating(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-star').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.selectedRating = Number(btn.dataset.rating) as UserRating;
+        const ratingWrap = root.querySelector<HTMLElement>('.lorebase-editmode-rating-wrap');
+        if (ratingWrap) this.detailedRatingEditor.mount(ratingWrap);
+        mountTenthsRating(this.qs<HTMLElement>(root, '[data-role="rating-value"]'), this.ratingSettings,
+            () => this.selectedRating, value => {
+                this.selectedRating = value;
+                this.updateRatingUI(root);
+            }, t('editPersonalRating'));
+        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-star:not(.lorebase-criterion-star)').forEach(btn => {
+            btn.addEventListener('click', (event) => {
+                const value = Number(btn.dataset.rating);
+                const rect = btn.getBoundingClientRect();
+                this.selectedRating = event.detail === 0
+                    ? value
+                    : getRatingFromStarPosition(value, event.clientX - rect.left, rect.width, this.ratingSettings);
                 this.updateRatingUI(root);
             });
         });
@@ -516,12 +587,22 @@ export class VideoEditModal extends Modal {
             this.selectedRating = null;
             this.updateRatingUI(root);
         });
+        finishTrackingPanel(root);
+        bindPriority(root, this.selectedPriority, value => { this.selectedPriority = value; });
+        mountDiscovery(root, this.discovery, value => this.discovery = value, this.app);
+        mountStatusReason(root,this.statusReasons,this.selectedStatus,value=>this.statusReasons=value,this.app);
     }
 
     private bindFields(root: HTMLElement): void {
-        this.bindText(root, '[data-field="title"]', (value) => { this.title = value || this.item.displayName; });
+        bindMovieDuration(root, parseEpisodeDuration(this.runtime), minutes => {
+            this.runtime = minutes === null ? '' : String(minutes);
+            this.updateProgressSummary(root);
+        });
+        this.bindText(root, '[data-field="title"]', (value) => {
+            this.title = value || this.item.displayName;
+            this.updateBreadcrumb(root);
+        });
         this.bindText(root, '[data-field="source-url"]', (value) => { this.sourceUrl = value; });
-        this.bindText(root, '[data-field="runtime"]', (value) => { this.runtime = value; });
         this.bindText(root, '[data-field="director"]', (value) => { this.director = value; });
         this.bindText(root, '[data-field="actors"]', (value) => { this.actors = value; });
         this.bindText(root, '[data-field="studios"]', (value) => { this.studios = this.parseList(value); });
@@ -535,10 +616,27 @@ export class VideoEditModal extends Modal {
     }
 
     private bindParts(root: HTMLElement): void {
+        bindTitlePartEditor(root);
+        this.partRatingControl = bindTitlePartRating(root, this.ratingSettings, 'series', () => this.getEditedPart());
+        const episodes = root.querySelector<HTMLElement>('[data-role="part-episodes"]');
+        if (episodes && this.item.type === 'series') this.episodeControl = new PartEpisodesControl(episodes, () => this.getEditedPart(), change => {
+            if (change === 'progress') this.setPartProgress(root, this.getEditedPart()?.episodeCurrent ?? 0);
+            else { this.renderPartStrip(root); this.renderActivePartEditor(root); this.updateProgressSummary(root); }
+        }, this.episodeLoader);
+        bindEpisodeDuration(root, () => this.parts, () => {
+            this.renderActivePartEditor(root);
+            this.updateProgressSummary(root);
+        });
+        const refresh = this.qs<HTMLButtonElement>(root, '[data-action="refresh-parts"]');
+        if (refresh) {
+            setIcon(refresh, 'refresh-cw');
+            refresh.disabled = !this.onRefreshSeriesParts;
+            refresh.classList.toggle('is-disabled', refresh.disabled);
+            refresh.title = et(refresh.disabled ? 'seasonSource' : 'refreshSeasons');
+            refresh.addEventListener('click', () => void this.refreshSeriesParts(root, refresh));
+        }
         const addPartButton = this.qs<HTMLButtonElement>(root, '[data-action="add-part"]');
         const removePartButton = this.qs<HTMLButtonElement>(root, '[data-action="remove-part"]');
-        if (addPartButton) setIcon(addPartButton, 'plus');
-        if (removePartButton) setIcon(removePartButton, 'trash-2');
 
         addPartButton?.addEventListener('click', () => {
             const index = this.parts.length + 1;
@@ -546,57 +644,46 @@ export class VideoEditModal extends Modal {
             const part: PartDraft = {
                 id: this.createPartId(kind),
                 kind,
-                title: this.item.type === 'series' ? `Season ${index}` : `Part ${index}`,
+                title: this.item.type === 'series' ? watchCopy().season + ' ' + index : `Part ${index}`,
                 seasonNumber: this.item.type === 'series' ? index : null,
                 episodeCurrent: 0,
                 episodeTotal: null,
+                episodeDuration: commonEpisodeDuration(this.parts),
                 status: 'planned',
             };
             this.parts.push(part);
-            this.activePartId = part.id;
+            this.editedPartId = part.id;
             this.refreshPartsUi(root);
+            this.qs<HTMLInputElement>(root, '[data-field="part-title"]')?.focus();
         });
 
         removePartButton?.addEventListener('click', () => {
             if (this.parts.length <= 1) return;
-            const active = this.getActivePart();
+            const active = this.getEditedPart();
             if (!active) return;
             const activeIndex = this.parts.findIndex((part) => part.id === active.id);
             this.parts = this.parts.filter((part) => part.id !== active.id);
-            this.activePartId = this.parts[Math.min(Math.max(activeIndex, 0), this.parts.length - 1)]?.id ?? this.parts[0]?.id ?? null;
+            this.editedPartId = this.parts[Math.min(Math.max(activeIndex, 0), this.parts.length - 1)]?.id ?? null;
+            if (this.activePartId === active.id) this.activePartId = this.parts[Math.min(Math.max(activeIndex, 0), this.parts.length - 1)]?.id ?? this.parts[0]?.id ?? null;
             this.refreshPartsUi(root);
         });
 
         this.qs<HTMLButtonElement>(root, '[data-action="episode-dec"]')?.addEventListener('click', () => {
-            const part = this.getActivePart();
-            if (!part) return;
-            part.episodeCurrent = Math.max(0, (part.episodeCurrent ?? 0) - 1);
-            this.refreshPartsUi(root);
+            this.setPartProgress(root, (this.getEditedPart()?.episodeCurrent ?? 0) - 1);
         });
         this.qs<HTMLButtonElement>(root, '[data-action="episode-inc"]')?.addEventListener('click', () => {
-            const part = this.getActivePart();
-            if (!part) return;
-            part.episodeCurrent = (part.episodeCurrent ?? 0) + 1;
-            if (part.status === 'planned') part.status = 'watching';
-            if (part.episodeTotal && part.episodeCurrent >= part.episodeTotal) part.status = 'completed';
-            if (this.selectedStatus === 'planned') this.selectedStatus = 'watching';
-            this.refreshPartsUi(root);
-            this.updateStatusUI(root);
+            this.setPartProgress(root, (this.getEditedPart()?.episodeCurrent ?? 0) + 1);
         });
-
         this.bindPartInput(root, '[data-field="part-title"]', (part, value) => { part.title = value; });
-        this.bindPartInput(root, '[data-field="part-season"]', (part, value) => { part.seasonNumber = this.parseNumberInput(value); });
-        this.bindPartInput(root, '[data-field="part-episode-current"]', (part, value) => { part.episodeCurrent = this.parseNumberInput(value); });
+        this.bindPartInput(root, '[data-field="part-episode-current"]', (_part, value) => { this.setPartProgress(root, this.parseNumberInput(value) ?? 0); });
         this.bindPartInput(root, '[data-field="part-episode-total"]', (part, value) => { part.episodeTotal = this.parseNumberInput(value); });
-
-        root.querySelectorAll<HTMLButtonElement>('[data-role="part-status-segments"] .lorebase-editmode-segment').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const part = this.getActivePart();
-                const status = btn.dataset.status as VideoStatus | undefined;
-                if (!part || !status) return;
-                part.status = status;
-                this.refreshPartsUi(root);
-            });
+        this.bindPartInput(root, '[data-field="part-duration"]', (part, value) => { part.episodeDuration = this.parseNumberInput(value) || null; });
+        this.bindPartInput(root, '[data-field="part-year"]', (part, value) => { part.year = this.parseNumberInput(value) || null; });
+        this.bindPartInput(root, '[data-field="part-poster"]', (part, value) => {
+            part.poster = value || null;
+        });
+        this.qs<HTMLInputElement>(root, '[data-field="part-episode-total"]')?.addEventListener('change', () => {
+            this.setPartProgress(root, this.getEditedPart()?.episodeCurrent ?? 0);
         });
     }
 
@@ -605,9 +692,7 @@ export class VideoEditModal extends Modal {
         button?.addEventListener('click', () => {
             this.notesExpanded = !this.notesExpanded;
             this.updateNotesDisclosureUI(root);
-            if (this.notesExpanded) {
-                window.setTimeout(() => this.qs<HTMLTextAreaElement>(root, '[data-field="summary"]')?.focus(), 0);
-            }
+            if (this.notesExpanded) focusSummaryNotes(root, this.compact);
         });
     }
 
@@ -625,7 +710,8 @@ export class VideoEditModal extends Modal {
                 started,
                 startedTrigger,
                 () => this.started,
-                (value) => { this.started = value; }
+                (value) => { this.started = value; },
+                { allowPartial: true }
             );
             this.startedDatePicker.syncInput(this.started);
         }
@@ -636,7 +722,8 @@ export class VideoEditModal extends Modal {
                 finished,
                 finishedTrigger,
                 () => this.finished,
-                (value) => { this.finished = value; }
+                (value) => { this.finished = value; },
+                { allowPartial: true, allowUnknown: true }
             );
             this.finishedDatePicker.syncInput(this.finished);
         }
@@ -647,9 +734,11 @@ export class VideoEditModal extends Modal {
                 released,
                 releasedTrigger,
                 () => this.releaseDate,
-                (value) => { this.releaseDate = value; }
+                (value) => { this.releaseDate = value; },
+                { allowPartial:true, allowQuarter:true, allowUnknown:true }
             );
             this.releaseDatePicker.syncInput(this.releaseDate);
+            released.removeAttribute('maxlength'); released.removeAttribute('inputmode');
         }
 
         this.qs<HTMLButtonElement>(root, '[data-action="today-started"]')?.addEventListener('click', () => {
@@ -701,7 +790,12 @@ export class VideoEditModal extends Modal {
     }
 
     private bindTags(root: HTMLElement): void {
-        this.bindChipInput(root, '[data-field="new-tag"]', this.tags, () => this.renderTagChips(root));
+        if (this.compact) {
+            this.compactChips = bindCompactEditorChips(root, {
+                tags: { read: () => this.tags, write: values => { this.tags = values; }, normalize: value => this.normalizeChip(value) },
+                genres: { read: () => this.genres, write: values => { this.genres = values; }, normalize: value => this.normalizeChip(value) },
+            });
+        } else this.bindChipInput(root, '[data-field="new-tag"]', this.tags, () => this.renderTagChips(root));
     }
 
     private bindRelatedMedia(root: HTMLElement): void {
@@ -726,6 +820,18 @@ export class VideoEditModal extends Modal {
         const container = this.qs<HTMLElement>(root, selector);
         if (!container) return;
         container.empty();
+        if (selector === '[data-role="part-status-segments"]') {
+            this.partStatusDropdown = createTitlePartDropdown(container,
+                options.map(option => ({ value: option.status, label: option.label })),
+                this.getEditedPart()?.status ?? 'planned', value => {
+                const part = this.getEditedPart();
+                if (!part) return;
+                setVideoPartStatus(part, value);
+                this.refreshPartsUi(root);
+            }, t('editStatus'));
+            this.updatePartStatusUI(root);
+            return;
+        }
         for (const option of options) {
             const button = container.createEl('button', {
                 cls: 'lorebase-editmode-segment',
@@ -733,7 +839,9 @@ export class VideoEditModal extends Modal {
             });
             button.dataset.status = option.status;
             const icon = button.createSpan({ cls: 'lorebase-editmode-segment-icon', attr: { 'aria-hidden': 'true' } });
-            icon.appendChild(this.createSvgIcon(STATUS_CONFIG[option.status].pathD));
+            const appearance = getStatusAppearance(this.item.type, option.status);
+        setIcon(icon, appearance.icon);
+        button.style.setProperty('--lorebase-status-color', appearance.color);
             button.createSpan({ cls: 'lorebase-editmode-segment-label', text: option.label });
         }
     }
@@ -742,7 +850,8 @@ export class VideoEditModal extends Modal {
         const stars = this.qs<HTMLElement>(root, '[data-role="stars"]');
         if (!stars) return;
         stars.empty();
-        for (let i = 1; i <= 5; i++) {
+        stars.toggleClass('is-custom-scale', this.ratingSettings.mode === 'custom');
+        for (const i of getRatingStarValues(this.ratingSettings)) {
             stars.createEl('button', {
                 cls: 'lorebase-editmode-star',
                 text: String.fromCharCode(9733),
@@ -752,47 +861,89 @@ export class VideoEditModal extends Modal {
     }
 
     private renderPartKindOptions(root: HTMLElement): void {
-        const select = this.qs<HTMLSelectElement>(root, '[data-field="part-kind"]');
-        if (!select) return;
-        select.empty();
+        const host = this.qs<HTMLElement>(root, '[data-field="part-kind"]');
+        if (!host) return;
         const options: Array<{ value: PartDraft['kind']; label: string }> = [
             { value: 'movie', label: t('formatMovie') },
             { value: 'season', label: t('settingsSeries') },
         ];
-        for (const option of options) select.createEl('option', { value: option.value, text: option.label });
+        this.partKindDropdown = createTitlePartDropdown(host, options, this.getEditedPart()?.kind ?? 'season', value => {
+            const part = this.getEditedPart();
+            if (part) part.kind = value;
+        }, t('editFormat'));
+    }
+
+    private setPartProgress(root: HTMLElement, value: number): void {
+        const part = this.getEditedPart();
+        if (!part) return;
+        setPartEpisodeCurrent(part, value);
+        if ((this.selectedStatus === 'planned' && (part.episodeCurrent ?? 0) > 0) || (this.selectedStatus === 'completed' && part.status !== 'completed')) this.selectedStatus = part.status;
+        this.renderPartStrip(root);
+        this.renderActivePartEditor(root);
+        this.updateProgressSummary(root);
+        this.updateStatusUI(root);
+    }
+
+    showPart(partId: string): void {
+        if (!this.parts.some(part => part.id === partId)) return;
+        this.editedPartId = partId;
+        const root = this.contentEl.querySelector<HTMLElement>('.lorebase-editmode-root');
+        if (!root) return;
+        this.renderPartStrip(root);
+        this.renderActivePartEditor(root);
+        root.querySelector('[data-role="part-editor"]')?.scrollIntoView({ block: 'center' });
+        this.qs<HTMLInputElement>(root, '[data-field="part-title"]')?.focus({ preventScroll: true });
     }
 
     private renderPartStrip(root: HTMLElement): void {
-        const container = this.qs<HTMLElement>(root, '[data-role="part-strip"]');
-        if (!container) return;
-        container.empty();
-        for (const part of this.parts) {
-            const active = part.id === this.activePartId;
-            const chip = container.createEl('button', {
-                cls: `lorebase-editmode-chip lorebase-editmode-part-chip ${active ? 'is-active' : ''}`,
-                text: this.getPartChipLabel(part),
-                attr: { type: 'button', 'aria-pressed': String(active), 'data-status': part.status },
-            });
-            chip.addEventListener('click', () => {
+        const host = this.qs<HTMLElement>(root, '[data-role="part-strip"]');
+        if (!host) return;
+        const active = this.getEditedPart();
+        renderPartTabs({
+            host, editor: this.qs<HTMLElement>(root, '[data-role="part-editor"]'),
+            mediaType: 'series',
+            parts: this.parts, selectedPartId: active?.id ?? null, activePartId: this.activePartId,
+            onSelect: part => {
                 this.activePartId = part.id;
-                this.refreshPartsUi(root);
-            });
-        }
+                this.editedPartId = part.id;
+                this.renderPartStrip(root);
+                this.renderActivePartEditor(root);
+            },
+            onEdit: part => {
+                this.editedPartId = part.id;
+                this.renderPartStrip(root);
+                this.renderActivePartEditor(root);
+            },
+        });
+        updateTitlePartTracking(root, active);
+        updateTitlePartPresentation(root, this.app, this.parts, active);
+        this.updateMainPoster(root);
+    }
+
+    private updateMainPoster(root: HTMLElement): void {
+        const image = this.qs<HTMLImageElement>(root, '[data-role="poster"]');
+        if (!image || this.item.type !== 'series') return;
+        const source = getPartPoster(this.parts, this.activePartId, this.posterMode, this.poster || DEFAULT_COVER, value => resolvePartPoster(this.app, value, this.poster || DEFAULT_COVER));
+        setSmoothPoster(image, [source, this.poster]);
     }
 
     private renderActivePartEditor(root: HTMLElement): void {
-        const part = this.getActivePart();
-        const editor = this.qs<HTMLElement>(root, '[data-role="part-editor"]');
-        if (editor) editor.toggleClass('is-hidden', !part);
+        const part = this.getEditedPart();
+        this.episodeControl?.update();
+        updateTitlePartTracking(root, part);
         if (!part) return;
-        this.setInput(root, '[data-field="part-kind"]', part.kind);
+        this.partKindDropdown?.setValue(part.kind);
+        this.partRatingControl?.setValue(part.userRating ?? null);
         this.setInput(root, '[data-field="part-title"]', part.title);
-        this.setInput(root, '[data-field="part-season"]', part.seasonNumber);
         this.setInput(root, '[data-field="part-episode-current"]', part.episodeCurrent);
         this.setInput(root, '[data-field="part-episode-total"]', part.episodeTotal);
+        this.setInput(root, '[data-field="part-duration"]', part.episodeDuration ?? null);
+        this.setInput(root, '[data-field="part-poster"]', part.poster ?? null);
+        this.setInput(root, '[data-field="part-year"]', part.year ?? null);
         this.updatePartStatusUI(root);
+        updatePartEditorActions(root);
+        updateTitlePartCard(root, part, this.parts.indexOf(part));
     }
-
     private renderGenreChips(root: HTMLElement): void {
         const container = this.qs<HTMLElement>(root, '[data-role="genre-chips"]');
         if (!container) return;
@@ -1013,56 +1164,61 @@ export class VideoEditModal extends Modal {
 
     private updateQuickSettingSwitches(root: HTMLElement): void {
         const favorite = this.qs<HTMLButtonElement>(root, '[data-toggle="favorite"]');
-        if (!favorite) return;
-        favorite.setAttr('aria-pressed', String(this.favorite));
-        favorite.toggleClass('is-active', this.favorite);
+        if (favorite) {
+            favorite.setAttr('aria-pressed', String(this.favorite));
+            favorite.toggleClass('is-active', this.favorite);
+        }
+        const release = this.qs<HTMLButtonElement>(root, '[data-toggle="release"]');
+        if (release) {
+            const active = this.selectedStatus === 'to_be_released';
+            release.setAttr('aria-pressed', String(active));
+            release.toggleClass('is-active', active);
+        }
     }
 
     private updateStatusUI(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('[data-role="status-segments"] .lorebase-editmode-segment').forEach(btn => {
-            const active = btn.dataset.status === this.selectedStatus;
-            btn.toggleClass('is-active', active);
-            btn.setAttr('aria-pressed', String(active));
-        });
+        syncTrackingStatus(root, this.selectedStatus);
     }
 
     private updatePartStatusUI(root: HTMLElement): void {
-        const part = this.getActivePart();
-        root.querySelectorAll<HTMLButtonElement>('[data-role="part-status-segments"] .lorebase-editmode-segment').forEach(btn => {
-            const active = btn.dataset.status === part?.status;
-            btn.toggleClass('is-active', active);
-            btn.setAttr('aria-pressed', String(active));
-        });
+        const status = this.getEditedPart()?.status ?? 'planned';
+        this.partStatusDropdown?.setValue(status);
+        updateTitlePartStatusAppearance(root, 'series', status);
     }
 
     private updateRatingUI(root: HTMLElement): void {
-        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-star').forEach(btn => {
+        root.querySelectorAll<HTMLButtonElement>('.lorebase-editmode-star:not(.lorebase-criterion-star)').forEach(btn => {
             const value = Number(btn.dataset.rating ?? '0');
-            btn.toggleClass('is-active', this.selectedRating !== null && value <= this.selectedRating);
+            paintRatingStar(btn, value, this.selectedRating, this.ratingSettings, this.item.type);
         });
         const numeric = this.selectedRating ?? 0;
-        this.setText(root, '[data-role="rating-value"]', `${numeric.toFixed(1)} / 5.0`);
+        const max = getRatingMax(this.ratingSettings);
+        const rating = this.compact
+            ? formatCompactEditorRating(this.selectedRating, max)
+            : `${numeric.toFixed(1)} / ${max.toFixed(1)}`;
+        updateRatingReadout(this.qs(root, '[data-role="rating-value"]'), this.selectedRating, rating);
+        this.setText(root, '.lorebase-editmode-rating-hint', getRatingInputHint(this.ratingSettings, i18n.getLanguage()));
         const line = this.qs<HTMLElement>(root, '[data-role="rating-line"]');
-        if (line) line.style.width = `${Math.round((numeric / 5) * 100)}%`;
+        if (line) line.style.width = `${Math.round((numeric / max) * 100)}%`;
     }
 
     private updateProgressSummary(root: HTMLElement): void {
-        const current = this.parts.reduce((sum, part) => sum + (part.episodeCurrent ?? 0), 0);
-        const total = this.parts.reduce((sum, part) => sum + (part.episodeTotal ?? 0), 0);
-        this.setText(root, '[data-role="progress-total"]', this.item.type === 'movie'
-            ? String(this.parts.length)
-            : total > 0 ? `${current} / ${total}` : `${current}`);
-        const active = this.getActivePart();
-        this.setText(root, '[data-role="active-part-name"]', active ? this.getPartDisplayName(active) : '-');
+        syncEpisodeDuration(root, this.parts);
+        const host = this.qs<HTMLElement>(root, '[data-role="watch-progress"]');
+        if (host && this.item.type !== 'movie') renderWatchProgress(host, this.parts);
+        const part = this.getEditedPart();
+        if (part) updateTitlePartCard(root, part, this.parts.indexOf(part));
 
         const remove = this.qs<HTMLButtonElement>(root, '[data-action="remove-part"]');
         if (remove) {
             remove.disabled = this.parts.length <= 1;
             remove.toggleClass('is-disabled', remove.disabled);
         }
+        updatePartEditorActions(root);
     }
 
     private updateCharCount(root: HTMLElement): void {
+        syncNotesReader(root);
         this.setText(root, '[data-role="char-count"]', `${this.getCurrentNotesValue().length} ${t('editCharsShort')}`);
     }
 
@@ -1076,7 +1232,7 @@ export class VideoEditModal extends Modal {
             button.toggleClass('is-active', mode === this.notesMode);
         });
         const title = this.qs<HTMLElement>(root, '[data-role="notes-title"]');
-        if (title) title.textContent = this.notesMode === 'description' ? t('editDescription') : t('editMyNotes');
+        if (title && !this.compact) title.textContent = this.notesMode === 'description' ? t('editDescription') : t('editMyNotes');
     }
 
     private updateNotesDisclosureUI(root: HTMLElement): void {
@@ -1100,32 +1256,83 @@ export class VideoEditModal extends Modal {
         this.updateProgressSummary(root);
     }
 
+    private async refreshSeriesParts(root: HTMLElement, button: HTMLButtonElement): Promise<void> {
+        if (!this.onRefreshSeriesParts || button.disabled) return;
+        const existingParts = this.parts.slice();
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        try {
+            const { parts, partial } = await this.onRefreshSeriesParts();
+            if (!this.contentEl.contains(root)) return;
+            if (!parts.length) {
+                new Notice(et('seasonsUnavailable'));
+                return;
+            }
+            const scan = inspectPartCatalog(catalogSource(this.item), parts, this.parts, this.partCatalog);
+            const completed = this.selectedStatus === 'completed';
+            if (completed && scan.candidates.length) {
+                renderContinuationNotice(root, scan.candidates, scan.baseline, (selected, resume) => {
+                    const applied = applyContinuations(this.parts, scan.candidates, selected, resume);
+                    this.parts = applied.parts; this.partCatalog = scan.catalog;
+                    if (applied.activeId) { this.activePartId = applied.activeId; this.editedPartId = applied.activeId; }
+                    if (resume) { this.selectedStatus = 'watching'; this.updateStatusUI(root); }
+                    root.querySelector('.lorebase-continuations')?.remove(); this.refreshPartsUi(root);
+                });
+            } else this.partCatalog = scan.catalog;
+            for (const source of parts) {
+                const matchesSeason = (part: PartDraft) => part.kind === 'season'
+                    && (part.id === source.id || part.seasonNumber === source.seasonNumber);
+                const existing = this.parts.find(matchesSeason);
+                if (!existing && (existingParts.some(matchesSeason) || this.parts.some(part => part.id === source.id))) continue;
+                if (!existing && completed) continue;
+                // A previously declined episode increase stays declined too.
+                const keepTotal = completed && existing && (existing.episodeTotal ?? 0) > 0 && (source.episodeTotal ?? 0) > (existing.episodeTotal ?? 0);
+                const part = existing ?? { ...source };
+                if (!keepTotal && source.episodeDetails?.length) part.episodeDetails = mergeEpisodeDetails(source.episodeDetails, part.episodeDetails ?? []);
+                const highestEpisode = source.episodeDetails?.reduce((max, episode) => Math.max(max, episode.number), 0) ?? 0;
+                const total = Math.max(source.episodeTotal ?? 0, highestEpisode);
+                if (!keepTotal && total > 0) {
+                    const watched = part.watchedEpisodes?.reduce((max, number) => Math.max(max, number), 0) ?? 0;
+                    part.episodeTotal = Math.max(total, part.episodeCurrent ?? 0, watched);
+                }
+                if (source.poster) part.poster = source.poster;
+                if (!existing) this.parts.push(part);
+            }
+            this.refreshPartsUi(root);
+            new Notice(et(partial ? 'seasonsPartial' : 'seasonsUpdated'));
+        } catch {
+            if (this.contentEl.contains(root)) new Notice(et('seasonsUnavailable'));
+        } finally {
+            button.disabled = false;
+            button.removeAttribute('aria-busy');
+        }
+    }
+
     private getVideoStatusOptions(): Array<{ status: VideoStatus; label: string }> {
-        return [
-            { status: 'planned', label: t('statusPlanned') },
-            { status: 'watching', label: t('statusWatching') },
-            { status: 'completed', label: t('statusCompleted') },
-            { status: 'dropped', label: t('statusDropped') },
-            { status: 'paused', label: t('statusPaused') },
-        ];
+        return getStatusOptionsForMediaType(this.item.type).map(option => ({ ...option, status: option.status as VideoStatus }));
+    }
+
+    private getEditedPart(): PartDraft | null {
+        if (!this.parts.length) return null;
+        return this.parts.find((part) => part.id === this.editedPartId) ?? this.getActivePart();
     }
 
     private getActivePart(): PartDraft | null {
-        if (!this.parts.length) return null;
-        return this.parts.find((part) => part.id === this.activePartId) ?? this.parts[0] ?? null;
+        return this.parts.find(part => part.id === this.activePartId) ?? this.parts[0] ?? null;
     }
 
     private normalizeParts(item: VideoItem): PartDraft[] {
-        if (item.parts?.length) return item.parts.map((part) => ({ ...part }));
+        if (item.parts?.length) return item.parts.map((part) => ({ ...part, episodeDuration: part.episodeDuration ?? parseEpisodeDuration(item.runtime) }));
         if (item.type === 'series') {
             return [{
                 id: 'season-1',
                 kind: 'season',
-                title: 'Season 1',
+                title: item.displayName,
                 seasonNumber: 1,
                 episodeCurrent: item.episodeCurrent ?? 0,
                 episodeTotal: item.episodeTotal,
                 status: item.status,
+                episodeDuration: parseEpisodeDuration(item.runtime),
             }];
         }
         return [{
@@ -1139,25 +1346,6 @@ export class VideoEditModal extends Modal {
         }];
     }
 
-    private getPartChipLabel(part: PartDraft): string {
-        const current = part.episodeCurrent ?? 0;
-        const total = part.episodeTotal ?? '?';
-        if (part.kind === 'season') {
-            const season = part.seasonNumber ? `S${part.seasonNumber}` : t('settingsSeries');
-            return `${season} ${current}/${total}`;
-        }
-        return part.title || t('formatMovie');
-    }
-
-    private getPartDisplayName(part: PartDraft): string {
-        const prefix = part.kind === 'season' && part.seasonNumber ? `S${part.seasonNumber}` : this.getPartKindLabel(part.kind);
-        return part.title ? `${prefix}: ${part.title}` : prefix;
-    }
-
-    private getPartKindLabel(kind: PartDraft['kind']): string {
-        return kind === 'season' ? t('settingsSeries') : t('formatMovie');
-    }
-
     private createPartId(kind: PartDraft['kind']): string {
         const used = new Set(this.parts.map((part) => part.id));
         let index = this.parts.length + 1;
@@ -1169,24 +1357,20 @@ export class VideoEditModal extends Modal {
         return id;
     }
 
-    private createSvgIcon(pathD: string): SVGElement {
-        const svg = createSvg('svg');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        const path = svg.createSvg('path');
-        path.setAttribute('d', pathD);
-        svg.appendChild(path);
-        return svg;
-    }
-
     private bindText(root: HTMLElement, selector: string, handler: (value: string) => void): void {
         this.qs<HTMLInputElement>(root, selector)?.addEventListener('input', (event) => {
             handler((event.currentTarget as HTMLInputElement).value.trim());
         });
     }
 
+    private updateBreadcrumb(root: HTMLElement): void {
+        const prefix = t(this.item.type === 'movie' ? 'editBreadcrumbMovies' : 'editBreadcrumbSeries');
+        this.setText(root, '[data-role="breadcrumb"]', `${prefix} / ${this.title}`);
+    }
+
     private bindPartInput(root: HTMLElement, selector: string, handler: (part: PartDraft, value: string) => void): void {
         this.qs<HTMLInputElement>(root, selector)?.addEventListener('input', (event) => {
-            const part = this.getActivePart();
+            const part = this.getEditedPart();
             if (!part) return;
             handler(part, (event.currentTarget as HTMLInputElement).value.trim());
             this.renderPartStrip(root);
@@ -1247,22 +1431,10 @@ export class VideoEditModal extends Modal {
 
     private formatHumanDate(timestamp: number): string {
         if (!Number.isFinite(timestamp)) return t('editUnknown');
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: '2-digit' }).format(new Date(timestamp));
     }
 
-    private normalizeDateInput(value: string | null | undefined): string {
-        const trimmed = String(value ?? '').trim();
-        if (!trimmed) return '';
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        const parsed = Date.parse(trimmed);
-        if (Number.isNaN(parsed)) return '';
-        const date = new Date(parsed);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
 
     private getTodayDateInput(): string {
         const now = new Date();
@@ -1282,30 +1454,41 @@ export class VideoEditModal extends Modal {
     }
 
     private async save(): Promise<boolean> {
+        if (!validateRatingInputs(this.contentEl)) return false;
+        if (!validateCountriesControl(this.contentEl)) return false;
         if (!validateDatePickers([this.startedDatePicker, this.finishedDatePicker, this.releaseDatePicker].filter((picker): picker is HierarchicalDatePicker => Boolean(picker)))) return false;
+        this.compactChips?.commit();
         const activePart = this.getActivePart();
         const allPartsCompleted = this.item.type === 'series' && this.parts.length > 0 && this.parts.every((part) => part.status === 'completed');
         const status = allPartsCompleted ? 'completed' : this.selectedStatus;
 
         const updates: VideoUpdates = {
+            ...(this.countries !== undefined ? { countries: this.countries } : {}),
+            workType: this.workType,
             displayName: this.title,
-            imageUrl: this.poster,
-            horizontalImageUrl: this.horizontalPoster,
             year: this.year,
             userRating: this.selectedRating,
+            detailedRatings: this.detailedRatingEditor.getValue(),
             status,
             favorite: this.favorite,
+            priority: this.selectedPriority,
+            statusReasons: this.statusReasons,
+            ...(this.discovery || this.item.discovery ? { discovery: this.discovery } : {}),
+            ...(this.item.type === 'series' && this.partCatalog ? { partCatalog: this.partCatalog } : {}),
+            repeatCount: this.repeatCount,
             summary: this.summary,
             genres: this.genres,
             tags: this.tags,
             sourceUrl: this.sourceUrl || null,
             started: this.started || null,
             finished: this.finished || null,
-            relatedMedia: this.relatedMedia,
+            relatedMedia: this.compactRelated?.getValue() ?? this.relatedMedia,
             myNotes: this.myNotes,
         };
 
         if (this.item.type === 'movie') {
+            updates.imageUrl = this.poster;
+            updates.horizontalImageUrl = this.horizontalPoster;
             updates.releaseDate = this.releaseDate;
             updates.runtime = this.runtime;
             updates.director = this.director;
@@ -1314,7 +1497,6 @@ export class VideoEditModal extends Modal {
             updates.parts = this.parts;
             updates.activePartId = activePart?.id ?? this.activePartId;
             updates.releaseDate = this.releaseDate;
-            updates.runtime = this.runtime;
             updates.director = this.director;
             updates.actors = this.actors;
             updates.seasons = this.parts.length || this.seasons;

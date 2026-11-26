@@ -74,7 +74,7 @@ function annotatePanels(root: HTMLElement): void {
 
 function createMobileSummary(root: HTMLElement): void {
     const posterCard = root.querySelector<HTMLElement>('.lorebase-editmode-poster-card');
-    if (!posterCard || posterCard.querySelector('.lorebase-editmode-mobile-summary')) return;
+    if (!posterCard || posterCard.querySelector('.lorebase-editmode-mobile-summary, .lorebase-game-cover-identity')) return;
     const titleInput = root.querySelector<HTMLInputElement>('[data-field="title"]');
     const yearInput = root.querySelector<HTMLInputElement>('[data-field="year"]');
     const summary = createDiv();

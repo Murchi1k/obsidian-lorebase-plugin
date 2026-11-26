@@ -1,0 +1,482 @@
+/**
+ * LOREBASE phone layouts.
+ * Loaded LAST by styles.entry.css. Shared desktop styles stay in their component
+ * files; all phone overrides belong here. Only plugin surfaces are targeted.
+ */
+.lorebase-mobile-inline-close { display: none; }
+
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 540px) and (pointer: coarse) {
+    body {
+        --lb-phone-space: 12px;
+        --lb-phone-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+        --lb-phone-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    }
+    .lorebase-toolbar {
+        --lb-phone-nav-clearance: max(76px, calc(var(--navbar-height, 56px) + max(var(--navbar-bottom-offset, 12px), var(--lb-phone-bottom)) + 12px));
+    }
+
+    /* Full-height workspaces use a single scrollable body and in-flow actions.
+       Respect the host's available height when the on-screen keyboard opens. */
+    .modal[class*="lorebase-"] {
+        min-width: 0;
+        max-width: calc(100vw - 16px);
+        max-height: calc(100dvh - 16px - var(--lb-phone-top) - var(--lb-phone-bottom));
+        box-sizing: border-box;
+    }
+    .modal:is(.lorebase-editmode-modal-shell, .lorebase-select-modal-container,
+        .lorebase-dashboard-container, .lorebase-release-calendar-container,
+        .lorebase-custom-groups-container, .lorebase-manual-create-container, .lorebase-related-picker-container) {
+        width: 100%;
+        max-width: 100vw;
+        height: 100%;
+        height: min(100%, 100dvh);
+        max-height: 100dvh;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+    .modal[class*="lorebase-"] > .modal-content {
+        min-width: 0;
+        min-height: 0;
+        max-width: 100%;
+        margin: 0;
+        box-sizing: border-box;
+    }
+    .modal:is(.lorebase-custom-groups-container, .lorebase-release-calendar-container) > .modal-content {
+        height: 100%;
+        padding: calc(12px + var(--lb-phone-top)) 12px 0;
+    }
+    .modal:is(.lorebase-select-modal-container, .lorebase-release-calendar-container,
+        .lorebase-custom-groups-container) > .modal-close-button {
+        top: calc(8px + var(--lb-phone-top));
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        z-index: 30;
+    }
+    .modal[class*="lorebase-"] > :is(.modal-header-button, .modal-close-button) {
+        top: calc(12px + var(--lb-phone-top));
+        right: 12px;
+    }
+    .modal.has-mobile-inline-close > :is(.modal-header, .modal-header-button, .modal-close-button) { display: none !important; }
+    .modal[class*="lorebase-"] .has-mobile-close {
+        position: relative;
+        min-height: 44px;
+        padding-right: 54px;
+    }
+    .modal[class*="lorebase-"] .has-mobile-close > .lorebase-mobile-inline-close {
+        display: inline-flex;
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: auto;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        min-height: 44px;
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 10px;
+        background: var(--background-secondary);
+        color: var(--text-normal);
+        box-shadow: none;
+        z-index: 2;
+    }
+    .modal[class*="lorebase-"] .lorebase-mobile-inline-close svg { width: 20px; height: 20px; }
+    :is(.lorebase-view, .lorebase-editmode-root, .lorebase-add-workspace,
+        .lorebase-settings, .lorebase-dashboard, .lorebase-release-calendar,
+        .lorebase-custom-groups) :is(input:not([type="checkbox"]):not([type="range"]):not([type="color"]), textarea, select) {
+        min-width: 0;
+        max-width: 100%;
+        font-size: 16px;
+    }
+    :is(.lorebase-settings, .lorebase-add-workspace, .lorebase-editmode-root) :is(p, .setting-item-description) {
+        overflow-wrap: anywhere;
+    }
+    :is(.lorebase-settings, .lorebase-editmode-root, .lorebase-add-workspace) [hidden] {
+        display: none !important;
+    }
+
+    /* Library: search and two compact rows of icons. Accessible names stay on buttons. */
+    .lorebase-view { scrollbar-gutter: auto; overscroll-behavior-y: contain; }
+    .lorebase-toolbar {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 10px 12px;
+        margin: 0 0 8px;
+        border-radius: 0;
+    }
+    .lorebase-toolbar-mobile-header { display: none; }
+    .lorebase-toolbar :is(.lorebase-toolbar-left, .lorebase-toolbar-center, .lorebase-toolbar-right) {
+        display: grid;
+        width: 100%;
+        min-width: 0;
+        gap: 6px;
+    }
+    .lorebase-toolbar .lorebase-toolbar-center { order: 0; grid-template-columns: minmax(0, 1fr) 44px; }
+    .lorebase-toolbar .lorebase-toolbar-left { order: 1; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .lorebase-toolbar .lorebase-toolbar-right { order: 2; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .lorebase-toolbar :is(.lorebase-toolbar-left, .lorebase-toolbar-right) > * { width: 100%; min-width: 0; }
+    .lorebase-toolbar :is(.lorebase-toolbar-btn, .lorebase-media-trigger) {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        height: 44px;
+        padding: 10px;
+        border-radius: 10px;
+    }
+    .lorebase-toolbar .lorebase-toolbar-mobile-label {
+        display: none;
+    }
+    .lorebase-toolbar :is(.lorebase-toolbar-left, .lorebase-toolbar-right) > .lorebase-toolbar-btn > svg,
+    .lorebase-toolbar :is(.lorebase-toolbar-left, .lorebase-toolbar-right) > .lorebase-dropdown-wrap > .lorebase-toolbar-btn > svg { width: 21px; height: 21px; }
+    .lorebase-toolbar .lorebase-media-trigger-icon svg { width: 22px; height: 22px; }
+    .lorebase-toolbar :is(.lorebase-toolbar-center .lorebase-add-btn, .lorebase-search-input) { height: 44px; min-height: 44px; }
+    .lorebase-toolbar .lorebase-toolbar-center .lorebase-search-container { width: 100%; max-width: none; }
+    .lorebase-toolbar .lorebase-toolbar-right > .lorebase-dropdown-wrap:last-child > .lorebase-toolbar-btn { height: 100%; }
+    .lorebase-media-tray { position: static; order: 3; width: 100%; max-width: 100%; flex-wrap: wrap; }
+    .lorebase-media-tray .lorebase-media-option { min-width: 38px; min-height: 40px; }
+    .lorebase-toolbar .lorebase-dropdown.is-open {
+        position: fixed;
+        inset: auto 8px var(--lb-phone-nav-clearance) 8px;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        max-height: min(68dvh, calc(100dvh - var(--lb-phone-nav-clearance) - var(--lb-phone-top) - 24px));
+        padding: 14px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-radius: 16px;
+    }
+    .lorebase-toolbar .lorebase-dropdown.is-open::after { display: none; }
+    body.is-hidden-nav .lorebase-toolbar .lorebase-dropdown.is-open { bottom: calc(8px + var(--lb-phone-bottom)); }
+    .lorebase-view-panel :is(.lorebase-view-control-row, .lorebase-view-save-row) { flex-wrap: wrap; gap: 8px; }
+    .lorebase-view-panel .lorebase-view-control-label { flex: 0 0 100%; }
+    .lorebase-view-panel :is(.lorebase-view-dropdown, input) { min-width: 0; flex: 1; }
+    .lorebase-view-panel button { white-space: normal; }
+    .lorebase-view .lorebase-card { max-width: none; }
+
+    /* All media editors: the poster and its overlays occupy ONE grid cell.
+       Panels never shrink vertically, and only the panel list scrolls. */
+    .modal.lorebase-editmode-modal-shell > .modal-content { height: 100%; padding: 0; overflow: hidden; }
+    .lorebase-editmode-root,
+    .lorebase-editmode-root .lorebase-editmode-view {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: 0;
+    }
+    .lorebase-editmode-root .lorebase-editmode-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        flex: 0 0 auto;
+        gap: 8px;
+        padding: calc(8px + var(--lb-phone-top)) 12px 8px;
+        min-height: 56px;
+    }
+    .lorebase-editmode-root .lorebase-editmode-breadcrumb { font-size: 12px; min-width: 0; }
+    .lorebase-editmode-root .lorebase-editmode-header-right { flex-wrap: nowrap; gap: 4px; }
+    .lorebase-editmode-root .lorebase-editmode-header-right button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 8px; }
+    .lorebase-editmode-root .lorebase-editmode-header-right [data-action="discard"],
+    .lorebase-editmode-root.lorebase-compact-editor [data-action="save"] > span:not([data-icon]) { display: none; }
+    .lorebase-editmode-root .lorebase-editmode-header-right [data-action="overflow"] { display: inline-flex; }
+    .lorebase-editmode-root .lorebase-editmode-mobile-tabs {
+        display: grid;
+        position: static;
+        flex: 0 0 auto;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        padding: 0 12px;
+    }
+    .lorebase-editmode-root .lorebase-editmode-mobile-tab { min-height: 44px; font-size: 13px; }
+    .lorebase-editmode-root .lorebase-editmode-grid {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+        min-width: 0;
+        padding: 12px;
+        gap: 12px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        scroll-padding-block: 12px;
+    }
+    .lorebase-editmode-root .lorebase-editmode-column {
+        display: contents;
+        overflow: visible;
+        padding: 0;
+        container-type: normal;
+    }
+    .lorebase-editmode-root .lorebase-editmode-panel { flex: 0 0 auto; min-width: 0; margin: 0; padding: 12px; }
+    .lorebase-editmode-root .lorebase-editmode-view[data-mobile-tab="general"] [data-mobile-pane]:not([data-mobile-pane="general"]),
+    .lorebase-editmode-root .lorebase-editmode-view[data-mobile-tab="personal"] [data-mobile-pane]:not([data-mobile-pane="personal"]),
+    .lorebase-editmode-root .lorebase-editmode-view[data-mobile-tab="more"] [data-mobile-pane]:not([data-mobile-pane="more"]) { display: none; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-editmode-poster-card {
+        display: grid;
+        grid-template: 'cover' auto / minmax(0, 1fr);
+        flex: 0 0 auto;
+        width: min(100%, 240px);
+        min-height: 0;
+        height: auto;
+        margin: 0 auto;
+        padding: 10px;
+        align-items: stretch;
+    }
+    .lorebase-editmode-root.lorebase-compact-editor :is(.lorebase-editmode-poster-frame, .lorebase-game-cover-identity, .lorebase-game-cover-type) { grid-area: cover; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-editmode-poster-frame {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        aspect-ratio: 2 / 3;
+        margin: 0;
+    }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-editmode-poster { width: 100%; height: 100%; object-fit: cover; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-game-cover-title { font-size: 18px; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-game-cover-year { font-size: 14px; }
+    .lorebase-editmode-root .lorebase-editmode-mobile-footer {
+        display: block;
+        position: static;
+        flex: 0 0 auto;
+        padding: 8px 12px calc(8px + var(--lb-phone-bottom));
+        background: var(--background-primary);
+    }
+    .lorebase-editmode-root .lorebase-editmode-mobile-footer button { min-height: 44px; width: 100%; }
+    .lorebase-editmode-root .lorebase-editmode-segmented {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        min-width: 0;
+        gap: 6px;
+    }
+    .lorebase-editmode-root .lorebase-editmode-segment { min-width: 0; min-height: 40px; white-space: normal; font-size: 12px; padding: 6px; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-compact-tracking .lorebase-tracking-status { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-tracking-status button.lorebase-editmode-segment { min-height: 42px; height: auto; }
+    .lorebase-editmode-root.lorebase-compact-editor .lorebase-tracking-status .lorebase-editmode-segment-label { overflow: visible; white-space: normal; text-overflow: clip; line-height: 1.3; }
+    .lorebase-editmode-root :is(.lorebase-editmode-panel-title-row, .lorebase-source-compact-row, .lorebase-part-utilities) { flex-wrap: wrap; gap: 8px; }
+    .lorebase-editmode-root .lorebase-source-panel a { overflow-wrap: anywhere; }
+    .lorebase-editmode-root .lorebase-source-action { min-height: 36px; min-width: 36px; }
+    .lorebase-editmode-root .lorebase-reading-cycle-entry { grid-template-columns: 82px minmax(0, 1fr); gap: 10px; padding: 10px; }
+    .lorebase-editmode-root .lorebase-reading-cycle-fields { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-editmode-root .lorebase-community-rating-card { grid-template-columns: 78px minmax(0, 1fr); }
+
+    /* Add, search, review and manual entry share one bottom action bar. */
+    .modal:is(.lorebase-select-modal-container, .lorebase-related-picker-container) > .modal-content {
+        height: 100%;
+        padding: calc(12px + var(--lb-phone-top)) 12px 0;
+        overflow: hidden;
+    }
+    .lorebase-select-modal.lorebase-add-workspace { display: flex; flex-direction: column; height: 100%; max-height: none; min-height: 0; gap: 12px; }
+    .lorebase-add-workspace .lorebase-select-header { flex: 0 0 auto; padding: 0 44px 0 0; min-height: 40px; }
+    .lorebase-add-workspace .lorebase-select-title-row { flex-wrap: wrap; gap: 8px; }
+    .lorebase-add-workspace .lorebase-select-title { font-size: 18px; }
+    .lorebase-add-workspace .lorebase-select-header-action { min-height: 40px; font-size: 12px; }
+    .lorebase-add-workspace .lorebase-select-search-shell { flex: 0 0 auto; gap: 10px; }
+    .lorebase-add-workspace .lorebase-select-search-controls { flex-wrap: wrap; justify-content: flex-start; overflow: visible; }
+    .lorebase-add-workspace .lorebase-select-providers { display: flex; flex-wrap: wrap; margin: 0; gap: 4px; max-width: 100%; min-width: 0; }
+    .lorebase-add-workspace .lorebase-select-provider { min-height: 40px; padding: 6px 10px; font-size: 12px; }
+    .lorebase-add-workspace :is(.lorebase-select-search-submit, .lorebase-select-alternate-provider .lorebase-settings-dropdown-btn) { width: 40px; min-width: 40px; min-height: 44px; }
+    .lorebase-add-workspace :is(.lorebase-select-grid, .lorebase-select-search-grid, .lorebase-select-review-gallery) {
+        display: grid;
+        flex: 1 1 0;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: max-content;
+        align-content: start;
+        min-height: 0;
+        max-height: none;
+        gap: 10px;
+        padding: 2px 2px 12px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .lorebase-add-workspace .lorebase-select-card { width: 100%; min-width: 0; max-width: none; height: auto; flex: none; }
+    .lorebase-add-workspace .lorebase-select-empty { grid-column: 1 / -1; width: 100%; }
+    .lorebase-add-workspace .lorebase-select-pagination { position: static; transform: none; flex: 0 0 auto; align-self: center; }
+    .lorebase-add-workspace .lorebase-select-pagination:empty { display: none; }
+    .modal.lorebase-related-picker-container { height: 100dvh; }
+    .lorebase-related-picker .lorebase-select-header { padding: 0; }
+    .lorebase-related-picker.lorebase-add-workspace .lorebase-select-search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .lorebase-related-picker-filter { min-height: 36px; padding: 5px 8px; }
+    .lorebase-related-picker-actions .lorebase-flow-btn { min-height: 42px; padding-inline: 11px; }
+    .lorebase-add-workspace .lorebase-select-footer {
+        display: flex;
+        position: static;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 -12px;
+        padding: 10px 12px calc(10px + var(--lb-phone-bottom));
+        background: var(--background-primary);
+    }
+    .lorebase-add-workspace .lorebase-select-footer > button { flex: 1 1 0; min-width: 0; min-height: 44px; height: auto; padding: 8px; font-size: 12px; white-space: normal; }
+    .lorebase-add-workspace :is(.lorebase-manual-create-body, .lorebase-manual-section-grid, .lorebase-manual-part-editor) { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-add-workspace .lorebase-manual-cover-panel { position: static; }
+
+    /* Settings: readable names, compact navigation and full-width form fields. */
+    .lorebase-settings { min-width: 0; padding: 12px; scroll-padding-top: 72px; }
+    .lorebase-settings .lorebase-settings-section-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; }
+    .lorebase-settings .lorebase-settings-section-tab { min-width: 0; min-height: 44px; padding: 8px; white-space: normal; font-size: 13px; }
+    .lorebase-settings :is(.lorebase-settings-topbar, .lorebase-settings-choices, .setting-item-control, .lorebase-template-header, .lorebase-template-toolbar) { flex-wrap: wrap; gap: 8px; }
+    .lorebase-settings .setting-item { min-width: 0; gap: 12px; padding-block: 12px; }
+    .lorebase-settings .setting-item-info { min-width: 0; }
+    .lorebase-settings .setting-item-name { line-height: 1.4; overflow-wrap: anywhere; }
+    .lorebase-settings .setting-item-control { min-width: 0; max-width: 100%; }
+    .lorebase-settings .setting-item:has(.setting-item-control > :is(input[type="text"], input[type="password"], textarea, .lorebase-provider-credentials)) { flex-direction: column; align-items: stretch; }
+    .lorebase-settings .setting-item-control > :is(input[type="text"], input[type="password"], textarea) { width: 100%; }
+    .lorebase-settings :is(.lorebase-settings-choices button, .lorebase-settings-dropdown-btn) { min-height: 40px; white-space: normal; }
+    .lorebase-settings .lorebase-card-mini-viewport { height: 310px; min-height: 0; max-width: 100%; padding: 10px; }
+    .lorebase-settings .lorebase-card-preview-stage { position: relative; top: auto; max-width: 100%; }
+    .lorebase-settings .lorebase-card-preview-help-panel { top: 44px; max-height: 60dvh; }
+    .lorebase-settings .lorebase-template-editor-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+    .lorebase-settings .lorebase-template-editor-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; }
+    .lorebase-settings .lorebase-template-editor-columns { display: none; }
+    .lorebase-settings .lorebase-template-editor-row { grid-template-columns: 22px minmax(0, 1fr) 40px; gap: 4px 8px; padding: 10px 0; }
+    .lorebase-settings .lorebase-template-editor-row > .lorebase-template-editor-property-cell { grid-column: 2; grid-row: 2; }
+    .lorebase-settings .lorebase-template-editor-row > :last-child { grid-column: 3; grid-row: 1 / 3; justify-self: center; }
+    .lorebase-settings .lorebase-template-editor-property-cell code { white-space: normal; overflow-wrap: anywhere; font-size: 11px; }
+    .lorebase-settings .lorebase-template-editor-list { max-height: 65dvh; }
+    .lorebase-settings :is(.lorebase-import-route, .lorebase-import-modes, .lorebase-import-rule-inputs) { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-settings .lorebase-import-route-arrow { display: none; }
+    .lorebase-settings .lorebase-media-library-path { min-width: 0; overflow-wrap: anywhere; }
+    .lorebase-settings .lorebase-provider-credentials { width: 100%; }
+    .lorebase-settings .lorebase-settings-support-actions { gap: 4px; }
+    .lorebase-settings .lorebase-settings-support-button { min-height: 36px; }
+
+    /* Statistics: compact chrome, natural widget heights and two-column cards. */
+    .lorebase-dashboard { --stat-space: 12px; --stat-body-text: 13px; --stat-caption: 11px; --stat-heading: 15px; }
+    .lorebase-dashboard[data-density="compact"] { --stat-space: 10px; }
+    .lorebase-dashboard .lb-stat-header { display: flex; align-items: center; padding: calc(10px + var(--lb-phone-top)) 12px 8px; gap: 8px; }
+    .lorebase-dashboard .lb-stat-heading { flex: 1; min-width: 0; }
+    .lorebase-dashboard .lb-stat-heading h2 { font-size: 19px; line-height: 1.2; }
+    .lorebase-dashboard .lb-stat-heading :is(p, .lb-stat-icon) { display: none; }
+    .lorebase-dashboard .lb-stat-header-actions { flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }
+    .lorebase-dashboard .lb-stat-header-actions > button { width: 38px; height: 40px; min-height: 40px; padding: 8px; justify-content: center; }
+    .lorebase-dashboard .lb-stat-layout-toggle > span:not(.lb-stat-icon),
+    .lorebase-dashboard .lb-stat-filter-toggle > span:not(.lb-stat-icon):not(.lb-stat-filter-count) {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    .lorebase-dashboard .lb-stat-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px; }
+    .lorebase-dashboard .lb-stat-tab { justify-content: center; font-size: 13px; gap: 5px; padding: 8px 2px; }
+    .lorebase-dashboard .lb-stat-filters { padding: 10px 12px; }
+    .lorebase-dashboard .lb-stat-filter-primary { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .lorebase-dashboard .lb-stat-filter-primary > .lb-stat-select:nth-child(n) { width: 100%; min-width: 0; }
+    .lorebase-dashboard .lb-stat-period { grid-column: 1 / -1; width: 100%; justify-content: space-between; }
+    .lorebase-dashboard .lb-stat-period > button { flex: 1; min-height: 36px; padding: 5px; font-size: 12px; }
+    .lorebase-dashboard .lb-stat-search { grid-column: 1 / -1; grid-row: 3; min-width: 0; min-height: 42px; padding-right: 52px; }
+    .lorebase-dashboard .lb-stat-filter-toggle { position: absolute; bottom: 1px; right: 1px; width: 40px; height: 40px; min-height: 40px; padding: 8px; justify-content: center; border: 0; border-left: 1px solid var(--background-modifier-border); border-radius: 0 8px 8px 0; }
+    .lorebase-dashboard .lb-stat-filter-count { position: absolute; top: 0; right: 0; font-size: 9px; min-width: 14px; padding: 0 3px; }
+    .lorebase-dashboard .lb-stat-extra-filters { gap: 10px; }
+    .lorebase-dashboard .lb-stat-extra-filters > .lb-stat-select { flex: 1 1 130px; min-width: 0; }
+    .lorebase-dashboard .lb-stat-body { padding: 12px 12px calc(16px + var(--lb-phone-bottom)); scrollbar-gutter: auto; }
+    .lorebase-dashboard .lb-stat-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .lorebase-dashboard .lb-stat-widget { grid-column: span 2 !important; }
+    .lorebase-dashboard .lb-stat-widget[data-widget*="-kpi-"] { grid-column: span 1 !important; }
+    /* Desktop resize preferences must not leave 500px empty phone panels. */
+    .lorebase-dashboard .lb-stat-widget > :is(.lb-stat-panel, .lb-stat-quality-details) { height: auto !important; min-height: 0 !important; padding: 12px; flex: 0 0 auto; }
+    .lorebase-dashboard .lb-stat-widget .lb-stat-panel-heading { gap: 8px; margin-bottom: 14px; }
+    .lorebase-dashboard .lb-stat-widget h3 { font-size: 15px; }
+    .lorebase-dashboard .lb-stat-widget-resize { display: none; }
+    .lorebase-dashboard .lb-stat-widget > .lb-stat-kpi { min-height: 108px; padding: 12px 10px 12px 38px; gap: 5px; }
+    .lorebase-dashboard .lb-stat-kpi .lb-stat-kpi-label > .lb-stat-icon { left: 12px; width: 17px; height: 17px; }
+    .lorebase-dashboard .lb-stat-kpi > strong { font-size: 26px; }
+    .lorebase-dashboard .lb-stat-collection-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    .lorebase-dashboard :is(.lb-stat-composition, .lb-stat-time-overview > .lb-stat-time-visual) { flex-direction: column; gap: 10px; }
+    .lorebase-dashboard .lb-stat-donut { width: 156px; }
+    .lorebase-dashboard .lb-stat-collection .lb-stat-media { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .lorebase-dashboard .lb-stat-media-name { flex-wrap: wrap; gap: 6px; }
+    .lorebase-dashboard .lb-stat-media-name > span:last-child { margin-left: auto; font-size: 11px; }
+    .lorebase-dashboard .lb-stat-media-progress { flex-wrap: wrap; gap: 8px; font-size: 12px; }
+    .lorebase-dashboard .lb-stat-time-overview { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .lorebase-dashboard .lb-stat-time-sources { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .lorebase-dashboard .lb-stat-time-source { min-height: 64px; padding: 10px; }
+    .lorebase-dashboard .lb-stat-time-explanation { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .lorebase-dashboard .lb-stat-time-facts { padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--background-modifier-border); }
+    .lorebase-dashboard .lb-stat-source-value { font-size: 28px; }
+    .lorebase-dashboard .lb-stat-ratings { flex: none; height: 150px; min-height: 150px; }
+    .lorebase-dashboard .lb-stat-timeline-panel .lb-stat-timeline { flex: none; height: 190px; min-height: 190px; }
+    .lorebase-dashboard .lb-stat-legend { gap: 8px 12px; flex-wrap: wrap; font-size: 11px; }
+    .lorebase-dashboard .lb-stat-legend > small { flex: 1 1 100%; margin-left: 0; }
+    .lorebase-dashboard .lb-stat-genre-tile { min-height: 50px; }
+    .lorebase-dashboard .lb-stat-status-overview { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+    .lorebase-dashboard .lb-stat-status-ring { width: 96px; }
+    .lorebase-dashboard .lb-stat-status-ring strong { font-size: 23px; }
+    .lorebase-dashboard .lb-stat-map-layout { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-dashboard .lb-stat-map { height: auto; min-height: 0; }
+    .lorebase-dashboard .lb-stat-map svg { height: 200px; max-height: 200px; }
+    .lorebase-dashboard .lb-stat-map-controls { flex-wrap: wrap; gap: 6px; }
+    .lorebase-dashboard .lb-stat-map-controls > button { min-height: 38px; }
+    .lorebase-dashboard .lb-stat-activity-grid { gap: 3px; }
+    .lorebase-dashboard .lb-stat-activity-months { gap: 3px; }
+    .lorebase-dashboard .lb-stat-activity-months > small { font-size: 9px; }
+    .lorebase-dashboard .lb-stat-title-controls { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .lorebase-dashboard .lb-stat-title-controls > .lb-stat-select { width: 100%; min-width: 0; margin: 0; }
+    .lorebase-dashboard[data-card-size] .lb-stat-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .lorebase-dashboard .lb-stat-results-list { padding: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lorebase-dashboard .lb-stat-title-list:not(.lb-stat-card-grid) { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-dashboard .lb-stat-customization { inset: 8px; width: auto; max-width: none; padding: 16px; }
+
+    /* Release calendar shares its responsive gallery with desktop. */
+    .lorebase-release-calendar { padding-top: calc(12px + var(--lb-phone-top)); }
+    .lorebase-release-calendar .lorebase-release-header { padding-right: 44px; }
+    .lorebase-release-calendar .lorebase-release-body { margin-inline: -12px; padding-bottom: calc(16px + var(--lb-phone-bottom)); }
+    /* Collections use two poster columns and a wrapping action header. */
+    .lorebase-custom-groups { padding: calc(12px + var(--lb-phone-top)) 12px 0; }
+    .lorebase-custom-groups .lorebase-groups-header { padding: 0 44px 14px 0; gap: 10px; }
+    .lorebase-custom-groups .lorebase-groups-header h2 { font-size: 19px; }
+    .lorebase-custom-groups .lorebase-groups-toolbar { flex-wrap: wrap; gap: 10px; }
+    .lorebase-custom-groups .lorebase-groups-title { flex: 1 1 140px; }
+    .lorebase-custom-groups .lorebase-groups-title h3 { white-space: normal; overflow-wrap: anywhere; font-size: 18px; }
+    .lorebase-custom-groups .lorebase-groups-actions { flex-wrap: wrap; }
+    .lorebase-custom-groups .lorebase-select-search-grid { flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; overflow: visible; }
+    .lorebase-custom-groups .lorebase-groups-member-remove { opacity: 1; width: 32px; height: 32px; }
+    .lorebase-custom-groups .lorebase-groups-scroll { padding: 12px 0 calc(16px + var(--lb-phone-bottom)); }
+    .lorebase-custom-groups .lorebase-groups-member { width: 100%; min-width: 0; }
+
+    /* Other plugin dialogs share the same phone boundaries and action sizing. */
+    .modal.lorebase-manual-create-container > .modal-content { height: 100%; padding: 12px; overflow-y: auto; }
+    .lorebase-manual-create-body { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-manual-cover-panel { position: static; }
+    :is(.lorebase-trakt-footer, .lorebase-related-picker-footer, .lorebase-note-import-review-footer) { flex-wrap: wrap; gap: 8px; }
+    :is(.lorebase-trakt-footer, .lorebase-related-picker-footer, .lorebase-note-import-review-footer) > button { min-height: 42px; min-width: 0; white-space: normal; }
+    .lorebase-trakt-review.lorebase-add-workspace .lorebase-trakt-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .lorebase-related-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lorebase-psn-settings-fields { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-poster-gallery-thumbnails { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    /* Floating controls are portalled to body, so they need their own scope. */
+    .lorebase-floating-dropdown-panel { max-width: calc(100vw - 16px); box-sizing: border-box; }
+    .lorebase-floating-dropdown-panel .lorebase-settings-dropdown-option { min-height: 40px; }
+    .lorebase-field-picker-panel .lorebase-field-picker-list { max-height: 50dvh; }
+}
+
+/* Small phones keep their controls and text instead of clipping at the sides. */
+@media (max-width: 360px) {
+    .lorebase-toolbar .lorebase-toolbar-mobile-label { font-size: 10px; }
+    .lorebase-dashboard .lb-stat-heading h2 { font-size: 17px; }
+    .lorebase-dashboard .lb-stat-header-actions > button { width: 34px; min-width: 34px; padding: 7px; }
+    .lorebase-dashboard .lb-stat-status-overview { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-dashboard .lb-stat-status-ring { width: 110px; margin-inline: auto; }
+    .lorebase-settings .lorebase-settings-section-tabs { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+    .lorebase-view *, .lorebase-editmode-root *, .lorebase-dashboard * { scroll-behavior: auto; }
+}
