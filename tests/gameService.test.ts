@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { TFolder } from 'obsidian';
 import { extractMarkdownSection, GameService, upsertMarkdownSection } from '../src/services/GameService';
 import type { GameItem } from '../src/types';
 import { DEFAULT_SETTINGS } from '../src/constants';
 import { createMockApp, createBaseFilter, createMetadataService, createMockFile } from './helpers/testHelpers';
 import { getSortOptionsForMediaType, getStatusOptionsForMediaType } from '../src/views/library/viewOptions';
+import { groupMediaItems } from '../src/services/media/libraryViewState';
 
 describe('GameService', () => {
     it('parses frontmatter from cache into game model', () => {
@@ -14,7 +16,8 @@ describe('GameService', () => {
                     type: 'game',
                     poster: 'https://cdn.example/me.jpg',
                     status: 'played',
-                    userRating: '5',
+                    userRating: '7.3',
+                    detailed_ratings: [{ name: 'Story', value: 8.4 }],
                     year: '2007',
                     plot: 'Sci-fi RPG',
                     favorite: true,
@@ -54,7 +57,8 @@ describe('GameService', () => {
         expect(parsed).not.toBeNull();
         expect(parsed?.type).toBe('game');
         expect(parsed?.status).toBe('completed');
-        expect(parsed?.userRating).toBe(5);
+        expect(parsed?.userRating).toBe(7.3);
+        expect(parsed?.detailedRatings).toEqual([{ name: 'Story', value: 8.4 }]);
         expect(parsed?.year).toBe(2007);
         expect(parsed?.isAdult).toBe(true);
         expect(parsed?.tags).toContain('sci-fi');
@@ -82,6 +86,33 @@ describe('GameService', () => {
                 title: 'Mass Effect: Redemption',
             },
         ]);
+    });
+
+
+    it('loads only games and untyped notes from a shared media folder', async () => {
+        const entries = [
+            { title: 'Typed game', type: 'game' },
+            { title: 'Game with padded type', type: ' GAME ' },
+            { title: 'Legacy game' },
+            { title: 'Blank type', type: '  ' },
+            { title: 'Series', type: 'series' },
+            { title: 'Movie', type: 'movie' },
+            { title: 'Anime', type: 'anime' },
+            { title: 'Book', type: 'book' },
+            { title: 'Manga', type: 'manga' },
+            { title: 'Music', type: 'music' },
+        ];
+        const files = entries.map(({ title }) => createMockFile(`Shared/${title}.md`, title));
+        const app = createMockApp(Object.fromEntries(files.map((file, index) => [
+            file.path, { frontmatter: entries[index] },
+        ])));
+        const folder = Object.assign(new TFolder('Shared'), { children: files });
+        app.vault.getAbstractFileByPath = path => path === folder.path ? folder : null;
+        const service = new GameService(app, createMetadataService(app));
+        service.setFolderPath(folder.path);
+
+        const games = await service.loadGames();
+        expect(games.map(game => game.displayName)).toEqual(['Typed game', 'Game with padded type', 'Legacy game', 'Blank type']);
     });
 
     it('serializes related media when a game is edited', async () => {
@@ -249,7 +280,7 @@ describe('GameService', () => {
         expect(getSortOptionsForMediaType('game')[0]).toMatchObject({ field: 'series' });
     });
 
-    it('sorts games chronologically inside series groups', () => {
+    it('keeps the selected game sort inside library series groups', () => {
         const app = createMockApp({});
         const service = new GameService(app, createMetadataService(app));
         const createGame = (displayName: string, year: number): GameItem => ({
@@ -273,16 +304,19 @@ describe('GameService', () => {
             genres: [],
         });
 
-        const sortedByName = [
+        const items = [
             createGame('Alpha', 2024),
             createGame('Bravo', 1999),
             createGame('Charlie', 2010),
         ];
 
-        const grouped = service.groupBySeries(sortedByName, 'asc');
-        const seriesItems = Array.from(grouped.values())[0] ?? [];
-
-        expect(seriesItems.map((item) => item.displayName)).toEqual(['Bravo', 'Charlie', 'Alpha']);
+        const sortedByYear = service.filterAndSort(items, createBaseFilter(), 'year', 'asc', true);
+        const grouped = groupMediaItems(sortedByYear, 'series', 'asc', 'en-US');
+        expect(grouped[0].label).toBe('Same series');
+        expect(grouped[0].items.map(item => item.displayName)).toEqual(['Bravo', 'Charlie', 'Alpha']);
+        const sortedByName = service.filterAndSort(items, createBaseFilter(), 'name', 'desc', true);
+        expect(groupMediaItems(sortedByName, 'series', 'asc', 'en-US')[0].items.map(item => item.displayName))
+            .toEqual(['Charlie', 'Bravo', 'Alpha']);
     });
 
     it('uses custom status labels without changing status values', () => {

@@ -1,3 +1,16 @@
+import { releaseDatePatch } from '../utils/releaseDates';
+import { normalizeStatusReasons } from '../utils/statusReasons';
+import { normalizeDiscovery, discoveryFrontmatter } from '../utils/discovery';
+import { normalizePriority } from '../utils/priority';
+import { normalizePersonalDate, personalDateTimestamp, readPersonalDate } from '../utils/personalDates';
+import { wikilinkLabel } from './integrations/templateValues';
+import { normalizePlatformPlaythroughs, totalPlatformRepeats, normalizeRepeatCount } from '../utils/repeatTracking';
+import { normalizeMediaWorkType } from '../utils/mediaWorkType';
+import { trackingNumber, gameModes } from '../utils/gameTracking';
+import { normalizePlayStationTracking } from './playstation/types';
+import { isSyncUrl, syncSourceFromFrontmatter } from '../utils/syncSource';
+import { parseDetailedRatings } from '../utils/detailedRatings';
+import { isCustomStatus, countCustomStatus } from '../statusPresentation';
 /**
  * LOREBASE - Game Service (Optimized)
  * Handles game data loading, caching, filtering, and sorting
@@ -7,13 +20,13 @@
 import { App, TFile, TFolder } from 'obsidian';
 import { GameDlc, GameItem, GameStatus, FilterState, GameStats, SortField, SortOrder } from '../types';
 import { MetadataService } from './MetadataService';
-import { DEFAULT_COVER } from '../constants';
+import { DEFAULT_COVER, DEFAULT_SETTINGS } from '../constants';
 import { t } from '../localization';
 import { filterAndSortMedia } from './media/filtering';
 import { extractSimpleFrontmatter } from './media/libraryViewState';
-import { getRandomItem, parseRelatedMedia, serializeRelatedMedia } from './media/parsers';
+import { getRandomItem, parseRelatedMedia, parseUserRating, serializeRelatedMedia } from './media/parsers';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, mapInFrameBatches, normalizeCacheTags } from './media/serviceUtils';
-import { upsertMarkdownSection } from './markdownSections';
+import { updateMarkdownSection } from './markdownSections';
 
 export { extractMarkdownSection, upsertMarkdownSection } from './markdownSections';
 
@@ -28,7 +41,7 @@ export class GameService {
     private metadataService: MetadataService;
     private cache: GameItem[] = [];
     private cacheValid = false;
-    private folderPath = 'Games';
+    private folderPath = DEFAULT_SETTINGS.games.folderPath;
 
     constructor(app: App, metadataService: MetadataService) {
         this.app = app;
@@ -81,32 +94,7 @@ export class GameService {
     }
 
     private parseCompletionDate(value: unknown): number | null {
-        if (value === null || value === undefined) return null;
-
-        if (value instanceof Date) {
-            return value.getTime();
-        }
-
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            if (value >= 1900 && value <= 2100) {
-                return new Date(value, 0, 1).getTime();
-            }
-            if (value > 1e12) return value;
-            if (value > 1e9) return value * 1000;
-            return null;
-        }
-
-        if (typeof value === 'string') {
-            const trimmed = value.trim();
-            if (!trimmed) return null;
-            if (/^\d{4}$/.test(trimmed)) {
-                return new Date(Number(trimmed), 0, 1).getTime();
-            }
-            const parsed = Date.parse(trimmed);
-            return Number.isNaN(parsed) ? null : parsed;
-        }
-
-        return null;
+        return personalDateTimestamp(value);
     }
 
     private normalizeCompletionDateForFrontmatter(timestamp: number): string {
@@ -118,6 +106,7 @@ export class GameService {
     }
 
     private readCompletionTimestamp(frontmatter: Record<string, unknown>, finished: string | null): number | null {
+        if (finished !== null || Object.prototype.hasOwnProperty.call(frontmatter, 'finished')) return personalDateTimestamp(finished);
         return this.parseCompletionDate(finished)
             ?? this.parseCompletionDate(frontmatter.dateCompleted)
             ?? this.parseCompletionDate(frontmatter.completionDate);
@@ -128,21 +117,25 @@ export class GameService {
         return Boolean(Object.prototype.hasOwnProperty.call(frontmatter, key));
     }
 
-    private readFrontmatterText(frontmatter: Record<string, unknown>, keys: string[]): string | null {
+    private readFrontmatterText(
+        frontmatter: Record<string, unknown>,
+        keys: string[],
+        label: (text: string) => string = String,
+    ): string | null {
         for (const key of keys) {
             const value = frontmatter[key];
             if (value === undefined || value === null) continue;
 
             if (Array.isArray(value)) {
                 const normalized = value
-                    .map(item => String(item).trim())
+                    .map(item => label(String(item).trim()))
                     .filter(Boolean)
                     .join(', ');
                 if (normalized) return normalized;
                 continue;
             }
 
-            const normalized = String(value).trim();
+            const normalized = label(String(value).trim());
             if (normalized) return normalized;
         }
         return null;
@@ -159,23 +152,11 @@ export class GameService {
     }
 
     private readFrontmatterDateText(frontmatter: Record<string, unknown>, keys: string[]): string | null {
-        const text = this.readFrontmatterText(frontmatter, keys);
-        if (!text) return null;
-        const normalized = this.normalizeDateString(text);
-        return normalized || text;
+        return readPersonalDate(frontmatter, keys);
     }
 
     private normalizeDateString(value: string | null | undefined): string {
-        const trimmed = (value ?? '').trim();
-        if (!trimmed) return '';
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        const parsed = Date.parse(trimmed);
-        if (Number.isNaN(parsed)) return '';
-        const date = new Date(parsed);
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return normalizePersonalDate(value);
     }
 
     private normalizeListForFrontmatter(values: string[] | undefined, removeHashPrefix: boolean = false): string[] {
@@ -245,11 +226,7 @@ export class GameService {
     }
 
     private parseUserRating(value: unknown): GameDlc['userRating'] {
-        if (value === null || value === undefined || value === '') return null;
-        const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-        return Number.isFinite(parsed) && parsed >= 1 && parsed <= 5
-            ? parsed as GameDlc['userRating']
-            : null;
+        return parseUserRating(value);
     }
 
     private updateFrontmatterTextField(
@@ -342,38 +319,16 @@ export class GameService {
         frontmatter: Record<string, unknown> | null | undefined,
         value: string | null | undefined
     ): void {
-        const normalized = (value ?? '').trim();
-        if (!normalized) {
-            if (this.hasFrontmatterKey(frontmatter, 'released')) {
-                frontmatterUpdates.released = null;
-                return;
-            }
-            if (this.hasFrontmatterKey(frontmatter, 'release_date')) {
-                frontmatterUpdates.release_date = null;
-                return;
-            }
-            frontmatterUpdates.releaseDate = null;
-            return;
-        }
-
-        if (this.hasFrontmatterKey(frontmatter, 'released')) {
-            frontmatterUpdates.released = normalized;
-            return;
-        }
-        if (this.hasFrontmatterKey(frontmatter, 'release_date')) {
-            frontmatterUpdates.release_date = normalized;
-            return;
-        }
-        frontmatterUpdates.releaseDate = normalized;
+        Object.assign(frontmatterUpdates,releaseDatePatch(frontmatter ?? {},value,['released','release_date','releaseDate','release'],'releaseDate'));
     }
 
     public parseGameFromCache(file: TFile): GameItem | null {
         try {
             const cache = this.app.metadataCache.getFileCache(file);
-            const metadata = cache?.frontmatter || {};
+            const metadata = this.metadataService.resolveFrontmatter('game', cache?.frontmatter || {});
 
-            const rawType = typeof metadata.type === 'string' ? metadata.type.toLowerCase() : '';
-            if (rawType === 'anime') {
+            const rawType = typeof metadata.type === 'string' ? metadata.type.trim().toLowerCase() : '';
+            if (rawType && rawType !== 'game') {
                 return null;
             }
 
@@ -391,16 +346,18 @@ export class GameService {
                 this.readFrontmatterText(metadata, ['platforms', 'platform', 'Platforms', 'Platform']) ?? undefined
             );
             const started = this.readFrontmatterDateText(metadata, ['started', 'dateStarted', 'start_date']);
-            const finished = this.readFrontmatterDateText(metadata, ['finished', 'dateFinished', 'finish_date']);
+            const finished = this.readFrontmatterDateText(metadata, ['finished', 'dateFinished', 'finish_date', 'dateCompleted', 'completionDate']);
             const dateCompleted = this.readCompletionTimestamp(metadata, finished);
             const releaseDate = this.readFrontmatterText(metadata, ['releaseDate', 'release_date', 'released', 'release']);
-            const publisher = this.readFrontmatterText(metadata, ['publisher', 'publishers']) ?? '';
-            const developer = this.readFrontmatterText(metadata, ['developer', 'developers']) ?? '';
+            const publisher = this.readFrontmatterText(metadata, ['publisher', 'publishers'], wikilinkLabel) ?? '';
+            const developer = this.readFrontmatterText(metadata, ['developer', 'developers'], wikilinkLabel) ?? '';
             const title = this.readFrontmatterText(metadata, ['name', 'title']) ?? file.basename ?? 'Unknown';
-            const sourceUrl = this.readFrontmatterText(metadata, ['url', 'source_url']);
+            const rawSourceUrl = this.readFrontmatterText(metadata, ['url', 'source_url']);
+            const syncSource = syncSourceFromFrontmatter('game', metadata);
+            const sourceUrl = syncSource?.url || rawSourceUrl;
             const steamAppId = this.readFrontmatterText(metadata, ['steamAppId', 'steam_appid', 'appid']);
             const integrationProviderRaw = (this.readFrontmatterText(metadata, ['integration_provider']) ?? '').toLowerCase();
-            const integrationProvider = integrationProviderRaw === 'rawg' || integrationProviderRaw === 'steam' || integrationProviderRaw === 'igdb'
+            const integrationProvider = integrationProviderRaw === 'rawg' || integrationProviderRaw === 'steam' || integrationProviderRaw === 'igdb' || integrationProviderRaw === 'vndb'
                 ? integrationProviderRaw
                 : steamAppId
                     ? 'steam'
@@ -413,7 +370,7 @@ export class GameService {
             // @deprecated Legacy boolean status fallback kept for old notes.
             if (statusNormalized === 'played') {
                 status = 'completed';
-            } else if (['completed', 'playing', 'dropped', 'sandbox', 'wishlist', 'not_started'].includes(statusNormalized)) {
+            } else if (isCustomStatus(statusNormalized) || ['completed', 'playing', 'dropped', 'sandbox', 'wishlist', 'not_started', 'to_be_released'].includes(statusNormalized)) {
                 status = statusNormalized as GameStatus;
             } else if (isTruthy(metadata.played)) {
                 status = 'completed';
@@ -428,15 +385,7 @@ export class GameService {
             }
 
             // Parse rating safely
-            let userRating = null;
-            if (metadata.userRating !== undefined && metadata.userRating !== null) {
-                const rating = typeof metadata.userRating === 'string'
-                    ? parseInt(metadata.userRating, 10)
-                    : Number(metadata.userRating);
-                if (!isNaN(rating) && rating >= 1 && rating <= 5) {
-                    userRating = rating as 1 | 2 | 3 | 4 | 5;
-                }
-            }
+            const userRating = parseUserRating(metadata.userRating);
 
             // Parse year safely
             let year: number | null = null;
@@ -455,13 +404,26 @@ export class GameService {
                 year,
                 description: String(metadata.plot || ''),
                 userRating,
+                detailedRatings: parseDetailedRatings(metadata.detailed_ratings),
                 favorite: isTruthy(metadata.favorite),
+                priority: normalizePriority(metadata.personal_priority),
+                discovery: normalizeDiscovery(metadata.discovery_context),
+                statusReasons: normalizeStatusReasons(metadata.status_reasons),
                 poster: rawPoster,
                 imageUrl: imageUrl || rawPoster || DEFAULT_COVER,
                 horizontalImageUrl: horizontalImageUrl || rawHorizontalPoster || null,
                 hasCustomPoster: Boolean(metadata.cm_poster),
                 isAdult: isTruthy(metadata.Sex18),
+                workType: normalizeMediaWorkType('game', metadata.work_type ?? metadata.workType),
                 status,
+                progressPercent: trackingNumber(metadata.progress_percent, 100),
+                playtimeMinutes: trackingNumber(metadata.playtime),
+                achievementsUnlocked: trackingNumber(metadata.achievements_unlocked),
+                achievementsTotal: trackingNumber(metadata.achievements_total),
+                playstation: normalizePlayStationTracking(metadata.playstation),
+                syncSource,
+                metadataSourceUrl: typeof metadata.metadata_url === 'string' ? metadata.metadata_url : syncSource && rawSourceUrl && !isSyncUrl(rawSourceUrl) ? rawSourceUrl : null,
+                gameModes: gameModes(metadata.game_modes),
                 gameSeries: String(metadata.gameSeries || ''),
                 dateCompleted,
                 started,
@@ -471,6 +433,9 @@ export class GameService {
                 developer,
                 tags,
                 genres,
+                repeatCount: normalizeRepeatCount(metadata.repeat_count),
+                playedOn: typeof metadata.played_on === 'string' ? metadata.played_on.trim() : '',
+                platformPlaythroughs: normalizePlatformPlaythroughs(metadata.platform_playthroughs, typeof metadata.played_on === 'string' ? metadata.played_on : '', normalizeRepeatCount(metadata.repeat_count)),
                 platforms,
                 sourceUrl,
                 integrationProvider,
@@ -519,50 +484,10 @@ export class GameService {
         });
     }
 
-    /**
-     * Group games by series - SIMPLIFIED
-     */
-    groupBySeries(games: GameItem[], sortOrder: SortOrder): Map<string, GameItem[]> {
-        const grouped = new Map<string, GameItem[]>();
-        const noSeriesKey = t('noSeries');
-
-        for (const game of games) {
-            if (!game) continue;
-            const series = game.gameSeries || noSeriesKey;
-            if (!grouped.has(series)) {
-                grouped.set(series, []);
-            }
-            grouped.get(series)!.push(game);
-        }
-
-        // Sort within each series by release year for chronological series order.
-        for (const seriesGames of grouped.values()) {
-            seriesGames.sort((a, b) => {
-                const aYear = a?.year ?? 0;
-                const bYear = b?.year ?? 0;
-                return sortOrder === 'asc' ? aYear - bYear : bYear - aYear;
-            });
-        }
-
-        // Sort series keys
-        const sortedKeys = Array.from(grouped.keys()).sort((a, b) => {
-            if (a === noSeriesKey) return 1;
-            if (b === noSeriesKey) return -1;
-            return sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
-        });
-
-        const sortedMap = new Map<string, GameItem[]>();
-        for (const key of sortedKeys) {
-            sortedMap.set(key, grouped.get(key)!);
-        }
-
-        return sortedMap;
-    }
-
     calculateStats(games: GameItem[]): GameStats {
         const stats: GameStats = {
             total: games.length,
-            completed: 0, playing: 0, dropped: 0, sandbox: 0, wishlist: 0, notStarted: 0,
+            completed: 0, playing: 0, dropped: 0, sandbox: 0, wishlist: 0, notStarted: 0, toBeReleased: 0,
             favorite: 0, withRating: 0, avgRating: 0,
             customPosters: 0, adult: 0, seriesCount: 0,
             ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
@@ -576,12 +501,14 @@ export class GameService {
             if (!game) continue;
 
             switch (game.status) {
+                default: countCustomStatus(stats, game.status); break;
                 case 'completed': stats.completed++; break;
                 case 'playing': stats.playing++; break;
                 case 'dropped': stats.dropped++; break;
                 case 'sandbox': stats.sandbox++; break;
                 case 'wishlist': stats.wishlist++; break;
                 case 'not_started': stats.notStarted++; break;
+                case 'to_be_released': stats.toBeReleased++; break;
             }
 
             if (game.favorite) stats.favorite++;
@@ -591,7 +518,7 @@ export class GameService {
             if (game.userRating) {
                 stats.withRating++;
                 ratingSum += game.userRating;
-                stats.ratingDistribution[game.userRating]++;
+                stats.ratingDistribution[game.userRating] = (stats.ratingDistribution[game.userRating] || 0) + 1;
             }
 
             if (game.gameSeries && game.gameSeries !== t('noSeries')) {
@@ -610,6 +537,7 @@ export class GameService {
                     sandbox: Math.round((stats.sandbox / stats.total) * 1000) / 10,
                     wishlist: Math.round((stats.wishlist / stats.total) * 1000) / 10,
                     notStarted: Math.round((stats.notStarted / stats.total) * 1000) / 10,
+                    toBeReleased: Math.round((stats.toBeReleased / stats.total) * 1000) / 10,
                 };
             }
 
@@ -624,10 +552,30 @@ export class GameService {
         }
 
         const frontmatterUpdates: Record<string, unknown> = {};
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        if ('countries' in updates) frontmatterUpdates.countries = updates.countries ?? [];
+        if ('progressPercent' in updates) frontmatterUpdates.progress_percent = trackingNumber(updates.progressPercent, 100);
+        if ('playtimeMinutes' in updates) frontmatterUpdates.playtime = trackingNumber(updates.playtimeMinutes);
+        if ('achievementsUnlocked' in updates) frontmatterUpdates.achievements_unlocked = trackingNumber(updates.achievementsUnlocked);
+        if ('achievementsTotal' in updates) frontmatterUpdates.achievements_total = trackingNumber(updates.achievementsTotal);
+        if ('playstation' in updates) frontmatterUpdates.playstation = normalizePlayStationTracking(updates.playstation) ?? null;
+        if ('gameModes' in updates) frontmatterUpdates.game_modes = gameModes(updates.gameModes);
+        if ('repeatCount' in updates) frontmatterUpdates.repeat_count = normalizeRepeatCount(updates.repeatCount);
+        if ('playedOn' in updates) frontmatterUpdates.played_on = updates.playedOn?.trim() || null;
+        if ('platformPlaythroughs' in updates) {
+            const entries = normalizePlatformPlaythroughs(updates.platformPlaythroughs);
+            frontmatterUpdates.platform_playthroughs = entries.map(entry => ({ platform: entry.platform, repeat_count: entry.repeatCount, selected: entry.selected }));
+            frontmatterUpdates.played_on = entries.find(entry => entry.selected)?.platform ?? null;
+            if (!('repeatCount' in updates)) frontmatterUpdates.repeat_count = totalPlatformRepeats(entries);
+        }
+        const rawFrontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const frontmatter = this.metadataService.resolveFrontmatter('game', rawFrontmatter || {});
 
+        if ('detailedRatings' in updates) frontmatterUpdates.detailed_ratings = parseDetailedRatings(updates.detailedRatings) ?? null;
         if ('userRating' in updates) frontmatterUpdates.userRating = updates.userRating;
         if ('favorite' in updates) frontmatterUpdates.favorite = updates.favorite;
+        if ('priority' in updates) frontmatterUpdates.personal_priority = normalizePriority(updates.priority);
+        if ('discovery' in updates) frontmatterUpdates.discovery_context = discoveryFrontmatter(updates.discovery);
+        if ('statusReasons' in updates) frontmatterUpdates.status_reasons = normalizeStatusReasons(updates.statusReasons) ?? null;
         if ('status' in updates) {
             frontmatterUpdates.status = updates.status ?? 'not_started';
             frontmatterUpdates.played = null;
@@ -636,6 +584,7 @@ export class GameService {
             frontmatterUpdates.sandbox = null;
             frontmatterUpdates.wishlist = null;
         }
+        if ('workType' in updates) frontmatterUpdates.work_type = normalizeMediaWorkType('game', updates.workType);
         if ('year' in updates) frontmatterUpdates.year = updates.year;
         if ('displayName' in updates) {
             const title = updates.displayName?.trim() ?? '';
@@ -655,6 +604,7 @@ export class GameService {
         if ('finished' in updates) {
             const normalizedFinished = this.normalizeDateString(updates.finished);
             frontmatterUpdates.finished = normalizedFinished || null;
+            for (const key of ['dateFinished', 'finish_date', 'completionDate']) frontmatterUpdates[key] = null;
             if (this.hasFrontmatterKey(frontmatter, 'dateCompleted')) frontmatterUpdates.dateCompleted = null;
             if (this.hasFrontmatterKey(frontmatter, 'completionDate')) frontmatterUpdates.completionDate = null;
         }
@@ -679,7 +629,7 @@ export class GameService {
         if ('isAdult' in updates) frontmatterUpdates.Sex18 = updates.isAdult;
         // Note: hasCustomPoster is read-only from cm_poster value, don't write boolean to it
 
-        await this.metadataService.updateMetadata(file, frontmatterUpdates);
+        await this.metadataService.updateMetadata(file, frontmatterUpdates, 'game');
         if ('myNotes' in updates) {
             await this.updateMyNotesSection(file, updates.myNotes ?? '');
         }
@@ -688,11 +638,7 @@ export class GameService {
     }
 
     private async updateMyNotesSection(file: TFile, value: string): Promise<void> {
-        const content = await this.app.vault.read(file);
-        const next = upsertMarkdownSection(content, MY_NOTES_HEADING, value);
-        if (next !== content) {
-            await this.app.vault.modify(file, next);
-        }
+        await updateMarkdownSection(this.app, file, value, MY_NOTES_HEADING);
     }
 
     async deleteGame(game: GameItem): Promise<boolean> {
