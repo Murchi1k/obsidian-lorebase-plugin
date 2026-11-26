@@ -1,0 +1,150 @@
+/* Trakt uses the plugin's accent and Obsidian theme surfaces. */
+.modal.lorebase-trakt-login-container, .modal.lorebase-trakt-review-container { --lb-trakt-accent: var(--lorebase-accent, var(--interactive-accent)); max-width: none; border-radius: 14px; padding: 0; overflow: hidden; }
+.modal.lorebase-trakt-login-container { width: min(490px, calc(100vw - 32px)); }
+.modal.lorebase-trakt-review-container { width: min(1000px, calc(100vw - 48px)); max-height: calc(100vh - 64px); }
+.modal.lorebase-trakt-review-container.has-few-items { width: min(780px, calc(100vw - 48px)); }
+.modal.lorebase-trakt-review-container.is-single-entry { width: min(560px, calc(100vw - 48px)); }
+.modal.lorebase-trakt-review-container.is-result { width: min(550px, calc(100vw - 32px)); }
+.lorebase-trakt-login-container > .modal-content, .lorebase-trakt-review-container > .modal-content { margin: 0; padding: 0; }
+.modal.lorebase-trakt-login-container .lorebase-trakt-login, .modal.lorebase-trakt-review-container .lorebase-trakt-review { display: flex; flex-direction: column; gap: 22px; padding: 30px; margin: 0; min-height: 0; max-height: calc(100vh - 64px); overflow: hidden; box-sizing: border-box; }
+.modal.lorebase-trakt-review-container:not(.is-result) .lorebase-trakt-review { gap: 16px; padding: 24px; }
+.lorebase-trakt-header { display: flex; align-items: flex-start; gap: 13px; padding-right: 20px; flex: 0 0 auto; }
+.modal.lorebase-trakt-login-container .lorebase-trakt-login { overflow-y: auto; }
+.lorebase-trakt-header-icon { display: grid; place-items: center; color: var(--lb-trakt-accent); width: 24px; height: 28px; flex: 0 0 24px; }
+.lorebase-trakt-header-icon svg { width: 23px; height: 23px; stroke-width: 1.8; }
+.lorebase-trakt-header h2 { margin: 0 0 5px; font-size: 20px; font-weight: 650; line-height: 1.4; }
+.lorebase-trakt-message { color: var(--text-muted); line-height: 1.5; font-size: 13px; }
+.lorebase-trakt-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 7px 13px; border: 1px solid var(--background-modifier-border); border-radius: 8px; box-shadow: none; font: inherit; font-size: 13px; line-height: 1.3; white-space: nowrap; }
+.lorebase-trakt-button svg { display: block; width: 15px; height: 15px; }
+.lorebase-trakt-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
+.lorebase-trakt-login-steps { display: flex; flex-direction: column; gap: 18px; }
+.lorebase-trakt-login-step { display: flex; gap: 11px; align-items: center; min-width: 0; }
+.lorebase-trakt-step-number { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; color: var(--text-muted); font-size: 11px; border: 1px solid var(--background-modifier-border); border-radius: 50%; font-variant-numeric: tabular-nums; }
+.lorebase-trakt-step-copy { flex: 1; min-width: 0; }
+.lorebase-trakt-login-step strong { font-size: 13px; font-weight: 500; }
+.lorebase-trakt-address { color: var(--text-muted); font-size: 11px; margin-top: 4px; overflow-wrap: anywhere; }
+.lorebase-trakt-open { background: transparent; min-height: 32px; padding: 6px 9px; font-size: 12px; }
+.lorebase-trakt-code-panel { display: flex; align-items: center; gap: 10px; padding: 18px 16px; margin: -6px 0 0 35px; border: 1px solid var(--background-modifier-border); border-radius: 10px; background: var(--background-secondary); }
+.lorebase-trakt-code { flex: 1; text-align: center; color: var(--text-normal); font-family: var(--font-monospace); font-size: 29px; line-height: 1.2; font-weight: 600; letter-spacing: .12em; user-select: text; }
+.lorebase-trakt-copy { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: var(--text-muted); }
+.lorebase-trakt-copy:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.lorebase-trakt-copy svg { width: 16px; height: 16px; }
+.lorebase-trakt-waiting { display: flex; align-items: center; gap: 8px; padding-top: 17px; border-top: 1px solid var(--background-modifier-border); color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.lorebase-trakt-waiting > span:first-child { flex: 0 0 14px; }
+.lorebase-trakt-waiting svg { display: block; width: 14px; height: 14px; }
+.lorebase-trakt-waiting.is-error { color: var(--text-error); }
+.lorebase-trakt-spinner svg { animation: lorebase-trakt-spin 1.2s linear infinite; }
+@keyframes lorebase-trakt-spin { to { transform: rotate(360deg); } }
+.lorebase-trakt-provider-field, .lorebase-trakt-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.lorebase-trakt-provider-field > label, .lorebase-trakt-field > label { color: var(--text-muted); font-size: 12px; }
+.lorebase-trakt-provider-field .lorebase-settings-dropdown, .lorebase-trakt-field .lorebase-settings-dropdown { width: 100%; min-width: 0; }
+.lorebase-trakt-settings { container-type: inline-size; }
+.lorebase-trakt-provider-fields { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(110px, 1fr) minmax(180px, 1.4fr); align-items: end; gap: 12px; padding: 8px 0; }
+.lorebase-trakt-provider-fields .lorebase-trakt-provider-field { gap: 5px; }
+.lorebase-trakt-provider-fields .lorebase-trakt-provider-field > label { font-size: 11px; }
+.lorebase-trakt-settings .lorebase-trakt-provider-fields .lorebase-settings-dropdown-btn { height: 32px; min-height: 32px; padding: 0 10px; border-radius: 7px; font-size: 12px; }
+.lorebase-trakt-toolbar { display: flex; gap: 16px; align-items: center; flex-shrink: 0; }
+.lorebase-trakt-search { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 0 12px; height: 39px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-secondary); }
+.lorebase-trakt-search:focus-within { border-color: var(--background-modifier-border-focus); box-shadow: 0 0 0 1px var(--background-modifier-border-focus); }
+.lorebase-trakt-search > span { display: inline-flex; color: var(--text-muted); }
+.lorebase-trakt-search svg { width: 16px; height: 16px; }
+.lorebase-trakt-search input[type=search] { width: 100%; min-width: 0; height: 100%; border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: none; font-size: 13px; }
+.lorebase-trakt-search input[type=search]:focus { box-shadow: none; }
+.lorebase-trakt-filters { display: flex; align-items: center; gap: 14px; }
+.lorebase-trakt-filters button { display: flex; align-items: center; gap: 5px; min-height: 34px; padding: 5px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12px; }
+.lorebase-trakt-filters button[aria-pressed=true] { border-bottom-color: var(--lb-trakt-accent); color: var(--text-normal); }
+.lorebase-trakt-filter-count { color: var(--text-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.lorebase-trakt-bulk { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: -9px; }
+.lorebase-trakt-bulk > span { margin-right: auto; font-size: 12px; }
+.lorebase-trakt-bulk .lorebase-trakt-button { min-height: 25px; padding: 3px 5px; background: transparent; color: var(--text-muted); border: 0; font-size: 11px; }
+.lorebase-trakt-bulk .lorebase-trakt-button:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.lorebase-trakt-bulk .lorebase-trakt-button svg { width: 13px; height: 13px; }
+.lorebase-trakt-review.lorebase-add-workspace .lorebase-trakt-items { display: grid; grid-template-columns: repeat(var(--lb-trakt-columns, 4), minmax(0, 210px)); grid-auto-rows: max-content; justify-content: center; align-items: start; align-content: start; gap: 16px; max-height: none; overflow-y: auto; min-height: 0; padding: 3px; flex: 0 1 auto; }
+.lorebase-trakt-item { border-radius: 10px; background: var(--background-secondary); overflow: hidden; min-width: 0; }
+.lorebase-trakt-item.has-selection { box-shadow: 0 0 0 1px var(--lb-trakt-accent); }
+.lorebase-trakt-review.lorebase-add-workspace .lorebase-trakt-items .lorebase-trakt-item-select { border-radius: 10px 10px 0 0; margin: 0; min-height: 0; }
+.lorebase-trakt-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lorebase-trakt-art.is-empty img { opacity: 0; }
+.lorebase-trakt-review .lorebase-trakt-item-copy { display: flex; flex-direction: column; gap: 4px; }
+.lorebase-trakt-review.lorebase-add-workspace .lorebase-select-card-title { height: auto; max-height: 40px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+.lorebase-trakt-facts { display: flex; flex-wrap: wrap; align-items: center; align-content: start; min-height: 34px; gap: 3px 11px; }
+.lorebase-trakt-fact { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; line-height: 1.5; color: var(--lb-add-photo-muted); }
+.lorebase-trakt-fact svg { display: block; width: 13px; height: 13px; stroke-width: 1.7; }
+.lorebase-trakt-favorite { color: var(--color-red); }
+.lorebase-trakt-favorite svg { fill: currentColor; stroke-width: 1.5; }
+.lorebase-trakt-poster-favorite { position: absolute; display: grid; place-items: center; top: 10px; right: 40px; width: 22px; height: 22px; border-radius: 50%; background: var(--lb-add-photo-bg); z-index: 3; }
+.lorebase-trakt-poster-favorite svg { width: 13px; height: 13px; }
+.lorebase-trakt-item-target { display: flex; align-items: center; gap: 5px; color: var(--lb-add-photo-muted); font-size: 10px; line-height: 1.5; margin-top: 3px; }
+.lorebase-trakt-item-target.is-linked { color: #b4ddc7; }
+.lorebase-trakt-item-target svg { display: block; width: 13px; height: 13px; }
+.lorebase-trakt-item-target.is-warning { color: var(--text-warning); }
+.lorebase-trakt-item-bottom { padding: 7px 10px; font-size: 11px; color: var(--text-muted); }
+button.lorebase-trakt-details-toggle { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; height: auto; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--text-muted); font: inherit; }
+.lorebase-trakt-item-bottom button.lorebase-trakt-details-toggle { justify-content: space-between; width: 100%; }
+.lorebase-trakt-details-toggle svg { display: block; width: 13px; height: 13px; }
+.lorebase-trakt-item-details { display: flex; flex-direction: column; gap: 15px; padding: 16px 14px; border-top: 1px solid var(--background-modifier-border); }
+.lorebase-trakt-item-details[hidden], .lorebase-trakt-pagination[hidden] { display: none; }
+.lorebase-trakt-stats { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.lorebase-trakt-stat-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 1.5; }
+.lorebase-trakt-stat-line > span { color: var(--text-muted); }
+.lorebase-trakt-stat-line strong { font-weight: 500; white-space: nowrap; }
+.lorebase-trakt-change.is-conflict .lorebase-trakt-stat-line > span { color: var(--text-warning); }
+.lorebase-trakt-note-value { color: var(--text-faint); font-size: 10px; margin-top: 4px; }
+.lorebase-trakt-seasons { color: var(--text-muted); font-size: 12px; }
+.lorebase-trakt-seasons summary { cursor: pointer; padding: 2px 0; }
+.lorebase-trakt-season-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px 14px; padding: 12px 0 0; }
+.lorebase-trakt-season { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 11px; }
+.lorebase-trakt-season > span:last-child { color: var(--text-normal); overflow-wrap: anywhere; text-align: right; }
+.lorebase-trakt-footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; padding-top: 18px; border-top: 1px solid var(--background-modifier-border); flex: 0 0 auto; }
+.lorebase-trakt-footer > .lorebase-trakt-message, .is-result .lorebase-trakt-footer > :first-child { margin-right: auto; }
+.lorebase-trakt-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
+.lorebase-trakt-pagination .lorebase-trakt-button { background: transparent; border: 0; min-height: 27px; padding: 4px; }
+.lorebase-trakt-empty { grid-column: 1 / -1; padding: 45px 16px; color: var(--text-muted); text-align: center; font-size: 13px; }
+.lorebase-trakt-error { color: var(--text-error); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.lorebase-trakt-loading { padding: 30px 0; text-align: center; color: var(--text-muted); }
+.lorebase-trakt-loading svg { width: 24px; height: 24px; }
+.is-finished .lorebase-trakt-header-icon { color: var(--color-green); }
+.is-finished.has-errors .lorebase-trakt-header-icon { color: var(--text-warning); }
+.lorebase-trakt-result-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lorebase-trakt-result-counts > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px 8px; padding: 15px; border: 1px solid var(--background-modifier-border); border-radius: 9px; background: var(--background-secondary); }
+.lorebase-trakt-result-counts > div > span:first-child { color: var(--text-muted); }
+.lorebase-trakt-result-counts svg { display: block; width: 17px; height: 17px; }
+.lorebase-trakt-result-counts strong { color: var(--text-normal); font-size: 25px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lorebase-trakt-result-counts > div > span:last-child { color: var(--text-muted); font-size: 12px; grid-column: 1 / -1; }
+.lorebase-trakt-result-errors { max-height: 220px; overflow-y: auto; min-height: 0; color: var(--text-muted); font-size: 12px; }
+.lorebase-trakt-result-errors summary { cursor: pointer; padding-bottom: 8px; }
+.lorebase-trakt-result-errors .lorebase-trakt-error + .lorebase-trakt-error { margin-top: 8px; }
+.lorebase-trakt-import-progress { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--background-modifier-border); border-radius: 9px; background: var(--background-secondary); }
+.lorebase-trakt-progress-line { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.lorebase-trakt-current { font-size: 13px; line-height: 1.5; min-height: 20px; overflow-wrap: anywhere; }
+.lorebase-trakt-progress { display: block; width: 100%; height: 4px; border: 0; border-radius: 3px; overflow: hidden; appearance: none; background: var(--background-modifier-hover); }
+.lorebase-trakt-progress::-webkit-progress-bar { background: var(--background-modifier-hover); }
+.lorebase-trakt-progress::-webkit-progress-value { background: var(--lb-trakt-accent); border-radius: 3px; transition: width .2s ease; }
+@container (max-width: 520px) {
+    .lorebase-trakt-provider-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lorebase-trakt-provider-fields > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+    .modal.lorebase-trakt-review-container { width: calc(100vw - 32px); max-height: calc(100vh - 32px); }
+    .modal.lorebase-trakt-review-container .lorebase-trakt-review, .modal.lorebase-trakt-login-container .lorebase-trakt-login { padding: 24px 20px; gap: 18px; max-height: calc(100vh - 32px); }
+    .lorebase-trakt-toolbar { flex-wrap: wrap; gap: 10px; }
+    .lorebase-trakt-search { flex-basis: 100%; }
+    .lorebase-trakt-review.lorebase-add-workspace .lorebase-trakt-items { grid-template-columns: repeat(2, minmax(0, 210px)); gap: 12px; }
+    .is-single-entry .lorebase-trakt-review.lorebase-add-workspace .lorebase-trakt-items { grid-template-columns: minmax(0, 210px); }
+    .lorebase-trakt-header h2 { font-size: 18px; }
+    .lorebase-trakt-header .lorebase-trakt-message { font-size: 12px; }
+    .lorebase-trakt-bulk { gap: 6px; flex-wrap: wrap; }
+    .lorebase-trakt-bulk > span { flex: 1; }
+}
+@media (max-width: 430px) {
+    .lorebase-trakt-login-step { flex-wrap: wrap; }
+    .lorebase-trakt-open { margin-left: 35px; }
+    .lorebase-trakt-code-panel { margin-left: 0; padding: 18px 12px; }
+    .lorebase-trakt-code { font-size: 25px; }
+    .lorebase-trakt-footer { flex-wrap: wrap; }
+    .lorebase-trakt-footer > .lorebase-trakt-message { width: 100%; }
+    .lorebase-trakt-stats { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-trakt-result-counts > div { padding: 12px; }
+    .lorebase-trakt-provider-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .lorebase-trakt-spinner svg { animation: none; } .lorebase-trakt-progress::-webkit-progress-value { transition: none; } }
