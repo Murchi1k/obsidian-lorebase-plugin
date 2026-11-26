@@ -1,5 +1,8 @@
+import { priorityRank } from '../../utils/priority';
 import { FilterState, MediaStatus, SortField, SortOrder } from '../../types';
+import { personalDateSortValue } from '../../utils/personalDates';
 import { compareNames, hasAllValues } from './serviceUtils';
+import { getTitleSearchMatch, normalizeTitleSearch } from './titleSearch';
 import {
     FilterableMediaItem,
     getViewFieldValue,
@@ -24,36 +27,45 @@ export function filterAndSortMedia<T extends FilterableMediaItem>(
     const { items, filter, sortField, sortOrder, isVisible, getCompletedDate } = options;
     const rawSearch = filter.searchTerm ? filter.searchTerm.trim() : '';
     const isSearching = rawSearch.length > 0;
-    const searchLower = isSearching ? rawSearch.toLowerCase() : '';
+    const searchLower = isSearching ? normalizeTitleSearch(rawSearch) : '';
 
     const hasGlobalFilters = isSearching
         || filter.favoriteOnly
         || filter.statuses.length > 0
         || filter.tags.length > 0
         || filter.genres.length > 0
+        || Boolean(filter.workTypes?.length)
         || Boolean(filter.rules?.length);
 
     const statusSet = filter.statuses.length > 0 ? new Set<MediaStatus>(filter.statuses) : null;
     const selectedTags = filter.tags.length > 0 ? filter.tags : null;
     const selectedGenres = filter.genres.length > 0 ? filter.genres : null;
+    const selectedWorkTypes = filter.workTypes?.length ? new Set(filter.workTypes.map((value) => value.toLocaleLowerCase())) : null;
     const result: T[] = [];
+    const searchRanks = new Map<T, number>();
 
     for (let i = 0, len = items.length; i < len; i++) {
         const item = items[i];
         if (!item) continue;
 
-        if (isSearching && !(item.nameLower && item.nameLower.includes(searchLower))) continue;
+        if (isSearching) {
+            const match = getTitleSearchMatch(item, searchLower);
+            if (!match) continue;
+            searchRanks.set(item, match.rank);
+        }
         if (!isVisible(item, hasGlobalFilters)) continue;
         if (statusSet && !statusSet.has(item.status)) continue;
         if (filter.favoriteOnly && !item.favorite) continue;
         if (selectedTags && !hasAllValues(item.tags, selectedTags)) continue;
         if (selectedGenres && !hasAllValues(item.genres, selectedGenres)) continue;
+        if (selectedWorkTypes && (!item.workType || !selectedWorkTypes.has(item.workType.toLocaleLowerCase()))) continue;
         if (filter.rules?.some((rule) => !matchesFilterRule(item, rule))) continue;
 
         result.push(item);
     }
 
-    return sortMediaItemsSafe(result, sortField, sortOrder, getCompletedDate);
+    const sorted = sortMediaItemsSafe(result, sortField, sortOrder, getCompletedDate);
+    return isSearching ? sorted.sort((a, b) => searchRanks.get(a)! - searchRanks.get(b)!) : sorted;
 }
 
 function sortMediaItemsSafe<T extends FilterableMediaItem>(
@@ -66,19 +78,19 @@ function sortMediaItemsSafe<T extends FilterableMediaItem>(
         items.sort((a, b) => {
             if (field === 'dateCompleted' || field === 'dateFinished' || field === 'dateStarted' || field.startsWith('yaml:')) {
                 const aRaw = field === 'dateCompleted'
-                    ? getCompletedDate(a)
+                    ? a.finished ?? getCompletedDate(a)
                     : getViewFieldValue(a, field);
                 const bRaw = field === 'dateCompleted'
-                    ? getCompletedDate(b)
+                    ? b.finished ?? getCompletedDate(b)
                     : getViewFieldValue(b, field);
                 const yamlType = field.startsWith('yaml:') ? field.slice(5).split(':', 1)[0] : '';
                 const aValue = field === 'dateFinished' || field === 'dateStarted' || field === 'dateCompleted' || yamlType === 'date'
-                    ? parseDateValue(aRaw)
+                    ? (yamlType === 'date' ? parseDateValue(aRaw) : personalDateSortValue(aRaw))
                     : yamlType === 'number'
                         ? normalizeNumber(aRaw)
                     : normalizeComparable(aRaw);
                 const bValue = field === 'dateFinished' || field === 'dateStarted' || field === 'dateCompleted' || yamlType === 'date'
-                    ? parseDateValue(bRaw)
+                    ? (yamlType === 'date' ? parseDateValue(bRaw) : personalDateSortValue(bRaw))
                     : yamlType === 'number'
                         ? normalizeNumber(bRaw)
                     : normalizeComparable(bRaw);
@@ -94,6 +106,9 @@ function sortMediaItemsSafe<T extends FilterableMediaItem>(
             let comparison = 0;
 
             switch (field) {
+                case 'priority':
+                    comparison = priorityRank(a.priority) - priorityRank(b.priority);
+                    break;
                 case 'name':
                     comparison = compareNames(String(a.nameLower || '').toLowerCase(), String(b.nameLower || '').toLowerCase());
                     break;

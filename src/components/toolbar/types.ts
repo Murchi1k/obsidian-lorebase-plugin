@@ -1,6 +1,8 @@
-import { FilterState, LibraryViewState, MediaType, SortField, SortOrder, ViewMode } from '../../types';
+import { FilterState, LibraryViewState, MediaType, MusicCoverMode, SortField, SortOrder, ViewMode } from '../../types';
 
 export interface ToolbarCallbacks {
+    onManageWorkTypes?: () => void;
+    onMusicCoverModeChange?: (kind: 'album' | 'track' | 'all', mode: MusicCoverMode) => void;
     onSortChange: (field: SortField, order: SortOrder) => void;
     onFilterChange: (filter: Partial<FilterState>) => void;
     onSearch: (term: string) => void;
@@ -8,6 +10,8 @@ export interface ToolbarCallbacks {
     onRandom: () => void;
     onStats: () => void;
     onSettings: () => void;
+    onReleaseCalendar: () => void;
+    onCustomGroups: () => void;
     onViewModeChange: (mode: ViewMode) => void;
     onViewStateChange: (state: LibraryViewState) => void;
     onApplySavedView: (id: string | null) => void;

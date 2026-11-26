@@ -1,4 +1,5 @@
 import { setIcon } from 'obsidian';
+import { isMobileInterface } from '../MobileModalChrome';
 
 type DropdownOptions = {
     icon: string;
@@ -78,9 +79,11 @@ export class DropdownManager {
             panel.addClass('is-open');
             button.addClass('is-open');
             button.setAttribute('aria-expanded', 'true');
-            if (panel.hasClass('lorebase-view-panel') && window.matchMedia('(max-width: 768px)').matches) {
+            if (panel.hasClass('lorebase-view-panel') && isMobileInterface(this.root)) {
                 window.requestAnimationFrame(() => {
-                    panel.querySelector<HTMLElement>('select, input, button:not([disabled])')?.focus();
+                    if (!panel.hasClass('is-open')) return;
+                    // Text fields must only receive focus after an explicit tap.
+                    panel.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus({ preventScroll: true });
                 });
             }
         }
