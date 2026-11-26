@@ -1,0 +1,25 @@
+.lorebase-recommendations-count { font-size:11px; font-weight:400; color:var(--text-faint); }
+.lorebase-recommendations .lorebase-recommendations-help { margin:10px 0 0; }
+.lorebase-recommendations-help > summary { padding:8px 10px; font-family:inherit; }
+.lorebase-recommendations-body { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:12px; min-width:0; }
+.lorebase-recommendations-body .lorebase-person-muted { margin:0; font-size:12px; }
+.lorebase-recommendations-row { display:grid; grid-template-columns:repeat(7, minmax(150px, 1fr)); align-items:start; gap:10px; width:100%; min-width:0; box-sizing:border-box; overflow-x:auto; padding:2px 2px 5px; }
+.lorebase-recommendation-card { position:relative; min-width:0; font-family:inherit; }
+.lorebase-recommendations a.lorebase-recommendation-link { display:flex; flex-direction:column; gap:6px; min-width:0; color:var(--text-normal); text-decoration:none; font-family:inherit; }
+.lorebase-recommendation-poster { position:relative; width:100%; aspect-ratio:2/3; flex-shrink:0; background:var(--background-secondary); border-radius:8px; overflow:hidden; }
+.lorebase-recommendation-poster img { display:block; width:100%; height:100%; object-fit:cover; }
+.lorebase-recommendation-poster .lorebase-people-placeholder { font-size:24px; }
+.lorebase-recommendation-link strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.lorebase-recommendation-year { position:absolute; bottom:6px; left:6px; padding:2px 6px; border-radius:5px; background:rgb(15 12 22 / 78%); color:#faf9ff; font-size:11px; font-weight:400; line-height:16px; }
+.lorebase-recommendations a.lorebase-recommendation-link:hover, .lorebase-recommendations a.lorebase-recommendation-link:focus-visible { color:var(--text-normal); text-decoration:none; }
+.lorebase-recommendation-link:hover .lorebase-recommendation-poster, .lorebase-recommendation-link:focus-visible .lorebase-recommendation-poster { outline:2px solid var(--interactive-accent); outline-offset:1px; }
+.lorebase-editmode-root button.lorebase-recommendations-retry { padding:3px 8px; min-height:26px; height:auto; border-radius:6px; font-size:11px; box-shadow:none; }
+.lorebase-editmode-root button.lorebase-recommendation-add { position:absolute; display:grid; place-items:center; top:5px; right:5px; width:24px; height:24px; min-height:24px; padding:0; border:1px solid rgb(255 255 255 / 55%); border-radius:50%; background:rgb(15 12 22 / 78%); color:#faf9ff; box-shadow:none; }
+.lorebase-recommendation-add .lorebase-people-icon { width:13px; height:13px; }
+.lorebase-editmode-root .is-in-library button.lorebase-recommendation-add { color:#d3f2de; background:#235743; border-color:#91bfa6; }
+.lorebase-recommendation-card.is-in-library .lorebase-recommendation-poster { outline:1px solid #91bfa6; outline-offset:-1px; }
+.lorebase-recommendation-add.is-pending svg { animation:lorebase-recommendation-spin 1.2s linear infinite; }
+.lorebase-recommendations-status { width:100%; color:var(--text-error); font-size:12px; line-height:1.5; }
+.lorebase-recommendations-status:empty { display:none; }
+@keyframes lorebase-recommendation-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .lorebase-recommendation-add.is-pending svg { animation:none; } }
