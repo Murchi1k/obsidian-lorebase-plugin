@@ -1,12 +1,27 @@
+import { normalizeStatusReasons } from '../utils/statusReasons';
+import { normalizeReleaseDate, releaseDatePatch } from '../utils/releaseDates';
+import { normalizePartCatalog } from './media/partCatalog';
+import { normalizeDiscovery, discoveryFrontmatter } from '../utils/discovery';
+import { normalizePriority } from '../utils/priority';
+import { normalizePersonalDate, personalDateTimestamp, readPersonalDate } from '../utils/personalDates';
+import { isSyncUrl, syncSourceFromFrontmatter } from '../utils/syncSource';
+import { wikilinkLabel } from './integrations/templateValues';
+import { normalizeRepeatCount } from '../utils/repeatTracking';
+import { readEpisodeFields, episodeFields, normalizeEpisodePart } from './media/episodeTracking';
+import { normalizeMediaWorkType } from '../utils/mediaWorkType';
+import { parseDetailedRatings } from '../utils/detailedRatings';
+import { isCustomStatus, countCustomStatus } from '../statusPresentation';
 import { App, TFile, TFolder } from 'obsidian';
-import { FilterState, MovieItem, SeriesItem, SortField, SortOrder, VideoPart, VideoStats, VideoStatus } from '../types';
+import { FilterState, MovieItem, PosterMode, SeriesItem, SortField, SortOrder, VideoPart, VideoStats, VideoStatus } from '../types';
 import { DEFAULT_COVER } from '../constants';
 import { MetadataService } from './MetadataService';
 import { filterAndSortMedia } from './media/filtering';
 import { extractSimpleFrontmatter } from './media/libraryViewState';
 import { getRandomItem, parseNumber, parseRelatedMedia, parseUserRating, parseYear, serializeRelatedMedia } from './media/parsers';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, mapInFrameBatches } from './media/serviceUtils';
-import { upsertMarkdownSection } from './markdownSections';
+import { updateMarkdownSection } from './markdownSections';
+import { getPartPoster, normalizePosterMode } from './media/partPoster';
+import { readPartAlternativeTitles } from './integrations/alternativeTitles';
 
 export type VideoMediaType = 'movie' | 'series';
 export type VideoItem = MovieItem | SeriesItem;
@@ -18,6 +33,7 @@ export class VideoService {
     private cacheValid = false;
     private folderPath: string;
     private mediaType: VideoMediaType;
+    private posterMode?: PosterMode;
 
     constructor(app: App, mediaType: VideoMediaType, folderPath: string, metadataService: MetadataService) {
         this.app = app;
@@ -35,6 +51,14 @@ export class VideoService {
 
     invalidateCache(): void {
         this.cacheValid = false;
+    }
+
+    setPosterMode(mode: PosterMode | undefined): void {
+        const next = normalizePosterMode(mode);
+        if (this.posterMode !== next) {
+            this.posterMode = next;
+            this.invalidateCache();
+        }
     }
 
     async loadItems(): Promise<VideoItem[]> {
@@ -57,7 +81,7 @@ export class VideoService {
     parseFromCache(file: TFile): VideoItem | null {
         try {
             const cache = this.app.metadataCache.getFileCache(file);
-            const metadata = cache?.frontmatter || {};
+            const metadata = this.metadataService.resolveFrontmatter(this.mediaType, cache?.frontmatter || {});
             const rawType = typeof metadata.type === 'string' ? metadata.type.trim().toLowerCase() : '';
             if (rawType && rawType !== this.mediaType) return null;
 
@@ -75,6 +99,8 @@ export class VideoService {
             const parts = this.parseParts(metadata[partsKey]);
             const activePartId = this.readText(metadata, ['active_part_id']) || parts[0]?.id || null;
             const activePart = parts.find((part) => part.id === activePartId) ?? parts[0] ?? null;
+            const syncSource = syncSourceFromFrontmatter(this.mediaType, metadata);
+            const rawSourceUrl = this.readText(metadata, ['url', 'source_url']);
 
             const base = {
                 filePath: file.path,
@@ -83,17 +109,26 @@ export class VideoService {
                 year: parseYear(metadata.year),
                 description,
                 summary: description,
+                detailedRatings: parseDetailedRatings(metadata.detailed_ratings),
                 userRating: parseUserRating(metadata.userRating ?? metadata.rating_user),
                 favorite: isTruthy(metadata.favorite),
+                priority: normalizePriority(metadata.personal_priority),
+                discovery: normalizeDiscovery(metadata.discovery_context),
+                statusReasons: normalizeStatusReasons(metadata.status_reasons),
+                partCatalog: normalizePartCatalog(metadata.part_catalog),
                 poster,
                 imageUrl: verticalImageUrl || poster || DEFAULT_COVER,
                 horizontalImageUrl: horizontalImageUrl || verticalImageUrl || horizontal,
                 hasCustomPoster: Boolean(poster),
                 isAdult: false,
+                workType: normalizeMediaWorkType(this.mediaType, metadata.work_type ?? metadata.workType),
                 status,
+                repeatCount: normalizeRepeatCount(metadata.repeat_count),
                 genres: collectFieldTags(metadata, ['genres', 'genre']),
                 tags: collectTags(metadata, cache?.tags),
-                sourceUrl: this.readText(metadata, ['url', 'source_url']),
+                sourceUrl: syncSource?.url || rawSourceUrl,
+                syncSource,
+                metadataSourceUrl: this.readText(metadata, ['metadata_url']) || (syncSource && rawSourceUrl && !isSyncUrl(rawSourceUrl) ? rawSourceUrl : null),
                 started: this.readDateText(metadata, ['started', 'dateStarted', 'start_date']),
                 finished: this.readDateText(metadata, ['finished', 'dateFinished', 'finish_date', 'dateWatched', 'watched']),
                 integrationProvider: this.normalizeProvider(this.readText(metadata, ['integration_provider'])),
@@ -109,13 +144,17 @@ export class VideoService {
             };
 
             if (this.mediaType === 'series') {
+                const posterMode = this.posterMode ?? normalizePosterMode(metadata.poster_mode);
                 return {
                     ...base,
                     type: 'series',
-                    releaseDate: this.readDateText(metadata, ['released', 'release_date']) || null,
+                    titleImageUrl: base.imageUrl,
+                    posterMode,
+                    imageUrl: getPartPoster(parts, activePartId, posterMode, base.imageUrl, value => this.metadataService.getImageUrl(value)),
+                    releaseDate: this.readDateText(metadata, ['released', 'release_date', 'releaseDate', 'premiered', 'first_air_date']) || null,
                     runtime: this.readText(metadata, ['runtime']) || '',
-                    director: this.readText(metadata, ['director', 'directors']) || '',
-                    actors: this.readText(metadata, ['actors', 'cast']) || '',
+                    director: this.readText(metadata, ['director', 'directors'], wikilinkLabel) || '',
+                    actors: this.readText(metadata, ['actors', 'cast'], wikilinkLabel) || '',
                     seasons: (parseNumber(metadata.seasons) ?? parts.length) || null,
                     episodeCurrent: activePart?.episodeCurrent ?? parseNumber(metadata.episode_current),
                     episodeTotal: activePart?.episodeTotal ?? parseNumber(metadata.episode_total),
@@ -127,10 +166,10 @@ export class VideoService {
             return {
                 ...base,
                 type: 'movie',
-                releaseDate: this.readDateText(metadata, ['released', 'release_date']) || null,
+                releaseDate: this.readDateText(metadata, ['released', 'release_date', 'releaseDate']) || null,
                 runtime: this.readText(metadata, ['runtime']) || '',
-                director: this.readText(metadata, ['director', 'directors']) || '',
-                actors: this.readText(metadata, ['actors', 'cast']) || '',
+                director: this.readText(metadata, ['director', 'directors'], wikilinkLabel) || '',
+                actors: this.readText(metadata, ['actors', 'cast'], wikilinkLabel) || '',
             };
         } catch (error) {
             console.error(`Error parsing ${this.mediaType}:`, error);
@@ -161,6 +200,7 @@ export class VideoService {
             completed: 0,
             dropped: 0,
             paused: 0,
+            to_be_released: 0,
             favorite: 0,
             withRating: 0,
             avgRating: 0,
@@ -170,7 +210,8 @@ export class VideoService {
 
         let ratingSum = 0;
         for (const item of items) {
-            stats[item.status]++;
+            countCustomStatus(stats, item.status);
+            if (!isCustomStatus(item.status)) stats[item.status]++;
             if (item.favorite) stats.favorite++;
             if (item.userRating) {
                 stats.withRating++;
@@ -179,7 +220,7 @@ export class VideoService {
             }
         }
         stats.avgRating = stats.withRating > 0 ? Math.round((ratingSum / stats.withRating) * 10) / 10 : 0;
-        for (const status of ['planned', 'watching', 'completed', 'dropped', 'paused'] as const) {
+        for (const status of ['to_be_released', 'planned', 'watching', 'completed', 'dropped', 'paused'] as const) {
             stats.statusPercentages[status] = stats.total > 0 ? Math.round((stats[status] / stats.total) * 1000) / 10 : 0;
         }
         return stats;
@@ -190,10 +231,14 @@ export class VideoService {
         if (!(file instanceof TFile)) return;
 
         const frontmatterUpdates: Record<string, unknown> = {};
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        if ('countries' in updates) frontmatterUpdates.countries = updates.countries ?? [];
+        if ('repeatCount' in updates) frontmatterUpdates.repeat_count = normalizeRepeatCount(updates.repeatCount);
+        const rawFrontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const frontmatter = this.metadataService.resolveFrontmatter(this.mediaType, rawFrontmatter || {});
 
         if ('displayName' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['title', 'name'], updates.displayName);
         if ('title' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['title', 'name'], String(updates.title ?? ''));
+        if ('workType' in updates) frontmatterUpdates.work_type = normalizeMediaWorkType(this.mediaType, updates.workType);
         if ('year' in updates) frontmatterUpdates.year = updates.year;
         if ('description' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['plot', 'summary', 'description'], updates.description);
         if ('summary' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['plot', 'summary', 'description'], updates.summary);
@@ -204,17 +249,20 @@ export class VideoService {
         if ('tags' in updates) this.updateListField(frontmatterUpdates, frontmatter, ['tags', 'tag'], updates.tags, true);
         if ('rating' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['rating', 'scoreImdb', 'imdbRating'], updates.rating);
         if ('status' in updates) frontmatterUpdates.status = updates.status;
+        if ('detailedRatings' in updates) frontmatterUpdates.detailed_ratings = parseDetailedRatings(updates.detailedRatings) ?? null;
         if ('userRating' in updates) frontmatterUpdates.userRating = updates.userRating;
         if ('favorite' in updates) frontmatterUpdates.favorite = updates.favorite;
+        if ('priority' in updates) frontmatterUpdates.personal_priority = normalizePriority(updates.priority);
+        if ('partCatalog' in updates) frontmatterUpdates.part_catalog = normalizePartCatalog(updates.partCatalog) ?? null;
+        if ('discovery' in updates) frontmatterUpdates.discovery_context = discoveryFrontmatter(updates.discovery);
+        if ('statusReasons' in updates) frontmatterUpdates.status_reasons = normalizeStatusReasons(updates.statusReasons) ?? null;
         if ('sourceUrl' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['url', 'source_url'], updates.sourceUrl);
-        if ('started' in updates) frontmatterUpdates.started = this.normalizeDateString(String(updates.started ?? '')) || null;
-        if ('finished' in updates) frontmatterUpdates.finished = this.normalizeDateString(String(updates.finished ?? '')) || null;
-        if ('releaseDate' in updates) this.updateTextField(
-            frontmatterUpdates,
-            frontmatter,
-            ['released', 'release_date', 'releaseDate'],
-            this.normalizeDateString(String(updates.releaseDate ?? ''))
-        );
+        if ('started' in updates) frontmatterUpdates.started = normalizePersonalDate(updates.started) || null;
+        if ('finished' in updates) {
+            frontmatterUpdates.finished = normalizePersonalDate(updates.finished) || null;
+            for (const key of ['dateFinished', 'finish_date', 'dateWatched', 'watched']) frontmatterUpdates[key] = null;
+        }
+        if ('releaseDate' in updates) Object.assign(frontmatterUpdates,releaseDatePatch(frontmatter,updates.releaseDate,['released','release_date','releaseDate','premiered','first_air_date']));
         if ('runtime' in updates) this.updateTextField(frontmatterUpdates, frontmatter, ['runtime'], updates.runtime);
         if ('director' in updates) this.updateDisplayListField(
             frontmatterUpdates,
@@ -235,6 +283,7 @@ export class VideoService {
         if ('studios' in updates) this.updateListField(frontmatterUpdates, frontmatter, ['studios', 'studio'], updates.studios);
         if ('parts' in updates) frontmatterUpdates[this.mediaType === 'series' ? 'series_parts' : 'movie_parts'] = this.serializeParts(updates.parts ?? []);
         if ('activePartId' in updates) frontmatterUpdates.active_part_id = updates.activePartId;
+        if (this.mediaType === 'series' && 'posterMode' in updates) frontmatterUpdates.poster_mode = normalizePosterMode(updates.posterMode);
         if ('relatedMedia' in updates) frontmatterUpdates.related_media = serializeRelatedMedia(updates.relatedMedia);
         if ('episodeCurrent' in updates) frontmatterUpdates.episode_current = updates.episodeCurrent;
         if ('episodeTotal' in updates) frontmatterUpdates.episode_total = updates.episodeTotal;
@@ -248,7 +297,7 @@ export class VideoService {
             if (activePart?.seasonNumber !== undefined) frontmatterUpdates.season_current = activePart.seasonNumber;
         }
 
-        await this.metadataService.updateMetadata(file, frontmatterUpdates);
+        await this.metadataService.updateMetadata(file, frontmatterUpdates, this.mediaType);
         if ('myNotes' in updates) {
             await this.updateMyNotesSection(file, String(updates.myNotes ?? ''));
         }
@@ -256,11 +305,7 @@ export class VideoService {
     }
 
     private async updateMyNotesSection(file: TFile, value: string): Promise<void> {
-        const content = await this.app.vault.read(file);
-        const next = upsertMarkdownSection(content, 'My Notes', value);
-        if (next !== content) {
-            await this.app.vault.modify(file, next);
-        }
+        await updateMarkdownSection(this.app, file, value);
     }
 
     async deleteItem(item: VideoItem): Promise<void> {
@@ -277,15 +322,23 @@ export class VideoService {
             const source = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
             const kind = this.mediaType === 'series' ? 'season' : 'movie';
             const seasonNumber = parseNumber(source.seasonNumber ?? source.season ?? source.season_number);
-            return {
+            const rating = source.user_rating ?? source.userRating;
+            return normalizeEpisodePart({
                 id: this.readText(source, ['id']) || `${kind}-${index + 1}`,
                 kind,
                 title: this.readText(source, ['title', 'name']) || (kind === 'season' ? `Season ${seasonNumber ?? index + 1}` : `Part ${index + 1}`),
+                alternativeTitles: readPartAlternativeTitles(source),
                 seasonNumber,
                 episodeCurrent: parseNumber(source.episodeCurrent ?? source.episode_current ?? source.current),
                 episodeTotal: parseNumber(source.episodeTotal ?? source.episode_total ?? source.total),
                 status: this.getStatus(this.readText(source, ['status']) || '') ?? 'planned',
-            };
+                poster: this.readText(source, ['poster', 'image']) || null,
+                year: parseNumber(source.year),
+                episodeDuration: parseNumber(source.episode_duration ?? source.episodeDuration),
+            ...(typeof (source.released ?? source.releaseDate) === 'string' ? { releaseDate: String(source.released ?? source.releaseDate) } : {}),
+                ...(rating !== undefined ? { userRating: parseUserRating(rating) } : {}),
+                ...readEpisodeFields(source),
+            });
         });
     }
 
@@ -294,63 +347,48 @@ export class VideoService {
             id: part.id,
             kind: part.kind,
             title: part.title,
+            ...(part.alternativeTitles?.length ? { alt_titles: part.alternativeTitles } : {}),
             season: part.seasonNumber,
             episode_current: part.episodeCurrent,
             episode_total: part.episodeTotal,
             status: part.status,
+            poster: part.poster ?? null,
+            year: part.year ?? null,
+            episode_duration: part.episodeDuration ?? null,
+            ...(part.releaseDate ? { released: part.releaseDate } : {}),
+            ...(part.userRating != null ? { user_rating: part.userRating } : {}),
+            ...episodeFields(part),
         }));
     }
 
-    private readText(source: Record<string, unknown>, keys: string[]): string {
+    private readText(source: Record<string, unknown>, keys: string[], label: (text: string) => string = String): string {
         for (const key of keys) {
             const value = source[key];
             if (value === null || value === undefined) continue;
             if (Array.isArray(value)) {
-                const text = value.map((entry) => String(entry).trim()).filter(Boolean).join(', ');
+                const text = value.map(entry => label(String(entry).trim())).filter(Boolean).join(', ');
                 if (text) return text;
                 continue;
             }
-            const text = String(value).trim();
+            const text = label(String(value).trim());
             if (text) return text;
         }
         return '';
     }
 
     private readDateText(source: Record<string, unknown>, keys: string[]): string | null {
+        if (keys[0] === 'started' || keys[0] === 'finished') return readPersonalDate(source, keys);
         const text = this.readText(source, keys);
         if (!text) return null;
         return this.normalizeDateString(text) || null;
     }
 
     private normalizeDateString(value: string): string {
-        const trimmed = value.trim();
-        if (!trimmed) return '';
-        if (/^\d{4}$/.test(trimmed)) return '';
-        const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
-        if (isoMatch) {
-            const year = Number(isoMatch[1]);
-            const month = Number(isoMatch[2]);
-            const day = Number(isoMatch[3]);
-            const date = new Date(Date.UTC(year, month - 1, day));
-            return date.getUTCFullYear() === year
-                && date.getUTCMonth() === month - 1
-                && date.getUTCDate() === day
-                ? trimmed
-                : '';
-        }
-        const parsed = Date.parse(trimmed);
-        if (Number.isNaN(parsed)) return '';
-        const date = new Date(parsed);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return normalizeReleaseDate(value);
     }
 
     private parseDateString(value: string | null | undefined): number | null {
-        if (!value) return null;
-        const parsed = Date.parse(value);
-        return Number.isNaN(parsed) ? null : parsed;
+        return personalDateTimestamp(value);
     }
 
     private hasKey(frontmatter: Record<string, unknown> | null | undefined, key: string): boolean {
@@ -414,7 +452,7 @@ export class VideoService {
 
     private getStatus(value: string): VideoStatus | null {
         const normalized = value.trim().toLowerCase();
-        return ['planned', 'watching', 'completed', 'dropped', 'paused'].includes(normalized)
+        return isCustomStatus(normalized) || ['planned', 'watching', 'completed', 'dropped', 'paused', 'to_be_released'].includes(normalized)
             ? normalized as VideoStatus
             : null;
     }

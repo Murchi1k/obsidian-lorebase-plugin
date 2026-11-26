@@ -1,16 +1,28 @@
+import { ct } from '../localization/continuations';
+import { isFutureReleaseDate } from '../services/media/releaseStatus';
+import { inspectPartCatalog } from '../services/media/partCatalog';
+import type { Continuation } from '../services/media/partCatalog';
+import type { PartCatalog } from '../types';
+import { getStatusAppearance } from '../statusPresentation';
 import { App, Modal, setIcon } from 'obsidian';
 import type { AnimePart, AnimeStatus } from '../types';
 import type { IntegrationAnimePart } from '../services/integrations/types';
-import { t } from '../localization';
-import { createLorebaseDropdown } from '../components/LorebaseDropdown';
+import { i18n, t } from '../localization';
+import { setPartPoster, watchCopy } from '../components/WatchProgress';
+import { DEFAULT_COVER } from '../constants';
+import { reconcileAnimeParts } from '../services/integrations/animeParts';
 
 export interface AnimePartsReviewResult {
+    partCatalog?: PartCatalog;
+    continuations?: Continuation<IntegrationAnimePart>[];
     parts: IntegrationAnimePart[];
     activePartId: string | null;
     status: AnimeStatus;
 }
 
 interface AnimePartsReviewOptions {
+    catalogSource?: string;
+    partCatalog?: PartCatalog;
     title: string;
     subtitle?: string;
     providerParts: IntegrationAnimePart[];
@@ -22,17 +34,28 @@ interface AnimePartsReviewOptions {
 
 type PartDraft = IntegrationAnimePart & { isNew: boolean };
 
+const labels = {
+    en: { hint: 'Choose the parts to include. You can edit their details after applying.', all: 'Select all', clear: 'Clear selection', search: 'Find a part…', empty: 'No matching parts.', unavailable: 'No parts available.', saved: 'In your title', local: 'Local part' },
+    ru: { hint: 'Выберите части для тайтла. Изменить их данные можно после применения.', all: 'Выбрать все', clear: 'Снять выбор', search: 'Найти часть…', empty: 'Части не найдены.', unavailable: 'Нет доступных частей.', saved: 'В составе', local: 'Своя часть' },
+    uk: { hint: 'Виберіть частини для тайтлу. Їхні дані можна змінити після застосування.', all: 'Вибрати всі', clear: 'Зняти вибір', search: 'Знайти частину…', empty: 'Частин не знайдено.', unavailable: 'Немає доступних частин.', saved: 'У складі', local: 'Власна частина' },
+    'zh-CN': { hint: '选择要包含的分部，应用后可以编辑详细信息。', all: '全选', clear: '清除选择', search: '查找分部…', empty: '没有匹配的分部。', unavailable: '没有可用分部。', saved: '已包含', local: '本地分部' },
+};
+let reviewId = 0;
+
 export class AnimePartsReviewModal extends Modal {
     private options: AnimePartsReviewOptions;
     private parts: PartDraft[];
     private selected = new Set<string>();
+    private existingPartIds: Set<string>;
+    private providerPartIds: Set<string>;
     private activePartId: string | null;
     private status: AnimeStatus;
     private resolve?: (value: AnimePartsReviewResult | null) => void;
     private hasResolved = false;
     private listEl?: HTMLElement;
     private confirmBtn?: HTMLButtonElement;
-    private expandedPartId: string | null = null;
+    private readonly instanceId = ++reviewId;
+    private query = '';
 
     private onKeydown = (event: KeyboardEvent): void => {
         if (event.key !== 'Escape') return;
@@ -44,34 +67,12 @@ export class AnimePartsReviewModal extends Modal {
     constructor(app: App, options: AnimePartsReviewOptions) {
         super(app);
         this.options = options;
-        const existing = new Map((options.existingParts ?? []).map((part) => [part.id, part]));
-        const hasExisting = existing.size > 0;
-
-        this.parts = options.providerParts.map((part) => {
-            const saved = existing.get(part.id);
-            return {
-                ...part,
-                title: saved?.title ?? part.title,
-                episodeCurrent: saved?.episodeCurrent ?? part.episodeCurrent ?? 0,
-                episodeTotal: saved?.episodeTotal ?? part.episodeTotal,
-                status: this.normalizePartStatus(saved?.status ?? part.status),
-                isNew: Boolean(options.markNewParts && hasExisting && !saved),
-            };
-        });
-
-        if (hasExisting) {
-            for (const part of options.existingParts ?? []) {
-                if (this.parts.some((candidate) => candidate.id === part.id)) {
-                    this.selected.add(part.id);
-                }
-            }
-        } else {
-            for (const part of this.parts) this.selected.add(part.id);
-        }
-
-        this.activePartId = options.activePartId && this.selected.has(options.activePartId)
-            ? options.activePartId
-            : this.getFirstSelectedId();
+        const result = reconcileAnimeParts(options.providerParts, options.existingParts, options.activePartId);
+        this.existingPartIds = result.existingIds; this.providerPartIds = result.providerIds;
+        const hasExisting = Boolean(options.existingParts?.length);
+        this.parts = result.parts.map(part => ({ ...part, isNew: Boolean(options.markNewParts && hasExisting && !(options.catalogSource && (!options.partCatalog || options.partCatalog.source !== options.catalogSource)) && !result.existingIds.has(part.id) && (!options.partCatalog || options.partCatalog.source !== options.catalogSource || !Object.prototype.hasOwnProperty.call(options.partCatalog.parts, part.id))) }));
+        for (const part of this.parts) if (!hasExisting || result.existingIds.has(part.id)) this.selected.add(part.id);
+        this.activePartId = result.activePartId && this.selected.has(result.activePartId) ? result.activePartId : this.getFirstSelectedId();
         this.status = options.status ?? 'planned';
     }
 
@@ -102,30 +103,39 @@ export class AnimePartsReviewModal extends Modal {
 
         const header = contentEl.createDiv({ cls: 'lorebase-select-review-header' });
         const titleRow = header.createDiv({ cls: 'lorebase-select-review-title-row' });
-        const icon = titleRow.createSpan({ cls: 'lorebase-select-title-icon' });
-        setIcon(icon, 'list-checks');
+        setIcon(titleRow.createSpan({ cls: 'lorebase-select-title-icon' }), 'list-checks');
         titleRow.createEl('h2', { cls: 'lorebase-select-title lorebase-select-review-heading', text: this.options.title });
-        header.createDiv({
-            cls: 'lorebase-select-review-subtitle',
-            text: this.options.subtitle ?? t('animePartsProviderTitle'),
-        });
+        if (this.options.subtitle) header.createDiv({ cls: 'lorebase-select-review-subtitle', text: this.options.subtitle });
+        header.createEl('p', { cls: 'lorebase-anime-parts-hint', text: this.copy().hint });
 
         const toolbar = contentEl.createDiv({ cls: 'lorebase-anime-parts-toolbar' });
-        const selectedText = toolbar.createDiv({ cls: 'lorebase-anime-parts-selected', text: this.getSelectedLabel() });
-        selectedText.dataset.role = 'selected-count';
+        toolbar.createSpan({ cls: 'lorebase-anime-parts-selected', attr: { 'data-role': 'selected-count', 'aria-live': 'polite' } });
+        const toggleAll = toolbar.createEl('button', { cls: 'lorebase-anime-parts-select-all', attr: { type: 'button', 'data-action': 'toggle-all' } });
+        toggleAll.addEventListener('click', () => {
+            if (this.selected.size === this.parts.length) this.selected.clear();
+            else for (const part of this.parts) this.selected.add(part.id);
+            this.reconcileActivePart();
+            this.updateSelectedUi();
+        });
 
-        this.listEl = contentEl.createDiv({ cls: 'lorebase-anime-parts-list' });
+        if (this.parts.length > 6) {
+            const search = contentEl.createEl('input', {
+                cls: 'lorebase-anime-parts-search',
+                attr: { type: 'search', placeholder: this.copy().search, 'aria-label': this.copy().search },
+            });
+            search.value = this.query;
+            search.addEventListener('input', () => {
+                this.query = search.value;
+                this.updateRowsVisibility();
+            });
+        }
+
+        this.listEl = contentEl.createDiv({ cls: 'lorebase-anime-parts-list', attr: { role: 'list', 'aria-label': t('editAnimeParts') } });
         this.renderRows();
-
         const footer = contentEl.createDiv({ cls: 'lorebase-modal-actions lorebase-select-footer' });
-        const cancelBtn = footer.createEl('button', { cls: 'lorebase-flow-btn lorebase-flow-btn-secondary', attr: { type: 'button' } });
-        setIcon(cancelBtn.createSpan({ cls: 'lorebase-flow-btn-icon' }), 'x');
-        cancelBtn.createSpan({ cls: 'lorebase-flow-btn-label', text: t('commonCancel') });
-        this.confirmBtn = footer.createEl('button', { cls: 'lorebase-flow-btn lorebase-flow-btn-primary', attr: { type: 'button' } });
-        setIcon(this.confirmBtn.createSpan({ cls: 'lorebase-flow-btn-icon' }), 'check');
-        this.confirmBtn.createSpan({ cls: 'lorebase-flow-btn-label', text: t('animePartsApply') });
-
-        cancelBtn.addEventListener('click', () => this.cancel());
+        const cancel = footer.createEl('button', { cls: 'lorebase-flow-btn lorebase-flow-btn-secondary', text: t('commonCancel'), attr: { type: 'button', 'data-action': 'cancel' } });
+        this.confirmBtn = footer.createEl('button', { cls: 'lorebase-flow-btn lorebase-flow-btn-primary', text: t('animePartsApply'), attr: { type: 'button', 'data-action': 'apply' } });
+        cancel.addEventListener('click', () => this.cancel());
         this.confirmBtn.addEventListener('click', () => this.confirm());
         this.updateSelectedUi();
     }
@@ -133,200 +143,117 @@ export class AnimePartsReviewModal extends Modal {
     private renderRows(): void {
         if (!this.listEl) return;
         this.listEl.empty();
-
-        if (this.parts.length === 0) {
-            this.listEl.createDiv({ cls: 'lorebase-anime-parts-no-new', text: t('animePartsNoNew') });
-            return;
-        }
+        const savedIds = this.existingPartIds;
+        const providerIds = this.providerPartIds;
 
         for (const part of this.parts) {
-            const item = this.listEl.createDiv({ cls: 'lorebase-anime-parts-item' });
+            const item = this.listEl.createDiv({ cls: 'lorebase-anime-parts-item', attr: { role: 'listitem' } });
             item.dataset.partId = part.id;
-            item.toggleClass('is-selected', this.selected.has(part.id));
-            item.toggleClass('is-active-part', this.activePartId === part.id);
-            item.toggleClass('is-expanded', this.expandedPartId === part.id);
-
             const row = item.createDiv({ cls: 'lorebase-anime-parts-row' });
+            const id = `lorebase-provider-part-${this.instanceId}-${encodeURIComponent(part.id)}`;
+            const title = part.title || t('editAnimeParts');
             const check = row.createEl('input', {
                 cls: 'lorebase-anime-parts-checkbox',
-                attr: { type: 'checkbox' },
+                attr: { type: 'checkbox', id, 'aria-labelledby': `${id}-title` },
             });
-            check.checked = this.selected.has(part.id);
             check.addEventListener('change', () => {
                 if (check.checked) this.selected.add(part.id);
                 else this.selected.delete(part.id);
-
-                if (this.activePartId === part.id && !this.selected.has(part.id)) {
-                    this.activePartId = this.getFirstSelectedId();
-                }
-                if (!this.activePartId && this.selected.has(part.id)) {
-                    this.activePartId = part.id;
-                }
-
-                item.toggleClass('is-selected', this.selected.has(part.id));
-                this.updateActiveButtons();
+                this.reconcileActivePart();
                 this.updateSelectedUi();
             });
 
-            row.createSpan({
-                cls: 'lorebase-anime-parts-title',
-                text: part.title || 'Untitled',
-                attr: { 'data-role': 'part-title' },
-            });
-            row.createSpan({
-                cls: 'lorebase-anime-parts-meta',
-                text: this.getPartMeta(part),
-                attr: { 'data-role': 'part-meta' },
-            });
-
-            const editBtn = row.createEl('button', {
-                cls: 'lorebase-anime-parts-edit-btn',
-                attr: { type: 'button', title: t('contextEdit') },
-            });
-            setIcon(editBtn, this.expandedPartId === part.id ? 'chevron-up' : 'pencil');
-            editBtn.addEventListener('click', () => {
-                this.expandedPartId = this.expandedPartId === part.id ? null : part.id;
-                this.renderRows();
-            });
-
-            if (this.expandedPartId === part.id) {
-                this.renderPartEditor(item, part);
+            const cover = row.createEl('img', { cls: 'lorebase-part-cover', attr: { alt: '', loading: 'lazy' } });
+            setPartPoster(cover, this.app, part.poster, DEFAULT_COVER);
+            const body = row.createEl('label', { cls: 'lorebase-part-review-body', attr: { for: id } });
+            const heading = body.createSpan({ cls: 'lorebase-anime-parts-name-row' });
+            heading.createEl('strong', { cls: 'lorebase-anime-parts-title', text: title, attr: { id: `${id}-title` } });
+            if (part.isNew || savedIds.has(part.id)) {
+                const badge = heading.createSpan({
+                    cls: `lorebase-anime-parts-badge${part.isNew ? ' is-new' : ''}`,
+                    text: part.isNew ? t('animePartsNew') : providerIds.has(part.id) ? this.copy().saved : this.copy().local,
+                });
+                badge.dataset.role = 'part-origin';
             }
+            body.createSpan({ cls: 'lorebase-anime-parts-meta', text: this.getPartMeta(part) });
+            const tracking = body.createSpan({ cls: 'lorebase-anime-parts-tracking' });
+            tracking.createSpan({ text: `${part.episodeCurrent ?? 0} / ${part.episodeTotal && part.episodeTotal > 0 ? part.episodeTotal : '?'} ${watchCopy().episodes}` });
+            tracking.createSpan({ cls: 'lorebase-anime-parts-status', text: this.getStatusLabel(part.status) });
+
+            const activeLabel = row.createEl('label', { cls: 'lorebase-anime-parts-active-field' });
+            const radio = activeLabel.createEl('input', {
+                cls: 'lorebase-anime-parts-active-radio',
+                attr: { type: 'radio', name: `lorebase-provider-active-${this.instanceId}`, 'aria-label': `${watchCopy().activate}: ${title}` },
+            });
+            radio.addEventListener('change', () => {
+                if (!radio.checked || !this.selected.has(part.id)) return;
+                this.activePartId = part.id;
+                this.updateSelectedUi();
+            });
+            activeLabel.createSpan({ attr: { 'data-role': 'active-caption' } });
+        }
+        this.listEl.createDiv({ cls: 'lorebase-anime-parts-no-new', attr: { 'data-role': 'empty-results', role: 'status' } });
+        this.updateRowsVisibility();
+    }
+
+    private updateRowsVisibility(): void {
+        const query = this.query.trim().normalize('NFKC').toLocaleLowerCase();
+        let visible = 0;
+        const items = this.listEl?.querySelectorAll<HTMLElement>('.lorebase-anime-parts-item');
+        items?.forEach((item, index) => {
+            const part = this.parts[index];
+            item.hidden = Boolean(query && ![part.title, this.getPartMeta(part)].join(' ').normalize('NFKC').toLocaleLowerCase().includes(query));
+            if (!item.hidden) visible++;
+        });
+        const empty = this.listEl?.querySelector<HTMLElement>('[data-role="empty-results"]');
+        if (empty) {
+            empty.hidden = visible > 0;
+            empty.textContent = this.parts.length ? this.copy().empty : this.copy().unavailable;
         }
     }
 
-    private renderPartEditor(item: HTMLElement, part: PartDraft): void {
-        const editor = item.createDiv({ cls: 'lorebase-anime-parts-editor' });
-
-        const activeLabel = editor.createEl('label', { cls: 'lorebase-anime-parts-active-field' });
-        const activeRadio = activeLabel.createEl('input', {
-            cls: 'lorebase-anime-parts-active-radio',
-            attr: { type: 'radio', name: 'lorebase-anime-active-part' },
-        });
-        activeRadio.dataset.partId = part.id;
-        activeRadio.checked = this.activePartId === part.id;
-        activeRadio.disabled = !this.selected.has(part.id);
-        activeRadio.addEventListener('change', () => {
-            if (!activeRadio.checked || !this.selected.has(part.id)) return;
-            this.activePartId = part.id;
-            this.updateActiveButtons();
-        });
-        activeLabel.createSpan({ text: t('editActivePart') });
-
-        const fields = editor.createDiv({ cls: 'lorebase-anime-parts-editor-grid' });
-
-        const kindField = fields.createDiv({ cls: 'lorebase-anime-parts-field is-format' });
-        kindField.createSpan({ text: t('editFormat') });
-        const kindHost = kindField.createDiv({ cls: 'lorebase-anime-parts-dropdown lorebase-editmode-dropdown' });
-        createLorebaseDropdown(
-            kindHost,
-            this.getFormats().map((value) => ({ value, label: this.getFormatLabel(value) })),
-            part.kind,
-            (value) => {
-                part.kind = value;
-                this.updatePartSummary(item, part);
-            }
-        );
-
-        const titleField = fields.createEl('label', { cls: 'lorebase-anime-parts-field is-title' });
-        titleField.createSpan({ text: t('templateFieldName') });
-        const titleInput = titleField.createEl('input', {
-            cls: 'lorebase-anime-parts-text',
-            attr: { type: 'text' },
-        });
-        titleInput.value = part.title;
-        titleInput.addEventListener('input', () => {
-            part.title = titleInput.value.trim();
-            this.updatePartSummary(item, part);
-        });
-
-        const seasonField = fields.createEl('label', { cls: 'lorebase-anime-parts-field' });
-        seasonField.createSpan({ text: t('editSeasonCurrent') });
-        const seasonInput = seasonField.createEl('input', {
-            cls: 'lorebase-anime-parts-number',
-            attr: { type: 'number', min: '0', inputmode: 'numeric' },
-        });
-        seasonInput.value = part.seasonNumber === null || part.seasonNumber === undefined ? '' : String(part.seasonNumber);
-        seasonInput.addEventListener('input', () => {
-            part.seasonNumber = this.parseNumber(seasonInput.value);
-            this.updatePartSummary(item, part);
-        });
-
-        const episodeField = fields.createDiv({ cls: 'lorebase-anime-parts-field is-episodes' });
-        episodeField.createSpan({ text: t('editEpisodeCurrent') });
-        const progress = episodeField.createDiv({ cls: 'lorebase-anime-parts-progress' });
-        const currentInput = progress.createEl('input', {
-            cls: 'lorebase-anime-parts-number',
-            attr: { type: 'number', min: '0', inputmode: 'numeric', title: t('editEpisodeCurrent') },
-        });
-        currentInput.value = String(part.episodeCurrent ?? 0);
-        currentInput.addEventListener('input', () => {
-            part.episodeCurrent = this.parseNumber(currentInput.value);
-            this.updatePartSummary(item, part);
-        });
-        progress.createSpan({ cls: 'lorebase-anime-parts-slash', text: '/' });
-        const totalInput = progress.createEl('input', {
-            cls: 'lorebase-anime-parts-number',
-            attr: { type: 'number', min: '0', inputmode: 'numeric', title: t('editEpisodeTotal') },
-        });
-        totalInput.value = part.episodeTotal === null || part.episodeTotal === undefined ? '' : String(part.episodeTotal);
-        totalInput.addEventListener('input', () => {
-            part.episodeTotal = this.parseNumber(totalInput.value);
-            this.updatePartSummary(item, part);
-        });
-
-        const statusField = fields.createDiv({ cls: 'lorebase-anime-parts-field is-status' });
-        statusField.createSpan({ text: t('templateFieldStatus') });
-        const statusHost = statusField.createDiv({ cls: 'lorebase-anime-parts-dropdown lorebase-editmode-dropdown' });
-        createLorebaseDropdown(
-            statusHost,
-            this.getPartStatuses().map((value) => ({ value, label: this.getStatusLabel(value) })),
-            part.status,
-            (value) => {
-                part.status = value;
-            }
-        );
-    }
-
-    private updatePartSummary(item: HTMLElement, part: IntegrationAnimePart): void {
-        const title = item.querySelector<HTMLElement>('[data-role="part-title"]');
-        if (title) title.textContent = part.title || 'Untitled';
-        const meta = item.querySelector<HTMLElement>('[data-role="part-meta"]');
-        if (meta) meta.textContent = this.getPartMeta(part);
-    }
-
     private updateSelectedUi(): void {
-        const count = this.selected.size;
         const label = this.contentEl.querySelector<HTMLElement>('[data-role="selected-count"]');
-        if (label) label.textContent = this.getSelectedLabel();
-        if (this.confirmBtn) this.confirmBtn.disabled = count === 0;
+        if (label) label.textContent = `${t('animePartsSelected')}: ${this.selected.size} / ${this.parts.length}`;
+        const all = this.contentEl.querySelector<HTMLButtonElement>('[data-action="toggle-all"]');
+        if (all) {
+            all.textContent = this.selected.size === this.parts.length && this.parts.length > 0 ? this.copy().clear : this.copy().all;
+            all.disabled = this.parts.length === 0;
+        }
+        if (this.confirmBtn) this.confirmBtn.disabled = this.selected.size === 0;
+        this.listEl?.querySelectorAll<HTMLElement>('.lorebase-anime-parts-item').forEach(item => {
+            const id = item.dataset.partId ?? '';
+            const selected = this.selected.has(id);
+            const active = this.activePartId === id;
+            item.toggleClass('is-selected', selected);
+            item.toggleClass('is-active-part', active);
+            item.querySelector<HTMLInputElement>('.lorebase-anime-parts-checkbox')!.checked = selected;
+            const radio = item.querySelector<HTMLInputElement>('.lorebase-anime-parts-active-radio')!;
+            radio.checked = active;
+            radio.disabled = !selected;
+            item.querySelector<HTMLElement>('[data-role="active-caption"]')!.textContent = active ? watchCopy().active : watchCopy().activate;
+        });
+    }
+
+    private reconcileActivePart(): void {
+        if (!this.activePartId || !this.selected.has(this.activePartId)) this.activePartId = this.getFirstSelectedId();
     }
 
     private getFirstSelectedId(): string | null {
-        for (const id of this.selected) return id;
-        return null;
-    }
-
-    private updateActiveButtons(): void {
-        this.listEl?.querySelectorAll<HTMLInputElement>('.lorebase-anime-parts-active-radio').forEach((radio) => {
-            const partId = radio.dataset.partId ?? '';
-            radio.checked = partId === this.activePartId;
-            radio.disabled = !this.selected.has(partId);
-        });
-        this.listEl?.querySelectorAll<HTMLElement>('.lorebase-anime-parts-item').forEach((item) => {
-            item.toggleClass('is-active-part', item.dataset.partId === this.activePartId);
-        });
+        return this.parts.find(part => this.selected.has(part.id))?.id ?? null;
     }
 
     private confirm(): void {
+        if (!this.selected.size) return;
         const parts = this.parts
-            .filter((part) => this.selected.has(part.id))
+            .filter(part => this.selected.has(part.id))
             .map(({ isNew: _isNew, ...part }) => ({ ...part }));
         this.hasResolved = true;
         this.resolve?.({
+            ...(this.options.catalogSource ? { partCatalog: inspectPartCatalog(this.options.catalogSource, this.options.providerParts, [], this.options.partCatalog).catalog } : {}),
             parts,
             activePartId: this.activePartId && this.selected.has(this.activePartId) ? this.activePartId : parts[0]?.id ?? null,
-            status: parts.length > 0 && parts.every((part) => part.status === 'completed') ? 'completed' : this.status,
+            status: parts.every(part => part.status === 'completed') ? 'completed' : this.status,
         });
         this.close();
     }
@@ -337,35 +264,16 @@ export class AnimePartsReviewModal extends Modal {
         this.close();
     }
 
-    private getSelectedLabel(): string {
-        return `${t('animePartsSelected')}: ${this.selected.size} / ${this.parts.length}`;
+    private copy() {
+        return labels[i18n.getLanguage()] ?? labels.en;
     }
 
     private getPartMeta(part: IntegrationAnimePart): string {
         const chunks = [this.getFormatLabel(part.kind)];
-        if (part.seasonNumber !== null && part.seasonNumber !== undefined) {
-            chunks.push(`S${part.seasonNumber}`);
-        }
-        chunks.push(`${part.episodeCurrent ?? 0}/${part.episodeTotal ?? '?'}`);
+        if (part.releaseDate) chunks.push(`${ct('date')}: ${part.releaseDate}${isFutureReleaseDate(part.releaseDate) ? ` · ${ct('announced')}` : ''}`);
+        else if (part.year) chunks.push(String(part.year));
+        if (part.episodeDuration && part.episodeDuration > 0) chunks.push(`${part.episodeDuration} ${watchCopy().minute}`);
         return chunks.join(' · ');
-    }
-
-    private parseNumber(value: string): number | null {
-        if (!value.trim()) return null;
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
-    }
-
-    private normalizePartStatus(status: AnimeStatus): AnimeStatus {
-        return status === 'dropped' ? 'planned' : status;
-    }
-
-    private getPartStatuses(): AnimeStatus[] {
-        return ['planned', 'watching', 'completed', 'paused'];
-    }
-
-    private getFormats(): IntegrationAnimePart['kind'][] {
-        return ['tv', 'movie', 'ova', 'ona', 'special'];
     }
 
     private getFormatLabel(format: IntegrationAnimePart['kind']): string {
@@ -380,11 +288,13 @@ export class AnimePartsReviewModal extends Modal {
 
     private getStatusLabel(status: AnimeStatus): string {
         switch (status) {
+            case 'to_be_released': return t('statusToBeReleased');
             case 'planned': return t('statusPlanned');
             case 'watching': return t('statusWatching');
             case 'completed': return t('statusCompleted');
             case 'dropped': return t('statusDropped');
             case 'paused': return t('statusPaused');
+            default: return getStatusAppearance('anime', status).label || status;
         }
     }
 }

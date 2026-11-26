@@ -6,6 +6,25 @@ import type { AnimeItem } from '../src/types';
 import { createMockApp, createBaseFilter, createMetadataService, createMockFile } from './helpers/testHelpers';
 
 describe('AnimeService', () => {
+    it('applies 18+ visibility to the general list and respects explicit adult filters', () => {
+        const general = createMockFile('Anime/General.md', 'General');
+        const adult = createMockFile('Anime/Restricted.md', 'Restricted');
+        const app = createMockApp({
+            [general.path]: { frontmatter: { type: 'anime', title: 'General' } },
+            [adult.path]: { frontmatter: { type: 'anime', title: 'Restricted', Sex18: true } },
+        });
+        const service = new AnimeService(app, createMetadataService(app));
+        const items = [service.parseAnimeFromCache(general)!, service.parseAnimeFromCache(adult)!];
+        const filter = createBaseFilter();
+
+        expect(service.filterAndSort(items, filter, 'name', 'asc', false)).toEqual([items[0]]);
+        expect(service.filterAndSort(items, filter, 'name', 'asc', true)).toEqual(items);
+        expect(service.filterAndSort(items, { ...filter, adultOnly: true }, 'name', 'asc', false)).toEqual([items[1]]);
+        expect(service.filterAndSort(items, {
+            ...filter, rules: [{ id: 'adult-filter', field: 'adult', fieldType: 'boolean', operator: 'isTrue' }],
+        }, 'name', 'asc', false)).toEqual([items[1]]);
+    });
+
     it('parses frontmatter from cache into anime model', () => {
         const file = createMockFile('Anime/Naruto.md', 'Naruto');
         file.stat = { ctime: 1_700_000_000_000, mtime: 1_700_000_100_000, size: 0 };
@@ -176,6 +195,7 @@ describe('AnimeService', () => {
                             episode_current: 8,
                             episode_total: 12,
                             status: 'watching',
+                            user_rating: 8.5,
                         },
                         {
                             id: 'ova-1',
@@ -198,6 +218,8 @@ describe('AnimeService', () => {
         expect(parsed?.episodeCurrent).toBe(1);
         expect(parsed?.episodeTotal).toBe(2);
         expect(parsed?.parts?.[1].kind).toBe('ova');
+        expect(parsed?.parts?.[0].userRating).toBe(8.5);
+        expect(parsed?.parts?.[1].userRating).toBeUndefined();
     });
 
     it('parses related media links from frontmatter', () => {
@@ -386,8 +408,8 @@ describe('AnimeService', () => {
             integrationProvider: 'anilist',
             integrationId: '42',
             parts: [
-                { id: 'tv-1', kind: 'tv', title: 'Season 1', seasonNumber: 1, episodeCurrent: 12, episodeTotal: 12, status: 'completed' },
-                { id: 'ova-1', kind: 'ova', title: 'OVA', seasonNumber: null, episodeCurrent: 2, episodeTotal: 2, status: 'completed' },
+                { id: 'tv-1', kind: 'tv', title: 'Season 1', seasonNumber: 1, episodeCurrent: 12, episodeTotal: 12, status: 'completed', userRating: 8.5 },
+                { id: 'ova-1', kind: 'ova', title: 'OVA', seasonNumber: null, episodeCurrent: 2, episodeTotal: 2, status: 'completed', userRating: null },
             ],
         });
 
@@ -395,7 +417,8 @@ describe('AnimeService', () => {
         expect(written.episode_current).toBe(2);
         expect(written.episode_total).toBe(2);
         expect(written.status).toBe('completed');
-        expect(written.anime_parts).toBeTypeOf('object');
+        expect(written.anime_parts).toMatchObject([{ user_rating: 8.5 }, {}]);
+        expect((written.anime_parts as unknown[])[1]).not.toHaveProperty('user_rating');
         expect(written.integration_provider).toBe('anilist');
         expect(written.integration_id).toBe('42');
     });

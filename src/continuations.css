@@ -1,0 +1,7 @@
+.lorebase-continuations { margin:12px 0; padding:12px; border:1px solid color-mix(in srgb,var(--lorebase-accent) 35%,var(--background-modifier-border)); border-radius:10px; background:color-mix(in srgb,var(--lorebase-accent) 5%,transparent); font-size:12px; }
+.lorebase-continuations-hint { margin:6px 0 10px; color:var(--text-muted); font-size:11px; line-height:1.5; }
+.lorebase-continuation-row { display:flex; align-items:flex-start; gap:8px; padding:7px 0; }
+.lorebase-continuation-text { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.lorebase-continuation-text small { color:var(--text-muted); line-height:1.4; }
+.lorebase-continuation-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.lorebase-editmode-root .lorebase-continuation-actions button { height:auto; min-height:30px; padding:5px 9px; font-size:11px; }

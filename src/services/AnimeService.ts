@@ -1,24 +1,42 @@
+import { normalizeStatusReasons } from '../utils/statusReasons';
+import { normalizePartCatalog } from './media/partCatalog';
+import { normalizeDiscovery, discoveryFrontmatter } from '../utils/discovery';
+import { normalizeReleaseDate, releaseDatePatch } from '../utils/releaseDates';
+import { normalizePriority } from '../utils/priority';
+import { normalizePersonalDate, personalDateTimestamp, readPersonalDate } from '../utils/personalDates';
+import { wikilinkLabel } from './integrations/templateValues';
+import { parseEpisodeDuration } from './media/watchProgress';
+import { animeGenreMigration } from '../utils/animeGenreMigration';
+import { readEpisodeFields, episodeFields, normalizeEpisodePart } from './media/episodeTracking';
+import { normalizeRepeatCount } from '../utils/repeatTracking';
+import { normalizeCountry } from '../utils/mediaWorkType';
+import { parseDetailedRatings } from '../utils/detailedRatings';
+import { isCustomStatus, countCustomStatus } from '../statusPresentation';
 /**
  * LOREBASE - Anime Service
  * Handles anime data loading, caching, filtering, and sorting
  */
 
 import { App, TFile, TFolder } from 'obsidian';
-import { AnimeFormat, AnimeItem, AnimePart, AnimeStatus, AnimeStats, FilterState, SortField, SortOrder } from '../types';
+import { AnimeFormat, AnimeItem, AnimePart, AnimeStatus, AnimeStats, FilterState, PosterMode, SortField, SortOrder } from '../types';
 import { MetadataService } from './MetadataService';
-import { DEFAULT_COVER } from '../constants';
+import { DEFAULT_COVER, DEFAULT_SETTINGS } from '../constants';
 import { filterAndSortMedia } from './media/filtering';
 import { extractSimpleFrontmatter } from './media/libraryViewState';
 import { getRandomItem, parseNumber, parseRelatedMedia, parseUserRating, parseYear, serializeRelatedMedia } from './media/parsers';
 import { collectFieldTags, collectTags, getAllMarkdownFiles, isTruthy, mapInFrameBatches, normalizeCacheTags } from './media/serviceUtils';
-import { upsertMarkdownSection } from './markdownSections';
+import { updateMarkdownSection } from './markdownSections';
+import { getPartPoster, normalizePosterMode } from './media/partPoster';
+import { readPartAlternativeTitles } from './integrations/alternativeTitles';
+import { isAnimeVideoProvider, readAnimeVideoSourceKind } from './integrations/animeVideoSources';
 
 export class AnimeService {
     private app: App;
     private metadataService: MetadataService;
     private cache: AnimeItem[] = [];
     private cacheValid = false;
-    private folderPath = 'Anime';
+    private folderPath = DEFAULT_SETTINGS.anime.folderPath;
+    private posterMode?: PosterMode;
 
     constructor(app: App, metadataService: MetadataService) {
         this.app = app;
@@ -36,6 +54,14 @@ export class AnimeService {
         this.cacheValid = false;
     }
 
+    setPosterMode(mode: PosterMode | undefined): void {
+        const next = normalizePosterMode(mode);
+        if (this.posterMode !== next) {
+            this.posterMode = next;
+            this.invalidateCache();
+        }
+    }
+
     async loadAnime(): Promise<AnimeItem[]> {
         if (this.cacheValid && this.cache.length > 0) {
             return this.cache;
@@ -48,6 +74,13 @@ export class AnimeService {
         }
 
         const files = getAllMarkdownFiles(folder);
+        for (const file of files) {
+            const metadata = this.metadataService.resolveFrontmatter('anime', this.app.metadataCache.getFileCache(file)?.frontmatter ?? {});
+            if (animeGenreMigration(metadata)) {
+                try { await this.metadataService.migrateAnimeGenres(file); }
+                catch (error) { console.error('Could not migrate anime genres:', file.path, error); }
+            }
+        }
         const animeItems = await mapInFrameBatches(files, (file) => this.parseAnimeFromCache(file));
 
         this.cache = animeItems;
@@ -57,7 +90,7 @@ export class AnimeService {
 
     private getStatusFromString(value: string): AnimeStatus | null {
         const normalized = value.trim().toLowerCase();
-        return ['planned', 'watching', 'completed', 'dropped', 'paused'].includes(normalized)
+        return isCustomStatus(normalized) || ['planned', 'watching', 'completed', 'dropped', 'paused', 'to_be_released'].includes(normalized)
             ? (normalized as AnimeStatus)
             : null;
     }
@@ -81,8 +114,12 @@ export class AnimeService {
     private inferIntegrationSource(sourceUrl: string): Pick<AnimeItem, 'integrationProvider' | 'integrationId'> | null {
         const candidates: Array<{ provider: NonNullable<AnimeItem['integrationProvider']>; pattern: RegExp }> = [
             { provider: 'anilist', pattern: /anilist\.co\/anime\/(\d+)/i },
+            { provider: 'kitsu', pattern: /kitsu\.(?:io|app)\/anime\/(\d+)/i },
             { provider: 'jikan', pattern: /myanimelist\.net\/anime\/(\d+)/i },
             { provider: 'shikimori', pattern: /shikimori\.(?:one|me)\/animes\/(?:[a-z]+)?(\d+)/i },
+            { provider: 'tmdb', pattern: /themoviedb\.org\/(?:tv|movie)\/(\d+)/i },
+            { provider: 'tvmaze', pattern: /tvmaze\.com\/shows\/(\d+)/i },
+            { provider: 'omdb', pattern: /imdb\.com\/title\/(tt\d+)/i },
         ];
         for (const candidate of candidates) {
             const id = sourceUrl.match(candidate.pattern)?.[1];
@@ -110,23 +147,34 @@ export class AnimeService {
         const defaultTitle = kind === 'tv' && seasonNumber ? `Season ${seasonNumber}` : kind.toUpperCase();
         const titleRaw = this.readObjectValue(source, ['title', 'name', 'label']);
         const title = typeof titleRaw === 'string' && titleRaw.trim() ? titleRaw.trim() : defaultTitle;
+        const rating = this.readObjectValue(source, ['user_rating', 'userRating']);
 
-        return {
+        return normalizeEpisodePart({
             id: this.normalizePartId(this.readObjectValue(source, ['id']), `${kind}-${index + 1}`),
             kind,
             title,
+            alternativeTitles: readPartAlternativeTitles(source),
             seasonNumber,
             episodeCurrent,
             episodeTotal,
             status,
-        };
+            ...(rating !== undefined ? { userRating: parseUserRating(rating) } : {}),
+            poster: typeof (source.poster ?? source.image) === 'string' ? String(source.poster ?? source.image).trim() || null : null,
+            year: parseNumber(source.year),
+            episodeDuration: parseNumber(source.episode_duration ?? source.episodeDuration),
+            ...(typeof (source.released ?? source.releaseDate) === 'string' ? { releaseDate: String(source.released ?? source.releaseDate) } : {}),
+            ...readEpisodeFields(source),
+        });
     }
 
-    private buildLegacyPart(anime: Pick<AnimeItem, 'format' | 'seasonCurrent' | 'episodeCurrent' | 'episodeTotal' | 'status'> & { seasonTotal?: number | null }): AnimePart {
+    private buildLegacyPart(anime: Pick<AnimeItem, 'format' | 'seasonCurrent' | 'episodeCurrent' | 'episodeTotal' | 'status'> & { seasonTotal?: number | null; title?: string; poster?: string; year?: number | null; episodeDuration?: number | null }): AnimePart {
         return {
             id: 'legacy-main',
             kind: anime.format,
-            title: anime.format === 'tv' && anime.seasonCurrent ? `Season ${anime.seasonCurrent}` : anime.format.toUpperCase(),
+            title: anime.title || anime.format.toUpperCase(),
+            poster: anime.poster ?? null,
+            year: anime.year ?? null,
+            episodeDuration: anime.episodeDuration ?? null,
             seasonNumber: anime.seasonCurrent ?? null,
             episodeCurrent: anime.episodeCurrent ?? null,
             episodeTotal: anime.episodeTotal ?? null,
@@ -139,7 +187,7 @@ export class AnimeService {
         return parts.find((part) => part.id === activePartId) ?? parts[0] ?? null;
     }
 
-    private normalizeAnimeParts(metadata: Record<string, unknown>, fallback: Pick<AnimeItem, 'format' | 'seasonCurrent' | 'episodeCurrent' | 'episodeTotal' | 'status'> & { seasonTotal?: number | null }): { parts: AnimePart[]; activePartId: string | null } {
+    private normalizeAnimeParts(metadata: Record<string, unknown>, fallback: Pick<AnimeItem, 'format' | 'seasonCurrent' | 'episodeCurrent' | 'episodeTotal' | 'status'> & { seasonTotal?: number | null; title?: string; poster?: string; year?: number | null; episodeDuration?: number | null }): { parts: AnimePart[]; activePartId: string | null } {
         const rawParts = metadata.anime_parts;
         const parsedParts = Array.isArray(rawParts)
             ? rawParts.map((part, index) => this.parseAnimePart(part, index)).filter((part): part is AnimePart => Boolean(part))
@@ -157,10 +205,17 @@ export class AnimeService {
             id: part.id,
             kind: part.kind,
             title: part.title,
+            ...(part.alternativeTitles?.length ? { alt_titles: part.alternativeTitles } : {}),
             season: part.seasonNumber,
             episode_current: part.episodeCurrent,
             episode_total: part.episodeTotal,
             status: part.status,
+            ...(part.userRating != null ? { user_rating: part.userRating } : {}),
+            poster: part.poster ?? null,
+            year: part.year ?? null,
+            episode_duration: part.episodeDuration ?? null,
+            ...(part.releaseDate ? { released: part.releaseDate } : {}),
+            ...episodeFields(part),
         }));
     }
 
@@ -168,28 +223,6 @@ export class AnimeService {
         return parts.length > 0 && parts.every((part) => part.status === 'completed');
     }
 
-    private parseDate(value: unknown): number | null {
-        if (value === null || value === undefined) return null;
-
-        if (value instanceof Date) {
-            return value.getTime();
-        }
-
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            if (value > 1e12) return value;
-            if (value > 1e9) return value * 1000;
-            return null;
-        }
-
-        if (typeof value === 'string') {
-            const trimmed = value.trim();
-            if (!trimmed) return null;
-            const parsed = Date.parse(trimmed);
-            return Number.isNaN(parsed) ? null : parsed;
-        }
-
-        return null;
-    }
 
     private parseCommunityRating(value: unknown): number | null {
         const parsed = parseNumber(value);
@@ -199,7 +232,9 @@ export class AnimeService {
     public parseAnimeFromCache(file: TFile): AnimeItem | null {
         try {
             const cache = this.app.metadataCache.getFileCache(file);
-            const metadata = cache?.frontmatter || {};
+            const original = this.metadataService.resolveFrontmatter('anime', cache?.frontmatter || {});
+            const migration = animeGenreMigration(original);
+            const metadata = migration ? Object.assign(original, migration) : original;
 
             const rawType = typeof metadata.type === 'string' ? metadata.type.toLowerCase() : '';
             if (rawType && rawType !== 'anime') {
@@ -222,7 +257,9 @@ export class AnimeService {
                 : '';
             let integrationProvider: AnimeItem['integrationProvider'] = integrationProviderRaw === 'anilist'
                 || integrationProviderRaw === 'jikan'
+                || integrationProviderRaw === 'kitsu'
                 || integrationProviderRaw === 'shikimori'
+                || isAnimeVideoProvider(integrationProviderRaw)
                 ? integrationProviderRaw
                 : null;
             let integrationId = typeof metadata.integration_id === 'string' || typeof metadata.integration_id === 'number'
@@ -237,6 +274,9 @@ export class AnimeService {
             }
 
             const format = this.getFormatFromString(metadata.format);
+            const integrationSourceKind = isAnimeVideoProvider(integrationProvider)
+                ? readAnimeVideoSourceKind(metadata.integration_source_kind, sourceUrl, format)
+                : undefined;
 
             let status: AnimeStatus = 'planned';
             if (typeof metadata.status === 'string') {
@@ -260,17 +300,24 @@ export class AnimeService {
                 : (typeof metadata.poster_b === 'string' ? metadata.poster_b : '');
             const tags = collectTags(metadata, normalizeCacheTags(cache?.tags));
             const genres = collectFieldTags(metadata, ['genres', 'genre']);
-            const studios = this.toDisplayList(metadata.studios ?? metadata.studio);
+            const studioValue = metadata.studios ?? metadata.studio;
+            const studios = typeof studioValue === 'string' && wikilinkLabel(studioValue) !== studioValue
+                ? [wikilinkLabel(studioValue)]
+                : this.toDisplayList(studioValue).map(wikilinkLabel);
             const dateAdded = file.stat?.ctime ?? file.stat?.mtime ?? Date.now();
             const started = this.readDateText(metadata, ['started', 'dateStarted', 'start_date']);
             const finished = this.readDateText(metadata, ['finished', 'dateFinished', 'finish_date', 'dateWatched', 'watched']);
-            const dateWatched = this.parseDate(finished ?? metadata.dateWatched);
+            const dateWatched = personalDateTimestamp(finished);
 
             const seasonCurrent = parseNumber(metadata.season_current);
             const seasonTotal = parseNumber(metadata.season_total);
             const episodeCurrent = parseNumber(metadata.episode_current);
             const episodeTotal = parseNumber(metadata.episode_total);
             const { parts, activePartId } = this.normalizeAnimeParts(metadata, {
+                title,
+                poster: rawVerticalImage,
+                year: parseYear(metadata.year),
+                episodeDuration: parseEpisodeDuration(metadata.episode_duration ?? metadata.duration ?? metadata.runtime),
                 format,
                 status,
                 seasonCurrent,
@@ -279,6 +326,8 @@ export class AnimeService {
                 episodeTotal,
             });
             const activePart = this.getActivePart(parts, activePartId);
+            const titleImageUrl = verticalImageUrl || rawVerticalImage || horizontalImageUrl || rawHorizontalImage || DEFAULT_COVER;
+            const posterMode = this.posterMode ?? normalizePosterMode(metadata.poster_mode);
 
             const anime: AnimeItem = {
                 type: 'anime',
@@ -288,19 +337,30 @@ export class AnimeService {
                 year: parseYear(metadata.year),
                 description: summaryText,
                 summary: summaryText,
+                releaseDate: this.readDateText(metadata, ['released', 'release_date', 'releaseDate', 'aired_on', 'air_date', 'premiered']),
+                detailedRatings: parseDetailedRatings(metadata.detailed_ratings),
                 userRating: parseUserRating(metadata.rating),
                 favorite: isTruthy(metadata.favorite),
+                priority: normalizePriority(metadata.personal_priority),
+                discovery: normalizeDiscovery(metadata.discovery_context),
+                statusReasons: normalizeStatusReasons(metadata.status_reasons),
+                partCatalog: normalizePartCatalog(metadata.part_catalog),
                 poster: typeof metadata.poster === 'string' ? metadata.poster : rawVerticalImage,
-                imageUrl: verticalImageUrl || rawVerticalImage || horizontalImageUrl || rawHorizontalImage || DEFAULT_COVER,
+                imageUrl: getPartPoster(parts, activePartId, posterMode, titleImageUrl, value => this.metadataService.getImageUrl(value)),
+                titleImageUrl,
+                posterMode,
                 horizontalImageUrl: horizontalImageUrl || rawHorizontalImage || verticalImageUrl || rawVerticalImage || null,
                 hasCustomPoster: Boolean(metadata.cm_poster),
-                isAdult: false,
+                isAdult: isTruthy(metadata.Sex18 ?? metadata.isAdult),
+                countryOfOrigin: normalizeCountry(metadata.country_of_origin ?? metadata.countryOfOrigin),
+                workType: normalizeCountry(metadata.country_of_origin ?? metadata.countryOfOrigin),
                 format,
                 status,
                 seasonCurrent: activePart?.seasonNumber ?? seasonCurrent,
                 seasonTotal,
                 episodeCurrent: activePart?.episodeCurrent ?? episodeCurrent,
                 episodeTotal: activePart?.episodeTotal ?? episodeTotal,
+                repeatCount: normalizeRepeatCount(metadata.repeat_count),
                 genres,
                 studios,
                 started,
@@ -310,6 +370,7 @@ export class AnimeService {
                 tags,
                 sourceUrl: sourceUrl || null,
                 integrationProvider,
+                integrationSourceKind,
                 integrationId,
                 parts,
                 activePartId,
@@ -319,7 +380,7 @@ export class AnimeService {
                 communityRatingProvider: typeof metadata.communityRatingProvider === 'string'
                     ? metadata.communityRatingProvider
                     : (typeof metadata.community_rating_provider === 'string' ? metadata.community_rating_provider : null),
-                rawFields: extractSimpleFrontmatter(metadata),
+                rawFields: extractSimpleFrontmatter(metadata.alt_titles === undefined ? metadata : { ...metadata, alt_titles: metadata.alt_titles }),
             };
 
             return anime;
@@ -333,19 +394,24 @@ export class AnimeService {
         items: AnimeItem[],
         filter: FilterState,
         sortField: SortField,
-        sortOrder: SortOrder
+        sortOrder: SortOrder,
+        showAdultInAll = false
     ): AnimeItem[] {
+        const adultOnly = filter.adultOnly
+            || filter.rules?.some(rule => rule.field === 'adult' && rule.operator === 'isTrue') === true;
         return filterAndSortMedia({
             items,
             filter,
             sortField,
             sortOrder,
-            getCompletedDate: (item) => this.parseDate(item.finished) ?? item.dateWatched ?? item.dateAdded,
-            isVisible: (item, hasGlobalFilters) => (
-                filter.customOnly
+            getCompletedDate: (item) => item.finished ? personalDateTimestamp(item.finished) : item.dateWatched,
+            isVisible: (item, hasGlobalFilters) => {
+                if (adultOnly && !item.isAdult) return false;
+                if (!adultOnly && !showAdultInAll && item.isAdult) return false;
+                return filter.customOnly
                     ? item.hasCustomPoster
-                    : hasGlobalFilters || !item.hasCustomPoster
-            ),
+                    : adultOnly || hasGlobalFilters || !item.hasCustomPoster;
+            },
         });
     }
 
@@ -357,7 +423,10 @@ export class AnimeService {
         }
 
         const frontmatterUpdates: Record<string, unknown> = {};
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        if ('countries' in updates) frontmatterUpdates.countries = updates.countries ?? [];
+        if ('repeatCount' in updates) frontmatterUpdates.repeat_count = normalizeRepeatCount(updates.repeatCount);
+        const rawFrontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        const frontmatter = this.metadataService.resolveFrontmatter('anime', rawFrontmatter || {});
 
         if ('displayName' in updates) {
             const title = updates.displayName?.trim() ?? '';
@@ -369,14 +438,21 @@ export class AnimeService {
             }
         }
         if ('favorite' in updates) frontmatterUpdates.favorite = updates.favorite;
+        if ('priority' in updates) frontmatterUpdates.personal_priority = normalizePriority(updates.priority);
+        if ('partCatalog' in updates) frontmatterUpdates.part_catalog = normalizePartCatalog(updates.partCatalog) ?? null;
+        if ('discovery' in updates) frontmatterUpdates.discovery_context = discoveryFrontmatter(updates.discovery);
+        if ('statusReasons' in updates) frontmatterUpdates.status_reasons = normalizeStatusReasons(updates.statusReasons) ?? null;
         if ('status' in updates) frontmatterUpdates.status = updates.status;
         if ('year' in updates) frontmatterUpdates.year = updates.year;
+        if ('releaseDate' in updates) Object.assign(frontmatterUpdates,releaseDatePatch(frontmatter,updates.releaseDate,['released','release_date','releaseDate','aired_on','air_date','premiered']));
         if ('summary' in updates) frontmatterUpdates.summary = updates.summary;
+        if ('detailedRatings' in updates) frontmatterUpdates.detailed_ratings = parseDetailedRatings(updates.detailedRatings) ?? null;
         if ('userRating' in updates) {
             frontmatterUpdates.rating = updates.userRating ?? null;
             frontmatterUpdates.userRating = null;
         }
         if ('format' in updates) frontmatterUpdates.format = updates.format;
+        if ('posterMode' in updates) frontmatterUpdates.poster_mode = normalizePosterMode(updates.posterMode);
         let parts = updates.parts ?? anime.parts;
         let activePartId = updates.activePartId !== undefined ? updates.activePartId : anime.activePartId;
         if (parts && parts.length > 0) {
@@ -384,7 +460,7 @@ export class AnimeService {
             if (activePart && activePart.id !== activePartId) {
                 activePartId = activePart.id;
             }
-            if (this.areAllTrackablePartsCompleted(parts)) {
+            if (!isCustomStatus(updates.status ?? anime.status) && this.areAllTrackablePartsCompleted(parts)) {
                 frontmatterUpdates.status = 'completed';
             }
             frontmatterUpdates.anime_parts = this.serializeAnimeParts(parts);
@@ -403,9 +479,12 @@ export class AnimeService {
             const normalizedFinished = this.normalizeDateString(updates.finished ?? '');
             frontmatterUpdates.finished = normalizedFinished || null;
             frontmatterUpdates.dateWatched = normalizedFinished || null;
+            for (const key of ['dateFinished', 'finish_date', 'watched']) frontmatterUpdates[key] = null;
         }
         if ('integrationProvider' in updates) frontmatterUpdates.integration_provider = updates.integrationProvider;
         if ('integrationId' in updates) frontmatterUpdates.integration_id = updates.integrationId;
+        if ('countryOfOrigin' in updates) frontmatterUpdates.country_of_origin = normalizeCountry(updates.countryOfOrigin);
+        if ('isAdult' in updates) frontmatterUpdates.Sex18 = updates.isAdult;
         if ('genres' in updates) frontmatterUpdates.genres = updates.genres?.length ? updates.genres : null;
         if ('studios' in updates) {
             const studios = this.toDisplayList(updates.studios);
@@ -417,36 +496,22 @@ export class AnimeService {
         if ('communityVotes' in updates) frontmatterUpdates.communityVotes = updates.communityVotes;
         if ('communityRatingProvider' in updates) frontmatterUpdates.communityRatingProvider = updates.communityRatingProvider;
 
-        await this.metadataService.updateMetadata(file, frontmatterUpdates);
+        await this.metadataService.updateMetadata(file, frontmatterUpdates, 'anime');
         if ('myNotes' in updates) {
             await this.updateMyNotesSection(file, updates.myNotes ?? '');
         }
     }
 
     private async updateMyNotesSection(file: TFile, value: string): Promise<void> {
-        const content = await this.app.vault.read(file);
-        const next = upsertMarkdownSection(content, 'My Notes', value);
-        if (next !== content) {
-            await this.app.vault.modify(file, next);
-        }
+        await updateMarkdownSection(this.app, file, value);
     }
 
     private readDateText(source: Record<string, unknown>, keys: string[]): string | null {
-        for (const key of keys) {
-            const value = source[key];
-            if (typeof value === 'string') {
-                const normalized = this.normalizeDateString(value);
-                if (normalized) return normalized;
-            }
-            if (typeof value === 'number' && Number.isFinite(value)) {
-                const timestamp = value > 1e12 ? value : value > 1e9 ? value * 1000 : null;
-                if (timestamp) return this.formatDateInput(timestamp);
-            }
-            if (value instanceof Date) {
-                return this.formatDateInput(value.getTime());
-            }
+        if (keys[0] !== 'started' && keys[0] !== 'finished') {
+            for (const key of keys) { const value = normalizeReleaseDate(source[key]); if (value) return value; }
+            return null;
         }
-        return null;
+        return readPersonalDate(source, keys);
     }
 
     private toDisplayList(value: unknown): string[] {
@@ -468,20 +533,9 @@ export class AnimeService {
     }
 
     private normalizeDateString(value: string | null | undefined): string {
-        const trimmed = String(value ?? '').trim();
-        if (!trimmed) return '';
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        const parsed = Date.parse(trimmed);
-        return Number.isNaN(parsed) ? '' : this.formatDateInput(parsed);
+        return normalizePersonalDate(value);
     }
 
-    private formatDateInput(timestamp: number): string {
-        const date = new Date(timestamp);
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
 
     async deleteAnime(anime: AnimeItem): Promise<boolean> {
         const file = this.app.vault.getAbstractFileByPath(anime.filePath);
@@ -509,6 +563,7 @@ export class AnimeService {
             completed: 0,
             dropped: 0,
             paused: 0,
+            to_be_released: 0,
             favorite: 0,
             withRating: 0,
             avgRating: 0,
@@ -520,6 +575,7 @@ export class AnimeService {
 
         for (const item of anime) {
             if (!item) continue;
+            countCustomStatus(stats, item.status);
 
             switch (item.status) {
                 case 'planned': stats.planned++; break;
@@ -527,6 +583,7 @@ export class AnimeService {
                 case 'completed': stats.completed++; break;
                 case 'dropped': stats.dropped++; break;
                 case 'paused': stats.paused++; break;
+                case 'to_be_released': stats.to_be_released++; break;
             }
 
             if (item.favorite) stats.favorite++;
@@ -534,7 +591,7 @@ export class AnimeService {
             if (item.userRating) {
                 stats.withRating++;
                 ratingSum += item.userRating;
-                stats.ratingDistribution[item.userRating]++;
+                stats.ratingDistribution[item.userRating] = (stats.ratingDistribution[item.userRating] || 0) + 1;
             }
         }
 
@@ -549,6 +606,7 @@ export class AnimeService {
                 completed: Math.round((stats.completed / stats.total) * 1000) / 10,
                 dropped: Math.round((stats.dropped / stats.total) * 1000) / 10,
                 paused: Math.round((stats.paused / stats.total) * 1000) / 10,
+                to_be_released: Math.round((stats.to_be_released / stats.total) * 1000) / 10,
             };
         }
 

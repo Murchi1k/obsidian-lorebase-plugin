@@ -1,0 +1,220 @@
+.lorebase-editmode-panel.lorebase-title-composition { background: color-mix(in srgb, var(--background-primary) 90%, transparent); }
+.lorebase-title-composition .lorebase-part-heading { margin-bottom: 12px; }
+.lorebase-editmode-root .lorebase-title-composition button.lorebase-part-tab {
+    height: 36px;
+    border-radius: 11px;
+    border-color: color-mix(in srgb, var(--lorebase-part-status-color) 24%, var(--background-modifier-border));
+    background: color-mix(in srgb, var(--lorebase-part-status-color) 14%, var(--background-secondary));
+}
+.lorebase-editmode-root .lorebase-title-composition button.lorebase-part-tab.is-selected {
+    border-color: color-mix(in srgb, var(--lorebase-part-status-color) 65%, var(--background-modifier-border));
+    background: color-mix(in srgb, var(--lorebase-part-status-color) 24%, var(--background-secondary));
+}
+.lorebase-editmode-root .lorebase-title-composition button.lorebase-part-tab:hover {
+    background: color-mix(in srgb, var(--lorebase-part-status-color) 21%, var(--background-secondary));
+}
+.lorebase-editmode-root .lorebase-title-composition button.lorebase-part-tab.is-selected:hover {
+    background: color-mix(in srgb, var(--lorebase-part-status-color) 30%, var(--background-secondary));
+}
+
+.lorebase-title-part-card {
+    --lb-title-part-surface: color-mix(in srgb, var(--interactive-accent) 5%, var(--background-secondary));
+    --lb-title-part-border: color-mix(in srgb, var(--interactive-accent) 22%, var(--background-modifier-border));
+    position: relative;
+    margin-top: 13px;
+    border: 1px solid var(--lb-title-part-border);
+    border-radius: 14px;
+    background: var(--background-primary);
+}
+.lorebase-title-part-overview {
+    display: grid;
+    grid-template-columns: clamp(104px, 15cqw, 154px) minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+    padding: 14px 16px;
+}
+.lorebase-title-part-overview .lorebase-part-artwork { position: relative; }
+.lorebase-title-part-overview .lorebase-part-poster-preview { border-radius: 9px; }
+.lorebase-editmode-root .lorebase-title-part-overview .lorebase-part-artwork-change {
+    position: absolute;
+    inset-inline-end: 5px;
+    inset-block-end: 5px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: var(--background-primary);
+}
+.lorebase-title-part-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.lorebase-title-part-identity { min-width: 0; }
+.lorebase-title-part-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; min-width: 0; }
+.lorebase-title-part-heading > .lorebase-title-part-rating { align-self: end; padding-bottom: 3px; }
+.lorebase-title-part-position {
+    display: inline-flex;
+    padding: 2px 7px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--interactive-accent) 22%, var(--background-secondary));
+    color: var(--text-normal);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.lorebase-editmode-root input.lorebase-title-part-title {
+    display: block;
+    width: 100%;
+    height: 36px;
+    margin-top: 2px;
+    padding: 1px 4px;
+    border-color: transparent;
+    box-shadow: none;
+    background: transparent;
+    color: var(--text-normal);
+    font-size: clamp(1.03rem, 2.6cqw, 1.45rem);
+    font-weight: 650;
+    text-overflow: ellipsis;
+}
+.lorebase-editmode-root input.lorebase-title-part-title:hover { border-color: var(--background-modifier-border); }
+.lorebase-editmode-root input.lorebase-title-part-title:focus { border-color: var(--interactive-accent); }
+.lorebase-title-part-rating { display: grid; justify-items: start; gap: 3px; }
+.lorebase-title-part-rating > .lorebase-title-part-label { font-size: 11px; }
+.lorebase-editmode-root .lorebase-title-part-rating .lorebase-game-dlc-score { display: inline-flex; width: max-content; min-height: 28px; gap: 2px; margin: 0; padding: 2px; }
+.lorebase-editmode-root .lorebase-title-part-rating .lorebase-game-dlc-score button { flex: 0 0 22px; width: 22px; min-width: 22px; height: 24px; min-height: 24px; padding: 3px; }
+.lorebase-editmode-root .lorebase-title-part-rating .lorebase-game-dlc-readout input { flex: 0 0 auto; width: 4.2ch; min-width: 0; height: 24px; min-height: 24px; padding: 1px 2px; border: 1px solid transparent; border-radius: 5px; background: transparent; box-shadow: none; color: var(--text-normal); font-size: 12px; }
+.lorebase-editmode-root .lorebase-title-part-rating .lorebase-game-dlc-readout input:focus { border-color: var(--interactive-accent); outline: none; }
+.lorebase-title-part-rating .lorebase-game-dlc-score svg { width: 12px; height: 12px; }
+.lorebase-title-part-card [data-card-icon], .lorebase-title-part-status-icon { display: inline-flex; flex: 0 0 auto; }
+.lorebase-title-part-card [data-card-icon] svg, .lorebase-title-part-status-icon svg { width: 14px; height: 14px; }
+
+.lorebase-title-part-tracking {
+    --part-progress-heading-height: 18px;
+    --part-progress-heading-gap: 5px;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(132px, .85fr) minmax(90px, 1.55fr) max-content;
+    align-items: center;
+    gap: 10px;
+}
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-part-live-status .lorebase-settings-dropdown-btn {
+    gap: 7px;
+    height: 36px;
+    min-height: 36px;
+    background: color-mix(in srgb, var(--lorebase-title-part-status) 12%, var(--background-secondary));
+}
+.lorebase-title-part-status-icon { color: var(--lorebase-title-part-status); }
+.lorebase-title-part-card .lorebase-part-live-status .lorebase-settings-dropdown-label { flex: 1; text-align: start; }
+.lorebase-title-part-progress-heading { display: flex; justify-content: space-between; gap: 6px; min-height: var(--part-progress-heading-height); margin-bottom: var(--part-progress-heading-gap); font-size: 0.82rem; line-height: var(--part-progress-heading-height); font-variant-numeric: tabular-nums; }
+.lorebase-title-part-progress-heading strong { color: var(--interactive-accent); }
+.lorebase-title-part-progress .lorebase-watch-progress-bar { height: 7px; }
+.lorebase-title-composition .lorebase-watch-progress-bar::-webkit-progress-value { background: var(--interactive-accent); }
+.lorebase-title-part-metadata { grid-column: 1 / -1; display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.lorebase-title-part-field {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    align-content: start;
+    margin: 0;
+}
+.lorebase-title-part-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    line-height: 1.2;
+}
+.lorebase-title-part-card .lorebase-part-dropdown { min-width: 0; }
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-title-part-field .lorebase-settings-dropdown-btn,
+.lorebase-editmode-root .lorebase-title-part-field input.lorebase-editmode-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    height: 34px;
+    padding: 0 8px;
+    gap: 4px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 7px;
+    box-shadow: none;
+    background: var(--background-secondary);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+}
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-title-part-field .lorebase-settings-dropdown-btn:is(:focus-visible, .is-open),
+.lorebase-editmode-root .lorebase-title-part-field input.lorebase-editmode-input:focus { border-color: var(--interactive-accent); }
+.lorebase-title-part-repeats .lorebase-part-repeat-tracking .lorebase-media-repeat-row { display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 7px; }
+.lorebase-title-part-repeats .lorebase-part-repeat-tracking .lorebase-editmode-field-label { display: none; }
+.lorebase-editmode-root .lorebase-title-part-repeats .lorebase-repeat-pill { margin: 0; line-height: 1; }
+.lorebase-title-part-repeats .lorebase-repeat-pill-icon { display: grid; height: 20px; place-items: center; }
+.lorebase-title-part-episode-count { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto minmax(0, 1fr) 20px; align-items: center; gap: 3px; height: 34px; padding: 0 3px; border: 1px solid var(--background-modifier-border); border-radius: 7px; background: var(--background-secondary); }
+.lorebase-title-part-episode-count:focus-within { border-color: var(--interactive-accent); }
+.lorebase-title-part-episode-count .lorebase-part-stepper { display: contents; }
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-title-part-episode-count input { width: 100%; min-width: 0; height: 32px; min-height: 0; padding: 0 2px; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: 0; text-align: center; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-title-part-episode-count button { width: 20px; min-width: 0; height: 32px; min-height: 0; padding: 0; }
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-title-part-episode-count button { border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); font-size: 0.9rem; cursor: pointer; box-shadow: none; }
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-title-part-episode-count button:hover:not(:disabled) { background: var(--background-modifier-hover); color: var(--text-normal); }
+.lorebase-title-part-episode-count button:disabled { opacity: .3; cursor: default; }
+.lorebase-title-part-card[data-episode-mode="episodes"] .lorebase-title-part-episode-count { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.lorebase-title-part-card[data-episode-mode="episodes"] .lorebase-title-part-episode-count .lorebase-part-stepper button { display: none; }
+.lorebase-title-part-card[data-episode-mode="episodes"] .lorebase-title-part-episode-count > button { display: none; }
+
+.lorebase-title-part-card summary { list-style: none; cursor: pointer; }
+.lorebase-title-part-card summary::-webkit-details-marker { display: none; }
+.lorebase-title-part-card summary:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.lorebase-title-part-card .lorebase-part-duration-panel > .lorebase-part-footer {
+    margin: 0;
+    padding: 6px 8px;
+    border-top: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+}
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-part-duration-panel [data-action="remove-part"] { display: inline-flex; width: 100%; align-items: center; justify-content: flex-start; gap: 8px; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-error); font-size: 12px; }
+.lorebase-editmode-root .lorebase-title-part-card .lorebase-part-duration-panel [data-action="remove-part"]:hover { background: color-mix(in srgb, var(--text-error) 10%, transparent); }
+.lorebase-title-part-card .lorebase-part-duration-panel [data-role="remove-part-icon"] { display: inline-flex; }
+.lorebase-title-part-card .lorebase-part-duration-panel [data-role="remove-part-icon"] svg { width: 14px; height: 14px; }
+.lorebase-title-part-card .lorebase-part-duration-panel :is(.lorebase-part-footer, [data-action="remove-part"])[hidden] { display: none; }
+
+.lorebase-title-part-tools {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 9px 16px;
+    border-top: 1px solid var(--lb-title-part-border);
+}
+.lorebase-title-part-tools .lorebase-part-episodes { flex: 1 1 60%; min-width: 0; margin: 0; padding: 0; border: 0; }
+.lorebase-title-part-card[data-episode-mode="episodes"] .lorebase-title-part-tools .lorebase-part-episodes { flex-basis: 100%; }
+.lorebase-title-part-tools .lorebase-part-duration-default { align-self: flex-start; margin-inline-start: auto; }
+.lorebase-title-part-tools .lorebase-part-duration-default > summary { display: flex; align-items: center; gap: 4px; min-height: 34px; }
+.lorebase-title-part-tools .lorebase-part-duration-default > .lorebase-part-duration-panel { left: auto; right: 0; }
+.lorebase-editmode-root .lorebase-title-part-tools .lorebase-episodes-mode button[aria-pressed="true"] {
+    border-color: var(--lb-title-part-border);
+    background: color-mix(in srgb, var(--interactive-accent) 22%, var(--background-secondary));
+}
+.lorebase-title-part-total {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+.lorebase-title-part-total .lorebase-watch-progress { gap: 7px; margin: 4px 0 0; }
+.lorebase-title-part-total .lorebase-watch-progress-bar { height: 7px; }
+.lorebase-title-part-total .lorebase-watch-progress-heading strong { font-size: 1.12rem; }
+
+@container (max-width: 650px) {
+    .lorebase-title-part-tracking { grid-template-columns: minmax(0, 1fr) auto; }
+    .lorebase-title-part-card .lorebase-title-part-progress { grid-column: 1 / -1; grid-row: 2; }
+    .lorebase-title-part-metadata { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 490px) {
+    .lorebase-title-part-overview { grid-template-columns: 84px minmax(0, 1fr); gap: 10px; padding: 10px; }
+    .lorebase-title-part-content { display: contents; }
+    .lorebase-title-part-overview .lorebase-part-artwork { grid-column: 1; grid-row: 1; }
+    .lorebase-title-part-heading { grid-column: 2; grid-row: 1; grid-template-columns: minmax(0, 1fr); align-self: center; gap: 8px; }
+    .lorebase-title-part-metadata .lorebase-title-part-episodes-field { grid-column: 1 / -1; }
+    .lorebase-title-part-tools, .lorebase-title-part-total { padding-inline: 10px; }
+}
