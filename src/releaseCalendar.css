@@ -1,0 +1,224 @@
+/* Release workspace: a 60/40 calendar and a full-width chronological archive. */
+.modal.lorebase-release-calendar-container {
+    width: min(1720px, calc(100vw - 32px));
+    max-width: 1720px;
+    height: min(1040px, calc(100vh - 32px));
+    max-height: calc(100vh - 32px);
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 20px;
+    background: var(--background-primary);
+}
+.lorebase-release-calendar-container > .modal-close-button { top: 20px; right: 18px; z-index: 3; }
+.lorebase-release-calendar-container .modal-content { height: 100%; margin: 0; overflow: hidden; }
+.lorebase-release-calendar {
+    --release-game: #eba065;
+    --release-anime: #df83b5;
+    --release-movie: #a4a1ed;
+    --release-series: #79b6e7;
+    --release-book: #d1b073;
+    --release-manga: #9bc184;
+    --release-color: var(--text-accent);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    padding: 22px 28px 0;
+    box-sizing: border-box;
+    color: var(--text-normal);
+}
+.lorebase-release-calendar .is-game { --release-color: var(--release-game); }
+.lorebase-release-calendar .is-anime { --release-color: var(--release-anime); }
+.lorebase-release-calendar .is-movie { --release-color: var(--release-movie); }
+.lorebase-release-calendar .is-series { --release-color: var(--release-series); }
+.lorebase-release-calendar .is-book { --release-color: var(--release-book); }
+.lorebase-release-calendar .is-manga { --release-color: var(--release-manga); }
+.lorebase-release-calendar button { font-family: inherit; }
+.lorebase-release-calendar button:focus-visible,
+.lorebase-release-search:focus-within { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
+.lorebase-release-calendar button svg { width: 15px; height: 15px; flex-shrink: 0; }
+.lorebase-release-calendar button span:has(> svg) { display: inline-flex; align-items: center; }
+.lorebase-release-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 20px; padding: 0 0 18px; }
+.lorebase-release-heading { display: flex; flex: 1; align-items: center; gap: 16px; min-width: 0; }
+.lorebase-release-heading-icon { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; color: var(--text-accent); border: 1px solid color-mix(in srgb, var(--interactive-accent) 30%, var(--background-modifier-border)); border-radius: 13px; background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-secondary)); }
+.lorebase-release-heading-icon svg { width: 25px; height: 25px; }
+.lorebase-release-heading h2 { margin: 0; font-size: 24px; font-weight: 750; line-height: 1.25; letter-spacing: -.6px; }
+.lorebase-release-subtitle { margin-top: 6px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.lorebase-release-view-switch,
+.lorebase-release-scope { display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--background-modifier-border); border-radius: 12px; background: var(--background-secondary); }
+.lorebase-release-calendar .lorebase-release-choice { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 12px; color: var(--text-muted); border: 0; border-radius: 8px; box-shadow: none; background: transparent; white-space: nowrap; font-size: 12px; }
+.lorebase-release-calendar .lorebase-release-choice.is-active { color: var(--text-normal); background: var(--background-modifier-hover); }
+.lorebase-release-filters { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--background-modifier-border); }
+.lorebase-release-calendar .lorebase-release-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex: 0 0 38px; padding: 0; border: 1px solid var(--background-modifier-border); border-radius: 10px; box-shadow: none; color: var(--text-muted); background: var(--background-secondary); }
+.lorebase-release-calendar .lorebase-release-icon-btn:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.lorebase-release-media-filters { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 12px; border-left: 1px solid var(--background-modifier-border); }
+.lorebase-release-calendar .lorebase-release-filter { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 10px; border: 1px solid var(--background-modifier-border); border-radius: 7px; box-shadow: none; background: transparent; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.lorebase-release-calendar .lorebase-release-filter:hover { border-color: var(--text-muted); }
+.lorebase-release-calendar .lorebase-release-filter.is-active { border-color: color-mix(in srgb, var(--release-color) 60%, var(--background-modifier-border)); color: var(--text-normal); background: transparent; }
+.lorebase-release-filter.is-active > span:first-child { color: color-mix(in srgb, var(--release-color) 65%, var(--text-muted)); }
+.lorebase-release-search { display: flex; align-items: center; flex: 0 1 205px; gap: 8px; min-width: 150px; height: 40px; padding: 0 12px; border: 1px solid var(--background-modifier-border); border-radius: 11px; color: var(--text-muted); background: var(--background-secondary); }
+.lorebase-release-search > span { display: inline-flex; }
+.lorebase-release-search svg { width: 15px; height: 15px; }
+.lorebase-release-calendar .lorebase-release-search input { width: 100%; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 12px; }
+.lorebase-release-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); flex: 1; min-height: 0; margin: 0 -28px; border-top: 1px solid var(--background-modifier-border); overflow: hidden; }
+.lorebase-release-body.is-agenda { display: flex; }
+.lorebase-release-sidebar { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 18px 22px 14px; border-right: 1px solid var(--background-modifier-border); overflow: hidden; background: var(--background-primary); }
+.lorebase-release-sidebar-heading { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.lorebase-release-eyebrow { display: block; color: var(--text-muted); font-size: 10px; line-height: 1.4; font-weight: 750; letter-spacing: 1.2px; text-transform: uppercase; }
+.lorebase-release-sidebar-heading h3 { margin: 5px 0 0; font-size: 22px; line-height: 1.3; }
+.lorebase-release-month-total { padding: 6px 9px; border: 1px solid var(--background-modifier-border); border-radius: 8px; color: var(--text-muted); font-size: 10px; }
+.lorebase-release-calendar .lorebase-release-today { height: 36px; flex-shrink: 0; padding: 0 12px; border: 1px solid var(--background-modifier-border); border-radius: 9px; box-shadow: none; font-size: 11px; background: var(--background-modifier-hover); }
+.lorebase-release-calendar-controls { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.lorebase-release-calendar-controls .lorebase-release-icon-btn { width: 36px; height: 36px; flex-basis: 36px; }
+.lorebase-release-date-picker { display: flex; justify-content: center; gap: 8px; min-width: 0; }
+.lorebase-release-date-picker .lorebase-settings-dropdown { min-width: 0; width: auto; }
+.lorebase-release-month-dropdown { flex: 0 1 128px; min-width: 0; }
+.lorebase-release-year-dropdown { flex: 0 0 84px; }
+.lorebase-release-date-picker .lorebase-settings-dropdown-btn { height: 36px; min-height: 36px; padding: 0 8px; font-size: 11px; border-radius: 8px; }
+.lorebase-release-date-picker .lorebase-settings-dropdown-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-release-grid { display: grid; flex: 1 1 0; min-height: 0; container: lorebase-release-month / size; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 26px repeat(6, minmax(0, 1fr)); border: 1px solid var(--background-modifier-border); border-radius: 13px; overflow: hidden; }
+.lorebase-release-weekday { display: grid; place-items: center; height: 26px; color: var(--text-muted); background: var(--background-primary); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.lorebase-release-calendar .lorebase-release-day { position: relative; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px; min-width: 0; height: auto; min-height: 0; padding: 6px 7px 7px; border: 0; border-right: 1px solid var(--background-modifier-border); border-top: 1px solid var(--background-modifier-border); border-radius: 0; box-shadow: none; background: transparent; color: var(--text-muted); text-align: left; overflow: hidden; }
+.lorebase-release-day:nth-child(7n) { border-right: 0; }
+.lorebase-release-calendar .lorebase-release-day:hover { background: var(--background-modifier-hover); }
+.lorebase-release-day.is-outside { background: color-mix(in srgb, var(--background-primary) 50%, transparent); }
+.lorebase-release-day.is-outside .lorebase-release-day-number { opacity: .4; }
+.lorebase-release-day-number { display: grid; align-self: flex-start; flex-shrink: 0; place-items: center; min-width: 20px; height: 19px; border-radius: 5px; font-size: 11px; line-height: 1; font-weight: 700; }
+.lorebase-release-day.is-today .lorebase-release-day-number { color: var(--text-on-accent); background: var(--interactive-accent); }
+.lorebase-release-day.is-today { background: color-mix(in srgb, var(--interactive-accent) 7%, transparent); }
+.lorebase-release-calendar .lorebase-release-day.is-selected { background: color-mix(in srgb, var(--interactive-accent) 17%, transparent); box-shadow: inset 0 0 0 2px var(--interactive-accent); }
+.lorebase-release-day-events { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 0; overflow: hidden; }
+.lorebase-release-day-event { display: block; flex-shrink: 0; min-width: 0; height: 20px; padding: 3px 6px; overflow: hidden; border-left: 2px solid var(--release-color); border-radius: 4px; background: color-mix(in srgb, var(--release-color) 15%, var(--background-secondary)); color: var(--text-normal); font-size: 10px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-release-day.is-outside .lorebase-release-day-event { opacity: .6; }
+.lorebase-release-day-count { font-size: 9px; line-height: 14px; color: var(--text-muted); }
+.lorebase-release-day-total { display: none; position: absolute; top: 5px; right: 5px; color: var(--text-accent); font-size: 9px; }
+.lorebase-release-day-dots { position: absolute; bottom: 4px; left: 12px; display: flex; gap: 3px; }
+.lorebase-release-day-dots > span { width: 3px; height: 3px; border-radius: 50%; background: var(--release-color); }
+.lorebase-release-sidebar-foot { display: grid; grid-template-columns: max-content minmax(0, 1fr); grid-template-rows: 26px; flex: 0 0 26px; align-items: center; gap: 10px; height: 26px; margin-top: 14px; color: var(--text-muted); font-size: 10px; }
+.lorebase-release-date-action { display: grid; align-items: center; justify-items: end; min-width: 0; height: 26px; }
+.lorebase-release-date-action > [hidden] { display: none !important; }
+.lorebase-release-calendar .lorebase-release-all-dates { height: auto; min-height: 24px; padding: 2px 0; border: 0; box-shadow: none; background: transparent; color: var(--text-accent); font-size: 12px; font-weight: 600; }
+.lorebase-release-sidebar-hint { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: 10px; line-height: 1.6; }
+.lorebase-release-legend { display: flex; gap: 12px; font-size: 10px; white-space: nowrap; }
+.lorebase-release-legend > span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--interactive-accent); }
+.lorebase-release-legend > .is-selected::before { background: transparent; box-shadow: 0 0 0 1px var(--interactive-accent); }
+.lorebase-release-gallery-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: color-mix(in srgb, var(--background-secondary) 25%, var(--background-primary)); }
+.lorebase-release-gallery-heading { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; gap: 12px; padding: 22px 24px 18px; }
+.lorebase-release-gallery-heading > div:first-child { min-width: 0; }
+.lorebase-release-gallery-title { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.lorebase-release-gallery-title h3 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -.4px; line-height: 1.3; }
+.lorebase-release-total { display: grid; place-items: center; min-width: 27px; padding: 3px 7px; border: 1px solid var(--background-modifier-border); border-radius: 9px; font-size: 11px; font-weight: 650; color: var(--text-accent); background: var(--background-modifier-hover); }
+.lorebase-release-gallery-scroll { position: relative; min-height: 0; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 24px 24px; scrollbar-gutter: stable; }
+.lorebase-release-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 12px; align-items: start; }
+.lorebase-release-calendar .lorebase-release-card { position: relative; display: block; align-self: start; width: 100%; min-width: 0; height: auto; padding: 0; overflow: hidden; text-align: left; white-space: normal; border: 0; border-radius: 10px; box-shadow: none; background: #17131e; color: #faf9ff; }
+.lorebase-release-card::before { content: ''; display: block; padding-top: 150%; }
+.lorebase-release-card::after { content: ''; position: absolute; z-index: 2; inset: 0; border: 2px solid transparent; border-radius: inherit; pointer-events: none; box-sizing: border-box; }
+.lorebase-release-card:hover::after { border-color: var(--release-color); }
+.lorebase-release-calendar .lorebase-release-card:focus-visible { outline: 0; }
+.lorebase-release-card:focus-visible::after { border-color: var(--interactive-accent); }
+.lorebase-release-card-cover { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; background: linear-gradient(150deg, #252333, #121019); }
+.lorebase-release-card-cover::after { content: ''; position: absolute; inset: 20% 0 0; background: linear-gradient(transparent, rgb(15 12 22 / 38%) 45%, rgb(15 12 22 / 96%) 100%); pointer-events: none; }
+.lorebase-release-card-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lorebase-release-cover-initial { display: inline-flex; color: #7c788e; }
+.lorebase-release-calendar .lorebase-release-cover-initial svg { width: 32px; height: 32px; }
+.lorebase-release-card-type { position: absolute; z-index: 1; top: 9px; left: 9px; max-width: calc(100% - 18px); padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--release-color) 42%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--release-color) 13%, #17131e); color: var(--release-color); font-size: 10px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-release-card-info { position: absolute; z-index: 1; bottom: 12px; left: 11px; right: 11px; display: flex; flex-direction: column; gap: 5px; min-width: 0; pointer-events: none; }
+.lorebase-release-card-title { display: block; min-width: 0; color: #faf9ff; font-size: 13px; font-weight: 600; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-release-card-release { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lorebase-release-card-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d4cedc; font-size: 11px; line-height: 16px; }
+.lorebase-release-card-countdown { display: inline-flex; align-items: center; align-self: flex-start; gap: 6px; max-width: 100%; margin-top: 3px; padding: 3px 9px; box-sizing: border-box; border: 1px solid #514b60; border-radius: 999px; background: #282431; color: #e8e3f4; font-size: 12px; font-weight: 600; line-height: 18px; text-shadow: 0 1px 2px rgb(0 0 0 / 55%); }
+.lorebase-release-countdown-icon { display: inline-flex; flex-shrink: 0; color: inherit; }
+.lorebase-release-calendar .lorebase-release-countdown-icon svg { width: 14px; height: 14px; }
+.lorebase-release-countdown-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lorebase-release-calendar .lorebase-release-show-more { display: block; min-height: 36px; height: auto; margin: 18px auto 0; padding: 8px 18px; border: 1px solid var(--background-modifier-border); border-radius: 9px; box-shadow: none; background: var(--background-secondary); font-size: 12px; }
+.lorebase-release-show-more[hidden], .lorebase-release-month-content[hidden] { display: none !important; }
+.lorebase-release-timeline-scroll { padding: 28px 54px 40px 92px; }
+.lorebase-release-timeline-year { margin-bottom: 26px; padding-left: 24px; border-left: 1px solid color-mix(in srgb, var(--interactive-accent) 28%, var(--background-modifier-border)); }
+.lorebase-release-timeline-year-heading { position: relative; display: flex; align-items: center; gap: 12px; min-height: 34px; margin-bottom: 10px; }
+.lorebase-release-timeline-year-heading::before { content: ''; position: absolute; left: -35px; width: 20px; height: 20px; border: 3px solid var(--background-primary); border-radius: 50%; box-shadow: 0 0 0 1px var(--interactive-accent); background: var(--interactive-accent); }
+.lorebase-release-timeline-year-heading h3 { margin: 0; font-size: 22px; font-weight: 750; }
+.lorebase-release-timeline-year-heading > span:not(.lorebase-release-timeline-rule) { color: var(--text-muted); font-size: 11px; }
+.lorebase-release-timeline-rule { flex: 1; min-width: 16px; height: 1px; margin-inline: 4px; background: var(--background-modifier-border); }
+.lorebase-release-month { margin-bottom: 28px; }
+.lorebase-release-calendar .lorebase-release-month-heading { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; height: auto; min-height: 42px; margin: 0 0 10px; padding: 0; text-align: left; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-normal); }
+.lorebase-release-month-heading::before { content: ''; position: absolute; left: -31px; width: 12px; height: 12px; border: 2px solid var(--interactive-accent); border-radius: 50%; background: var(--background-primary); }
+.lorebase-release-month-heading strong { font-size: 20px; line-height: 1.3; }
+.lorebase-release-month-year { font-size: 12px; color: var(--text-muted); }
+.lorebase-release-month-count { padding: 5px 8px; border-radius: 6px; color: var(--text-muted); background: var(--background-modifier-hover); font-size: 10px; }
+.lorebase-release-month-caret { display: inline-flex; color: var(--text-muted); }
+.lorebase-release-month-heading[aria-expanded="false"] .lorebase-release-month-caret { transform: rotate(-90deg); }
+.lorebase-release-timeline .lorebase-release-gallery { grid-template-columns: repeat(auto-fill, minmax(170px, 230px)); gap: 14px; }
+.lorebase-release-empty { display: flex; grid-column: 1 / -1; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 220px; padding: 32px; text-align: center; color: var(--text-muted); }
+.lorebase-release-empty > span:first-child svg { width: 30px; height: 30px; opacity: .6; }
+.lorebase-release-empty strong { color: var(--text-normal); font-size: 16px; }
+.lorebase-release-empty > span { max-width: 400px; font-size: 13px; line-height: 1.6; }
+@container lorebase-release-month (max-height: 460px) {
+    .lorebase-release-calendar .lorebase-release-day { padding: 4px 4px 5px; gap: 3px; }
+    .lorebase-release-day-number { height: 17px; font-size: 10px; }
+    .lorebase-release-day-event { height: 16px; padding: 1px 3px; font-size: 9px; }
+    .lorebase-release-day-events { gap: 2px; }
+    .lorebase-release-day-dots { bottom: 2px; left: 7px; }
+}
+@container lorebase-release-month (max-height: 400px) {
+    .lorebase-release-day-total { display: block; }
+    .lorebase-release-day-event:nth-child(n+2), .lorebase-release-day-count { display: none; }
+}
+@container lorebase-release-month (max-height: 290px) {
+    .lorebase-release-calendar .lorebase-release-day { padding: 2px 3px 3px; gap: 2px; }
+    .lorebase-release-day-number { height: 14px; min-width: 16px; font-size: 9px; }
+    .lorebase-release-day-event { height: 12px; line-height: 12px; padding: 0 2px; font-size: 8px; }
+    .lorebase-release-day-dots { bottom: 1px; }
+}
+@container lorebase-release-month (max-height: 230px) {
+    .lorebase-release-day-events { display: none; }
+}
+@media (max-width: 1200px) {
+    .lorebase-release-calendar { padding: 22px 24px 0; }
+    .lorebase-release-body { margin-inline: -24px; }
+    .lorebase-release-media-filters { order: 3; flex-basis: 100%; padding-left: 0; border-left: 0; }
+    .lorebase-release-search { margin-left: auto; }
+    .lorebase-release-gallery { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; }
+    .lorebase-release-gallery-heading { padding: 20px 18px 16px; }
+    .lorebase-release-gallery-scroll { padding: 0 18px 20px; }
+    .lorebase-release-timeline-scroll { padding: 24px 28px 32px 56px; }
+    .lorebase-release-sidebar { padding: 18px; }
+    .lorebase-release-gallery-heading { flex-wrap: wrap; }
+}
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 540px) and (pointer: coarse) {
+    .modal.lorebase-release-calendar-container { width: calc(100vw - 16px); max-height: calc(100vh - 16px); height: calc(100vh - 16px); border-radius: 14px; }
+    .lorebase-release-calendar { padding: 18px 14px 0; }
+    .lorebase-release-header { align-items: flex-start; flex-direction: column; gap: 14px; padding: 0 28px 16px 0; }
+    .lorebase-release-heading h2 { font-size: 22px; }
+    .lorebase-release-heading-icon { width: 40px; height: 40px; flex-basis: 40px; }
+    .lorebase-release-view-switch { width: 100%; }
+    .lorebase-release-view-switch > button { flex: 1; }
+    .lorebase-release-filters { gap: 8px; padding-block: 10px; }
+    .lorebase-release-calendar .lorebase-release-choice { gap: 6px; padding: 0 9px; font-size: 11px; }
+    .lorebase-release-search { flex-basis: 100%; order: 2; }
+    .lorebase-release-media-filters { flex-wrap: nowrap; overflow-x: auto; padding-block: 2px; }
+    .lorebase-release-calendar .lorebase-release-filter { flex-shrink: 0; height: 34px; padding: 0 10px; font-size: 11px; }
+    .lorebase-release-body, .lorebase-release-body.is-agenda { display: block; margin-inline: -14px; overflow-y: auto; }
+    .lorebase-release-sidebar { max-width: none; padding: 18px; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); overflow: visible; }
+    .lorebase-release-grid { flex: none; height: 380px; grid-template-rows: 26px repeat(6, minmax(0, 1fr)); }
+    .lorebase-release-calendar .lorebase-release-day { padding: 5px 3px 7px; gap: 3px; }
+    .lorebase-release-day-number { min-width: 18px; height: 17px; font-size: 10px; }
+    .lorebase-release-day-event { height: 16px; padding: 1px 3px; font-size: 8px; }
+    .lorebase-release-day-count { font-size: 8px; line-height: 11px; }
+    .lorebase-release-day-dots { left: 7px; bottom: 2px; }
+    .lorebase-release-sidebar-hint, .lorebase-release-legend { display: none; }
+    .lorebase-release-sidebar-foot { grid-template-columns: minmax(0, 1fr); }
+    .lorebase-release-gallery-panel, .lorebase-release-gallery-scroll { overflow: visible; }
+    .lorebase-release-gallery-heading { padding: 18px 14px 16px; }
+    .lorebase-release-gallery-title h3 { font-size: 21px; }
+    .lorebase-release-gallery-heading .lorebase-release-eyebrow { font-size: 9px; }
+    .lorebase-release-gallery-scroll { padding: 0 14px 20px; }
+    .lorebase-release-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .lorebase-release-timeline-scroll { padding: 20px 14px 30px 32px; }
+    .lorebase-release-timeline-year { padding-left: 18px; }
+    .lorebase-release-timeline-year-heading::before { left: -29px; }
+    .lorebase-release-month-heading::before { left: -25px; }
+    .lorebase-release-month-heading { flex-wrap: wrap; }
+    .lorebase-release-month-heading strong { font-size: 17px; }
+    .lorebase-release-timeline .lorebase-release-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
