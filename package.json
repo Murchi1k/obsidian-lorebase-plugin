@@ -1,7 +1,7 @@
 {
     "name": "lorebase",
-    "version": "3.0.1",
-    "description": "A media hub for games, anime, movies, series, books, and manga with rich cards, progress, ratings, and metadata.",
+    "version": "4.0.0",
+    "description": "A media hub for games, anime, movies, series, books, manga, and music with rich cards, progress, ratings, and metadata.",
     "main": "main.js",
     "scripts": {
         "dev": "node esbuild.config.mjs",
@@ -21,11 +21,16 @@
     "author": "Murch1k",
     "license": "MIT",
     "devDependencies": {
-        "@types/node": "^20.10.0",
-        "esbuild": "^0.28.0",
-        "obsidian": "1.11.4",
-        "tslib": "^2.8.1",
+        "@types/node": "^20.19.43",
+        "esbuild": "^0.28.2",
+        "happy-dom": "^21.0.4",
+        "obsidian": "^1.14.4",
+        "tslib": "^2.9.1",
         "typescript": "^5.3.2",
-        "vitest": "^4.0.18"
+        "vitest": "^4.1.12"
+    },
+    "dependencies": {
+        "fflate": "0.8.3",
+        "hls.js": "1.7.4"
     }
 }

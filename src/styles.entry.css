@@ -1,0 +1,8 @@
+/* Keep phone overrides after every shared and desktop component rule. */
+@import './styles.css';
+@import './priority.css';
+@import './discovery.css';
+@import './continuations.css';
+@import './workflowFields.css';
+@import './notesEditor.css';
+@import './mobile.css';

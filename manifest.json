@@ -1,11 +1,11 @@
 {
     "id": "lorebase",
     "name": "Lorebase",
-    "version": "3.0.1",
+    "version": "4.0.0",
     "minAppVersion": "1.7.0",
-    "description": "A media hub for games, anime, movies, series, books, and manga with rich cards, progress, ratings, and metadata.",
+    "description": "A media hub for games, anime, movies, series, books, manga, and music with rich cards, progress, ratings, and metadata.",
     "author": "Murch1k",
-    "authorUrl": "https://discord.gg/eTcw8v8c4",
+    "authorUrl": "https://discord.gg/qUA4EzafR",
     "fundingUrl": {
         "Ko-fi": "https://ko-fi.com/murch1k",
         "Patreon": "https://www.patreon.com/c/Murch1k"

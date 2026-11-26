@@ -1,9 +1,10 @@
-﻿/**
+/**
  * LOREBASE - Localization System
  * Multi-language support with type-safe translation keys
  */
 
 import { Language } from '../types';
+import { ZH_CN } from './zh-cn';
 
 // =============================================================================
 // TRANSLATION KEYS TYPE
@@ -11,17 +12,31 @@ import { Language } from '../types';
 
 /** All available translation keys */
 export type TranslationKey =
+    | 'addWorkspaceTitle'
+    | 'templateFieldCountryOfOrigin'
     // Statuses
     | 'statusPlayed' | 'statusPlaying' | 'statusDropped' | 'statusSandbox'
     | 'statusNotStarted' | 'statusWishlist' | 'statusFavorite'
     | 'statusPlanned' | 'statusWatching' | 'statusCompleted' | 'statusReadCompleted' | 'statusPaused'
-    | 'statusPlanToRead' | 'statusReading'
+    | 'statusPlanToRead' | 'statusReading' | 'statusToBeReleased'
     // UI elements
     | 'search' | 'searchPlaceholder'
     | 'sort' | 'sortName' | 'sortSeries' | 'sortRating' | 'sortYear' | 'sortDateCompleted' | 'sortOrder' | 'sortAsc' | 'sortDesc'
     | 'sortDateWatched' | 'sortDateRead'
     | 'status' | 'filter' | 'filterAdult' | 'filterFlags' | 'tags' | 'genres' | 'plans' | 'tagsEmpty' | 'view'
     | 'random' | 'randomAnime' | 'randomBook' | 'randomManga' | 'stats' | 'settings' | 'commandSteamSync'
+    | 'releaseCalendar' | 'releaseCalendarLoading' | 'releaseCalendarView' | 'releaseAgendaView'
+    | 'releaseCalendarItems' | 'releaseCalendarError' | 'releaseCalendarEmpty' | 'releaseCalendarEmptyHint'
+    | 'releasePreviousMonth' | 'releaseNextMonth' | 'releaseToday'
+    | 'releaseUpcoming' | 'releaseAll'
+    | 'releaseOldestFirst' | 'releaseNewestFirst'
+    | 'releaseCalendarNoUpcoming'
+    | 'releaseNextReleases'
+    | 'releaseMoreItems' | 'releaseDaysShort'
+    | 'customGroups' | 'customGroupsSubtitle' | 'customGroupsList' | 'customGroupsCreate' | 'customGroupsNamePlaceholder'
+    | 'customGroupsEmpty' | 'customGroupsEmptyHint' | 'customGroupsItems' | 'customGroupsSearchPlaceholder'
+    | 'customGroupsAddItems' | 'customGroupsNoResults' | 'customGroupsRename' | 'customGroupsDelete'
+    | 'customGroupsRemoveItem' | 'customGroupsManage' | 'contextGroups'
     // View modes
     | 'viewGrid' | 'viewHorizontal'
     // Display modes
@@ -39,10 +54,13 @@ export type TranslationKey =
     | 'settingsPageProgress' | 'settingsChapterProgress' | 'settingsVolumeProgress'
     | 'settingsSizeSmall' | 'settingsSizeMedium' | 'settingsSizeLarge'
     | 'settingsOrientation' | 'settingsOrientationVertical' | 'settingsOrientationHorizontal'
-    | 'settingsColor' | 'settingsLanguage' | 'settingsReset'
+    | 'settingsColor' | 'settingsLanguage' | 'settingsReset' | 'settingsDefaults'
+    | 'settingsCardClick' | 'settingsCardClickDesc' | 'settingsCardClickOpenNote' | 'settingsCardClickEditItem'
     | 'settingsShowAddModeChoice' | 'settingsShowAddModeChoiceDesc'
     | 'settingsMediaGames' | 'settingsMediaAnime' | 'settingsMediaMovies' | 'settingsMediaSeries' | 'settingsMediaBooks' | 'settingsMediaManga'
+    | 'settingsParticleLeaves' | 'settingsParticleFireflies' | 'settingsParticleRain' | 'settingsAppearance' | 'settingsCardBadges' | 'settingsCardProgress' | 'settingsCardLayout' | 'settingsTemplatesDesc'
     | 'settingsParticle' | 'settingsParticleNone' | 'settingsParticleSakura' | 'settingsParticleSnow' | 'settingsParticleIntensity'
+    | 'settingsMediaLibraries' | 'settingsMediaVisibility' | 'settingsMediaShown' | 'settingsMediaKeepOne' | 'settingsMediaFolderEdit' | 'settingsMediaFolderSave' | 'settingsMediaFolderHelp'
     | 'settingsFolder' | 'settingsGames' | 'settingsAnime' | 'settingsMovies' | 'settingsSeries' | 'settingsBooks' | 'settingsManga' | 'settingsMedia' | 'settingsMediaDesc' | 'settingsMediaTabs'
     | 'settingsIntegrationTemplateTabs' | 'settingsExperiment'
     | 'settingsTitle' | 'settingsSupportTitle' | 'settingsSupportDesc' | 'settingsSupportUnavailable'
@@ -56,15 +74,20 @@ export type TranslationKey =
     | 'settingsAboutChangelog' | 'settingsAboutDocumentation'
     | 'settingsAboutAttribution' | 'settingsAboutAttributionDesc' | 'settingsAboutAttributionTmdbNotice'
     | 'settingsDangerZone' | 'settingsDangerZoneWarning' | 'settingsResetAllButton'
-    | 'settingsGeneral' | 'settingsShowAdult'
+    | 'settingsGeneral' | 'settingsSync' | 'settingsShowAdult'
     | 'settingsBadges'
+    | 'settingsPreview' | 'settingsPreviewHelp' | 'settingsProviderSelect' | 'settingsDiagnostics' | 'settingsDiagnosticErrors'
+    | 'settingsImportBusy' | 'settingsImportScanning' | 'settingsImportEmpty' | 'settingsImportFailed'
     | 'settingsPreviewMode' | 'settingsPreviewGame' | 'settingsPreviewAnime' | 'settingsPreviewMovie' | 'settingsPreviewSeries' | 'settingsPreviewBook' | 'settingsPreviewManga'
     | 'settingsDescriptionLines' | 'settingsDescriptionLinesDesc'
     | 'settingsBookCoverEffect' | 'settingsBookCoverEffectDesc'
+    | 'settingsBookshelf' | 'settingsBookshelfDesc'
     | 'settingsBadgesStatus' | 'settingsBadgesRating' | 'settingsBadgesFavorite'
     | 'settingsBadgesStatusPosition' | 'settingsBadgesRatingPosition' | 'settingsBadgesFavoritePosition'
+    | 'settingsBadgesReleaseCountdown'
     | 'settingsBadgesStatusIconOnly'
     | 'settingsBadgesFavoritePulse'
+    | 'settingsMangaWorkTypeBadge'
     | 'settingsBadgesRatingMode' | 'settingsBadgesRatingModeStar' | 'settingsBadgesRatingModeEmoji'
     | 'settingsCompletionDateBadgeFormat' | 'settingsCompletionDateBadgeFormatShort' | 'settingsCompletionDateBadgeFormatFull'
     | 'settingsBadgesEditorHint'
@@ -89,10 +112,11 @@ export type TranslationKey =
     | 'settingsIntegrationsSteamSyncDesc'
     | 'settingsIntegrationsProviders' | 'settingsIntegrationsMediaProviders' | 'settingsIntegrationsTemplates'
     | 'settingsIntegrationsProviderRawg' | 'settingsIntegrationsProviderSteam' | 'settingsIntegrationsProviderIgdb'
-    | 'settingsIntegrationsProviderAnilist' | 'settingsIntegrationsProviderJikan' | 'settingsIntegrationsProviderShikimori'
+    | 'settingsIntegrationsProviderAnilist' | 'settingsIntegrationsProviderKitsu' | 'settingsIntegrationsProviderShikimori'
     | 'settingsIntegrationsProviderTmdb' | 'settingsIntegrationsProviderTvmaze' | 'settingsIntegrationsProviderOmdb'
     | 'settingsIntegrationsProviderHardcover' | 'settingsIntegrationsProviderGooglebooks'
-    | 'settingsIntegrationsProviderMangaupdates' | 'settingsIntegrationsProviderMangadex'
+    | 'settingsIntegrationsProviderMangaupdates' | 'settingsIntegrationsProviderMangadex' | 'settingsIntegrationsProviderComicVine'
+    | 'settingsMangaAndComics' | 'settingsIntegrationsComicVineKeyHelp'
     | 'settingsIntegrationsProviderKeyRequired' | 'settingsIntegrationsProviderKeyOptional'
     | 'settingsIntegrationsProviderKeyPlaceholder'
     | 'settingsIntegrationsProviderClientIdPlaceholder' | 'settingsIntegrationsProviderClientSecretPlaceholder'
@@ -121,6 +145,9 @@ export type TranslationKey =
     | 'settingsIntegrationsTemplateFields' | 'settingsIntegrationsHowLongToBeat' | 'settingsIntegrationsHowLongToBeatDesc'
     | 'settingsIntegrationsSteamGridDb' | 'settingsIntegrationsSteamGridDbDesc' | 'settingsIntegrationsSteamGridDbApiKey'
     | 'settingsIntegrationsSteamGridDbHelpTitle' | 'settingsIntegrationsSteamGridDbHelpText' | 'settingsIntegrationsSteamGridDbLink'
+    | 'settingsTmdbLanguage' | 'settingsTmdbLanguageDesc'
+    | 'templateFieldAlternativeTitles' | 'alternativeTitleLanguage' | 'alternativeTitleLanguageDesc' | 'alternativeTitles' | 'alternativeTitleSave' | 'alternativeTitleAll' | 'alternativeTitleNative' | 'alternativeTitleDefault' | 'alternativeTitleAdvancedDesc'
+    | 'alternativeTitleScriptDesc'
     | 'templateFieldType' | 'templateFieldName' | 'templateFieldImage' | 'templateFieldImageHorizontal'
     | 'templateFieldPoster' | 'templateFieldPosterHorizontal' | 'templateFieldPlot'
     | 'templateFieldScoreImdb' | 'templateFieldCommunityRating' | 'templateFieldCommunityVotes' | 'templateFieldCommunityRatingProvider'
@@ -137,9 +164,9 @@ export type TranslationKey =
     | 'templateFieldAuthors' | 'templateFieldPublisher' | 'templateFieldArtists'
     | 'templateFieldPageCurrent' | 'templateFieldPageTotal'
     | 'templateFieldChapterCurrent' | 'templateFieldChapterTotal'
-    | 'templateFieldVolumeCurrent' | 'templateFieldVolumeTotal' | 'templateFieldMangaParts'
+    | 'templateFieldVolumeCurrent' | 'templateFieldVolumeTotal' | 'templateFieldMangaParts' | 'templateFieldWorkType'
     | 'editProgressMain' | 'editProgressMainPlusSides' | 'editProgressPerfectionist' | 'commonNoData'
-    | 'resetTitle' | 'resetSubtitle' | 'resetWarning' | 'resetConfirm' | 'resetConfirmAck'
+    | 'settingsResetFailed' | 'resetTitle' | 'resetSubtitle' | 'resetWarning' | 'resetConfirm' | 'resetConfirmAck'
     // Statistics
     | 'statsTitle' | 'statsTotal' | 'statsCompleted' | 'statsAvgRating' | 'statsOf'
     | 'statsDistribution' | 'statsRatingDistribution' | 'statsAdditionalInfo'
@@ -148,7 +175,7 @@ export type TranslationKey =
     // Ratings
     | 'ratingAwesome' | 'ratingGood' | 'ratingOkay' | 'ratingWeak' | 'ratingBad'
     // Misc
-    | 'year' | 'yearNotSpecified' | 'noDescription' | 'noSeries'
+    | 'year' | 'yearNotSpecified' | 'noDescription' | 'noSeries' | 'noDate' | 'viewNew'
     | 'randomGame' | 'noGamesFound' | 'noAnimeFound' | 'noMoviesFound' | 'noSeriesFound' | 'noBooksFound' | 'noMangaFound'
     // Context menu
     | 'contextChangeStatus' | 'contextChangeRating' | 'contextAddFavorite'
@@ -162,6 +189,9 @@ export type TranslationKey =
     | 'editSeries' | 'editNoSeries' | 'editAdult' | 'editCustomPoster'
     | 'editSave' | 'editCancel' | 'editProgress' | 'editGeneral' | 'editCollection' | 'editPersonal' | 'editMore' | 'editCompletedOn'
     | 'editDetails' | 'editAdvanced' | 'editClear'
+    | 'communityRatingTitle' | 'communityRatingRefresh' | 'communityRatingScore'
+    | 'communityRatingNoSource' | 'communityRatingNoVotes' | 'communityRatingVotes'
+    | 'communityRatingNotFound' | 'communityRatingUpdated' | 'communityRatingRefreshFailed'
     | 'editSeasonCurrent' | 'editEpisodeCurrent' | 'editEpisodeTotal' | 'editEpisodes'
     | 'editSeasonTotal' | 'editFormat' | 'editSummary' | 'editUrl' | 'editEpisodeInc'
     | 'editPageCurrent' | 'editPageTotal' | 'editChapterCurrent' | 'editChapterTotal'
@@ -180,7 +210,7 @@ export type TranslationKey =
     | 'editDlc' | 'editRefreshDlc' | 'editNoDlc' | 'editCollapseDlc'
     | 'editDates' | 'editAdded' | 'editUpdated' | 'editUnknown'
     | 'editOverflow' | 'editRemoveHint' | 'editBreadcrumbGames' | 'editBreadcrumbAnime'
-    | 'editBreadcrumbBooks' | 'editBreadcrumbManga'
+    | 'editBreadcrumbBooks' | 'editBreadcrumbManga' | 'editBreadcrumbMovies' | 'editBreadcrumbSeries'
     | 'editMovieTitle' | 'editSeriesTitle' | 'editBookTitle' | 'editMangaTitle'
     | 'editAnimeParts' | 'editAddPart' | 'editRemovePart' | 'editCannotRemoveLastPart'
     | 'editRelatedMedia' | 'editAddRelated' | 'editRelatedEmpty' | 'editRelatedPickerTitle'
@@ -206,23 +236,23 @@ export type TranslationKey =
     | 'commandOpenSeriesLibrary' | 'commandOpenBooksLibrary' | 'commandOpenMangaLibrary'
     | 'commandAddGame' | 'commandAddAnime' | 'commandAddMovie' | 'commandAddSeries' | 'commandAddBook' | 'commandAddManga'
     | 'commandImportNotes'
+    | 'commandAddMusic' | 'commandOpenMusicLibrary' | 'commandAniListSync' | 'commandAniListImport'
     | 'ribbonLibrary'
     | 'errorInitView' | 'errorLoadingItems' | 'errorProcessingList'
     | 'promptSearchGame' | 'promptSearchAnime' | 'promptSearchMovie' | 'promptSearchSeries' | 'promptSearchBook' | 'promptSearchManga' | 'promptSearchPlaceholder'
     | 'promptSelectResult'
     | 'promptIncludeDlc'
-    | 'promptSearchAction' | 'promptAddSelected' | 'promptSelectedLabel'
+    | 'promptSearchAction' | 'promptSearchOtherCatalogs' | 'promptAddSelected' | 'promptSelectedLabel' | 'promptAlreadyInLibrary' | 'promptInLibraryShort'
     | 'promptReviewSelected' | 'promptReviewSelectedSubtitle' | 'promptConfirmSelected' | 'promptRemoveSelected'
     | 'promptPage' | 'promptPreviousPage' | 'promptNextPage'
-    | 'promptAddModeTitle' | 'promptAddModeProvider' | 'promptAddModeManual'
-    | 'promptAddModeProviderDesc' | 'promptAddModeManualDesc'
+    | 'promptAddModeManual'
     | 'manualCreateTitle' | 'manualCreateAction' | 'manualMediaType' | 'manualTitleRequired'
-    | 'manualSectionMain' | 'manualSectionProgress' | 'manualSectionExtra'
-    | 'manualCoverTitle' | 'manualCoverUrl' | 'manualCoverChoose' | 'manualCoverClear'
+    | 'manualSectionMain' | 'manualSectionProgress' | 'manualSectionExtra' | 'manualSeasonsProgress'
+    | 'manualCoverTitle' | 'manualCoverUrl' | 'manualCoverChoose' | 'manualCoverClear' | 'manualCoverLink' | 'manualBackToSearch' | 'manualNoRating'
     | 'promptAddAnotherTitle' | 'promptAddAnotherBodyGame' | 'promptAddAnotherBodyAnime'
     | 'promptAddAnotherYes' | 'promptAddAnotherNo'
     | 'noticeNoResults' | 'noticeMissingApiKey' | 'noticeProviderDisabled' | 'noticeIntegrationsDisabled'
-    | 'noticeCreated' | 'noticeSkipped'
+    | 'noticeCreated' | 'noticeSkipped' | 'noticeSteamDetailsUnavailable'
     | 'noticeProviderTestSuccess' | 'noticeProviderTestFail'
     | 'noticeIntegrationsError' | 'noticeSourceUpdated' | 'noticeSourceNoChanges' | 'noticeSourceFailed'
     | 'promptRateLimitTitle' | 'promptRateLimitBody'
@@ -250,6 +280,7 @@ const EN: Record<TranslationKey, string> = {
     statusPaused: 'Paused',
     statusPlanToRead: 'Plan to Read',
     statusReading: 'Reading',
+    statusToBeReleased: 'To be released',
 
     // UI elements
     search: 'Search',
@@ -280,6 +311,41 @@ const EN: Record<TranslationKey, string> = {
     randomManga: 'Random manga',
     stats: 'Statistics',
     settings: 'Settings',
+    releaseCalendar: 'Release calendar',
+    releaseCalendarLoading: 'Collecting release dates…',
+    releaseCalendarView: 'Calendar',
+    releaseAgendaView: 'By month',
+    releaseCalendarItems: 'releases',
+    releaseCalendarError: 'Could not load the release calendar.',
+    releaseCalendarEmpty: 'No releases found',
+    releaseCalendarEmptyHint: 'Add an exact release date to a media note or enable another media filter.',
+    releasePreviousMonth: 'Previous month',
+    releaseNextMonth: 'Next month',
+    releaseToday: 'Today',
+    releaseUpcoming: 'Upcoming',
+    releaseAll: 'All releases',
+    releaseOldestFirst: 'Oldest first',
+    releaseNewestFirst: 'Newest first',
+    releaseCalendarNoUpcoming: 'No upcoming releases. Switch to “All releases” to view the archive.',
+    releaseNextReleases: 'Next releases',
+    releaseMoreItems: 'more',
+    releaseDaysShort: 'days',
+    customGroups: 'Custom groups',
+    customGroupsList: 'Groups',
+    customGroupsSubtitle: 'Mix games, anime, films, books and other media in one collection.',
+    customGroupsCreate: 'Create group',
+    customGroupsNamePlaceholder: 'Group name',
+    customGroupsEmpty: 'No groups yet',
+    customGroupsEmptyHint: 'Create your first collection, for example “Best of all time”.',
+    customGroupsItems: 'items',
+    customGroupsSearchPlaceholder: 'Search the whole library…',
+    customGroupsAddItems: 'Add media',
+    customGroupsNoResults: 'Nothing else found',
+    customGroupsRename: 'Rename group',
+    customGroupsDelete: 'Delete group',
+    customGroupsRemoveItem: 'Remove from group',
+    customGroupsManage: 'Manage groups…',
+    contextGroups: 'Groups',
 
     // View modes
     viewGrid: 'Vertical',
@@ -326,6 +392,11 @@ const EN: Record<TranslationKey, string> = {
     settingsShowAddModeChoiceDesc: 'Choose between provider search and manual creation when pressing plus. Disable to open provider search directly.',
     settingsLanguage: 'Language',
     settingsReset: 'Reset settings',
+    settingsDefaults: 'Default settings',
+    settingsCardClick: 'Card click',
+    settingsCardClickDesc: 'Choose what a normal click on a library card does.',
+    settingsCardClickOpenNote: 'Open note',
+    settingsCardClickEditItem: 'Edit item',
     settingsMediaGames: 'Show games',
     settingsMediaAnime: 'Show anime',
     settingsMediaMovies: 'Show movies',
@@ -334,8 +405,16 @@ const EN: Record<TranslationKey, string> = {
     settingsMediaManga: 'Show manga',
     settingsParticle: 'Particle effect',
     settingsParticleNone: 'None',
-    settingsParticleSakura: '🌸 Sakura',
-    settingsParticleSnow: '❄️ Snow',
+    settingsParticleSakura: 'Sakura',
+    settingsParticleSnow: 'Snow',
+    settingsParticleLeaves: 'Leaves',
+    settingsParticleFireflies: 'Fireflies',
+    settingsParticleRain: 'Rain',
+    settingsAppearance: 'Appearance',
+    settingsCardBadges: 'Badges',
+    settingsCardProgress: 'Progress',
+    settingsCardLayout: 'Size and grid',
+    settingsTemplatesDesc: 'Choose the fields and format for new library notes.',
     settingsParticleIntensity: 'Particle intensity',
     settingsFolder: 'Folder path',
     settingsGames: 'Games',
@@ -344,10 +423,18 @@ const EN: Record<TranslationKey, string> = {
     settingsBooks: 'Books',
     settingsManga: 'Manga',
     settingsMedia: 'Media',
-    settingsMediaDesc: 'Configure each library type from one place.',
+    settingsMediaDesc: 'Choose which libraries to show and where their notes are stored.',
+    settingsMediaLibraries: 'Libraries',
+    settingsMediaVisibility: 'Show',
+    settingsMediaShown: 'Shown {count} of {total}',
+    settingsMediaKeepOne: 'Keep at least one library visible.',
+    settingsMediaFolderEdit: 'Edit folder path',
+    settingsMediaFolderSave: 'Save path',
+    settingsMediaFolderHelp: 'Click a path to edit it. Existing vault folders appear as suggestions.',
     settingsMediaTabs: 'Media type settings',
     settingsIntegrationTemplateTabs: 'Media type template',
     settingsAnime: 'Anime',
+    settingsSync: 'Sync',
     settingsExperiment: 'Experiment',
     settingsTitle: 'LOREBASE Settings',
     settingsLayoutMode: 'Settings layout',
@@ -356,15 +443,15 @@ const EN: Record<TranslationKey, string> = {
     settingsSupportTitle: 'Support LOREBASE',
     settingsSupportDesc: 'Discord, Ko-fi and Patreon.',
     settingsSectionGeneralDesc: 'Language, effects and accent color.',
-    settingsSectionCustomizationDesc: 'Card preview, badges, statuses and plans.',
+    settingsSectionCustomizationDesc: 'Appearance, size, statuses, and plans.',
     settingsSectionMediaDesc: 'Library settings for each media type.',
-    settingsSectionIntegrationsDesc: 'Providers and note templates.',
+    settingsSectionIntegrationsDesc: 'Metadata providers, library sync, and diagnostics.',
     settingsSectionSyncDesc: 'Import and synchronize external libraries.',
     settingsSectionExperimentDesc: 'Experimental features and local images.',
     settingsSectionDangerDesc: 'Reset all LOREBASE settings.',
     settingsSectionAboutDesc: 'Version and plugin information.',
     settingsAbout: 'About',
-    settingsAboutDesc: 'LOREBASE is a media hub for games, anime, movies, series, books, and manga with customizable cards, progress, ratings, and metadata integrations.',
+    settingsAboutDesc: 'LOREBASE is a media hub for games, anime, movies, series, books, manga, and music with customizable cards, progress, ratings, and metadata integrations.',
     settingsAboutVersion: 'Version',
     settingsAboutAuthor: 'Author',
     settingsAboutObsidian: 'Obsidian',
@@ -384,8 +471,17 @@ const EN: Record<TranslationKey, string> = {
     settingsResetAllButton: 'Reset All Settings',
     settingsGeneral: 'General',
     settingsShowAdult: 'Show 18+ content',
-    settingsBadges: 'Card Customization',
+    settingsBadges: 'Cards',
     settingsPreviewMode: 'Preview mode',
+    settingsImportBusy: 'A note import is already open.',
+    settingsImportScanning: 'Scanning notes…',
+    settingsImportEmpty: 'No Markdown notes found in the selected folder.',
+    settingsImportFailed: 'Note import failed',
+    settingsPreview: 'Preview',
+    settingsPreviewHelp: 'Editing help',
+    settingsProviderSelect: 'Select a provider to view its settings.',
+    settingsDiagnostics: 'Diagnostics',
+    settingsDiagnosticErrors: 'Errors',
     settingsPreviewGame: 'Game',
     settingsPreviewAnime: 'Anime',
     settingsPreviewMovie: 'Movie',
@@ -395,6 +491,8 @@ const EN: Record<TranslationKey, string> = {
     settingsDescriptionLines: 'Description lines',
     settingsDescriptionLinesDesc: 'Default is 4. Drag slider to increase lines.',
     settingsBookCoverEffect: 'Hardcover cover effect',
+    settingsBookshelf: 'Bookshelf',
+    settingsBookshelfDesc: 'Display books as colored spines of different sizes on wooden shelves. Click a spine to reveal its cover; click the cover to open the book. Escape folds it back.',
     settingsBookCoverEffectDesc: 'Adds a book spine, inset cover shadow, and subtle lift on hover for book-like cards.',
     settingsBadgesStatus: 'Status badge',
     settingsBadgesRating: 'Rating badge',
@@ -402,8 +500,10 @@ const EN: Record<TranslationKey, string> = {
     settingsBadgesStatusPosition: 'Status position',
     settingsBadgesRatingPosition: 'Rating position',
     settingsBadgesFavoritePosition: 'Favorite position',
+    settingsBadgesReleaseCountdown: 'Days until release on status badge',
     settingsBadgesStatusIconOnly: 'Status as icon only',
     settingsBadgesFavoritePulse: 'Favorite subtle pulse',
+    settingsMangaWorkTypeBadge: 'Type badge on manga cards',
     settingsBadgesRatingMode: 'Rating style',
     settingsBadgesRatingModeStar: 'Star',
     settingsBadgesRatingModeEmoji: 'Emoji',
@@ -463,7 +563,7 @@ const EN: Record<TranslationKey, string> = {
     settingsIntegrationsProviderSteam: 'Steam (Games)',
     settingsIntegrationsProviderIgdb: 'IGDB (Games)',
     settingsIntegrationsProviderAnilist: 'AniList (Anime)',
-    settingsIntegrationsProviderJikan: 'Jikan / MyAnimeList (Anime)',
+    settingsIntegrationsProviderKitsu: 'Kitsu (Anime)',
     settingsIntegrationsProviderShikimori: 'Shikimori (Anime)',
     settingsIntegrationsProviderTmdb: 'TMDB (Movies & Series)',
     settingsIntegrationsProviderTvmaze: 'TVmaze (Series)',
@@ -471,6 +571,9 @@ const EN: Record<TranslationKey, string> = {
     settingsIntegrationsProviderHardcover: 'Hardcover (Books)',
     settingsIntegrationsProviderGooglebooks: 'Google Books (Books)',
     settingsIntegrationsProviderMangaupdates: 'MangaUpdates (Manga)',
+    settingsIntegrationsProviderComicVine: 'Comic Vine (Comics)',
+    settingsMangaAndComics: 'Manga and Comics',
+    settingsIntegrationsComicVineKeyHelp: 'Sign in to Comic Vine and copy your API key from the API page.',
     settingsIntegrationsProviderMangadex: 'MangaDex (Manga)',
     settingsIntegrationsProviderKeyRequired: 'API key required',
     settingsIntegrationsProviderKeyOptional: 'API key not required',
@@ -494,7 +597,7 @@ const EN: Record<TranslationKey, string> = {
     settingsIntegrationsProviderOmdbHelpText: 'Request an API key on OMDb and paste it here.',
     settingsIntegrationsProviderOmdbLink: 'Open OMDb API key page',
     settingsIntegrationsProviderHardcoverHelpTitle: 'Hardcover API key',
-    settingsIntegrationsProviderHardcoverHelpText: 'Hardcover is the primary book provider. Create an API token in your Hardcover account and paste it here.',
+    settingsIntegrationsProviderHardcoverHelpText: 'Hardcover is the primary book provider. Create an API token with read:catalog or read:catalog:search permission and paste it here.',
     settingsIntegrationsProviderHardcoverLink: 'Open Hardcover API settings',
     settingsIntegrationsProviderGooglebooksHelpTitle: 'Google Books API key',
     settingsIntegrationsProviderGooglebooksHelpText: 'Google Books public requests are often rate-limited. Add a Google Books API key to use this provider reliably.',
@@ -535,7 +638,7 @@ const EN: Record<TranslationKey, string> = {
     settingsIntegrationsSteamGridDbHelpTitle: 'How to get a SteamGridDB API key',
     settingsIntegrationsSteamGridDbHelpText: 'Create or log in to SteamGridDB, open Preferences, then copy your API key.',
     settingsIntegrationsSteamGridDbLink: 'Open SteamGridDB preferences',
-    templateFieldType: 'Type',
+    templateFieldType: 'Media type',
     templateFieldName: 'Name',
     templateFieldImage: 'Image',
     templateFieldImageHorizontal: 'Horizontal image',
@@ -585,6 +688,20 @@ const EN: Record<TranslationKey, string> = {
     templateFieldVolumeCurrent: 'Current volume',
     templateFieldVolumeTotal: 'Total volumes',
     templateFieldMangaParts: 'Manga volumes',
+    templateFieldCountryOfOrigin: 'Country',
+    templateFieldWorkType: 'Type',
+    templateFieldAlternativeTitles: 'Alternative title',
+    alternativeTitleLanguage: 'Alternative title language',
+    alternativeTitleLanguageDesc: 'Choose which titles to save from this provider. Each media type has its own switch and keeps its language choice when turned off.',
+    alternativeTitleScriptDesc: 'MangaUpdates does not label titles by language. Choose a writing system or save all available titles. Your choice is kept when saving is turned off.',
+    alternativeTitles: 'Alternative titles',
+    alternativeTitleSave: 'Save alternative titles',
+    alternativeTitleAll: 'All available',
+    alternativeTitleNative: 'Original script',
+    alternativeTitleDefault: 'Provider default',
+    settingsTmdbLanguage: 'TMDB language',
+    settingsTmdbLanguageDesc: 'Language of titles, descriptions, genres and available posters from TMDB. Other providers are unaffected.',
+    alternativeTitleAdvancedDesc: 'Use alt_titles: {{VALUE:alternativeTitles}} in the template.',
     editProgressMain: 'Main',
     editProgressMainPlusSides: 'Main + Side Quests',
     editProgressPerfectionist: 'Perfectionist',
@@ -593,6 +710,7 @@ const EN: Record<TranslationKey, string> = {
     templateFieldPlaying: 'Playing',
     resetTitle: 'Restore default settings',
     resetSubtitle: 'This will restore all plugin settings to their default values.',
+    settingsResetFailed: 'Could not reset settings.',
     resetWarning: 'This can\'t be undone.',
     resetConfirm: 'Restore defaults',
     resetConfirmAck: 'I understand this can\'t be undone',
@@ -625,6 +743,8 @@ const EN: Record<TranslationKey, string> = {
     yearNotSpecified: 'Year N/A',
     noDescription: 'No description',
     noSeries: 'No series',
+    noDate: 'No date',
+    viewNew: 'New view',
     randomGame: 'Random game',
     noGamesFound: 'No games found',
     noAnimeFound: 'No anime found',
@@ -673,6 +793,15 @@ const EN: Record<TranslationKey, string> = {
     editDetails: 'Details',
     editAdvanced: 'Advanced',
     editClear: 'Clear',
+    communityRatingTitle: 'Community rating',
+    communityRatingRefresh: 'Refresh rating',
+    communityRatingScore: 'Score',
+    communityRatingNoSource: 'No source',
+    communityRatingNoVotes: 'No votes',
+    communityRatingVotes: 'votes',
+    communityRatingNotFound: 'Community rating not found.',
+    communityRatingUpdated: 'Community rating updated.',
+    communityRatingRefreshFailed: 'Community rating refresh failed.',
     editSeasonCurrent: 'Season (current)',
     editSeasonTotal: 'Seasons (total)',
     editEpisodeCurrent: 'Episode (current)',
@@ -738,6 +867,8 @@ const EN: Record<TranslationKey, string> = {
     editBreadcrumbAnime: 'Editing / Anime',
     editBreadcrumbBooks: 'Editing / Books',
     editBreadcrumbManga: 'Editing / Manga',
+    editBreadcrumbMovies: 'Editing / Movies',
+    editBreadcrumbSeries: 'Editing / Series',
     editMovieTitle: 'Edit movie',
     editSeriesTitle: 'Edit series',
     editBookTitle: 'Edit book',
@@ -767,7 +898,7 @@ const EN: Record<TranslationKey, string> = {
     planWaitEarlyAccess: 'Wait for early access to end',
     planNextInQueue: 'Next in queue',
     settingsStatusPlans: 'Statuses and plans',
-    settingsStatusPlansDesc: 'Rename visible status labels and manage quick game plan tags.',
+    settingsStatusPlansDesc: 'Customize statuses, icons and colors. Game plans are on the Games tab.',
     settingsGameStatusLabels: 'Game status labels',
     settingsAnimeStatusLabels: 'Anime status labels',
     settingsMovieStatusLabels: 'Movie status labels',
@@ -823,6 +954,10 @@ const EN: Record<TranslationKey, string> = {
     commandAddSeries: 'Add series',
     commandAddBook: 'Add book',
     commandAddManga: 'Add manga',
+    commandAddMusic: 'Add music',
+    commandOpenMusicLibrary: 'Open Music',
+    commandAniListSync: 'Sync AniList',
+    commandAniListImport: 'Import from AniList',
     commandSteamSync: 'Steam Sync',
     commandImportNotes: 'Import notes into LOREBASE',
     ribbonLibrary: 'LOREBASE Library',
@@ -839,7 +974,10 @@ const EN: Record<TranslationKey, string> = {
     promptSelectResult: 'Select an item',
     promptIncludeDlc: 'DLC',
     promptSearchAction: 'Search',
+    promptSearchOtherCatalogs: 'Search other catalogs',
     promptAddSelected: 'Add',
+    promptAlreadyInLibrary: 'Already in library',
+    promptInLibraryShort: 'In library',
     promptSelectedLabel: 'Selected',
     promptReviewSelected: 'Review selected',
     promptReviewSelectedSubtitle: 'Items are imported one at a time to protect provider access. Large batches may take a while.',
@@ -848,21 +986,22 @@ const EN: Record<TranslationKey, string> = {
     promptPage: 'Page',
     promptPreviousPage: 'Previous',
     promptNextPage: 'Next',
-    promptAddModeTitle: 'Add item',
-    promptAddModeProvider: 'Find via provider',
+    addWorkspaceTitle: 'Add',
     promptAddModeManual: 'Create manually',
-    promptAddModeProviderDesc: 'Search integrations and create from provider data.',
-    promptAddModeManualDesc: 'Create a blank card with your own fields.',
     manualCreateTitle: 'Create manually',
     manualCreateAction: 'Create',
     manualMediaType: 'Media type',
     manualTitleRequired: 'Title is required.',
     manualSectionMain: 'Main',
     manualSectionProgress: 'Progress',
+    manualSeasonsProgress: 'Seasons and progress',
     manualSectionExtra: 'Extra',
     manualCoverTitle: 'Cover',
     manualCoverUrl: 'Cover URL',
     manualCoverChoose: 'Choose file',
+    manualCoverLink: 'Add from URL',
+    manualBackToSearch: 'Back to search',
+    manualNoRating: 'Not rated',
     manualCoverClear: 'Clear',
     promptAddAnotherTitle: 'Add another?',
     promptAddAnotherBodyGame: 'Search and add another game?',
@@ -874,6 +1013,7 @@ const EN: Record<TranslationKey, string> = {
     noticeProviderDisabled: 'Selected provider is disabled in settings.',
     noticeIntegrationsDisabled: 'Integrations are disabled in settings.',
     noticeCreated: 'Note created.',
+    noticeSteamDetailsUnavailable: 'Steam did not return game details. Creating the note from search data; some fields will be empty.',
     noticeSkipped: 'Skipped.',
     noticeProviderTestSuccess: 'Provider test succeeded.',
     noticeProviderTestFail: 'Provider test failed.',
@@ -912,6 +1052,7 @@ const RU: Record<TranslationKey, string> = {
     statusPaused: 'На паузе',
     statusPlanToRead: 'В планах',
     statusReading: 'Читаю',
+    statusToBeReleased: 'Ожидает релиза',
 
     // UI elements
     search: 'Поиск',
@@ -942,6 +1083,41 @@ const RU: Record<TranslationKey, string> = {
     randomManga: 'Случайная манга',
     stats: 'Статистика',
     settings: 'Настройки',
+    releaseCalendar: 'Календарь релизов',
+    releaseCalendarLoading: 'Собираем даты релизов…',
+    releaseCalendarView: 'Календарь',
+    releaseAgendaView: 'По месяцам',
+    releaseCalendarItems: 'релизов',
+    releaseCalendarError: 'Не удалось загрузить календарь релизов.',
+    releaseCalendarEmpty: 'Релизы не найдены',
+    releaseCalendarEmptyHint: 'Добавьте точную дату релиза в заметку или включите другой тип медиа.',
+    releasePreviousMonth: 'Предыдущий месяц',
+    releaseNextMonth: 'Следующий месяц',
+    releaseToday: 'Сегодня',
+    releaseUpcoming: 'Предстоящие',
+    releaseAll: 'Все релизы',
+    releaseOldestFirst: 'Сначала старые',
+    releaseNewestFirst: 'Сначала новые',
+    releaseCalendarNoUpcoming: 'Предстоящих релизов нет. Переключитесь на «Все релизы», чтобы посмотреть архив.',
+    releaseNextReleases: 'Ближайшие релизы',
+    releaseMoreItems: 'ещё',
+    releaseDaysShort: 'дн.',
+    customGroups: 'Пользовательские группы',
+    customGroupsList: 'Группы',
+    customGroupsSubtitle: 'Собирайте игры, аниме, фильмы, книги и другие медиа в одной коллекции.',
+    customGroupsCreate: 'Создать группу',
+    customGroupsNamePlaceholder: 'Название группы',
+    customGroupsEmpty: 'Групп пока нет',
+    customGroupsEmptyHint: 'Создайте первую коллекцию, например «Лучшее за всё время».',
+    customGroupsItems: 'элементов',
+    customGroupsSearchPlaceholder: 'Поиск по всей библиотеке…',
+    customGroupsAddItems: 'Добавить медиа',
+    customGroupsNoResults: 'Больше ничего не найдено',
+    customGroupsRename: 'Переименовать группу',
+    customGroupsDelete: 'Удалить группу',
+    customGroupsRemoveItem: 'Убрать из группы',
+    customGroupsManage: 'Управление группами…',
+    contextGroups: 'Группы',
 
     // View modes
     viewGrid: 'Вертикальный',
@@ -988,6 +1164,11 @@ const RU: Record<TranslationKey, string> = {
     settingsShowAddModeChoiceDesc: 'При нажатии на плюс выбирать между поиском через провайдер и ручным созданием. Если выключено, сразу открывается поиск.',
     settingsLanguage: 'Язык',
     settingsReset: 'Сбросить настройки',
+    settingsDefaults: 'Настройки по умолчанию',
+    settingsCardClick: 'Клик по карточке',
+    settingsCardClickDesc: 'Что делать при обычном клике по карточке в библиотеке.',
+    settingsCardClickOpenNote: 'Открывать заметку',
+    settingsCardClickEditItem: 'Открывать редактирование',
     settingsMediaGames: 'Показывать игры',
     settingsMediaAnime: 'Показывать аниме',
     settingsMediaMovies: 'Показывать фильмы',
@@ -996,8 +1177,16 @@ const RU: Record<TranslationKey, string> = {
     settingsMediaManga: 'Показывать мангу',
     settingsParticle: 'Эффект частиц',
     settingsParticleNone: 'Нет',
-    settingsParticleSakura: '🌸 Сакура',
-    settingsParticleSnow: '❄️ Снег',
+    settingsParticleSakura: 'Сакура',
+    settingsParticleSnow: 'Снег',
+    settingsParticleLeaves: 'Листья',
+    settingsParticleFireflies: 'Светлячки',
+    settingsParticleRain: 'Дождь',
+    settingsAppearance: 'Внешний вид',
+    settingsCardBadges: 'Бейджи',
+    settingsCardProgress: 'Прогресс',
+    settingsCardLayout: 'Размер и сетка',
+    settingsTemplatesDesc: 'Настройте поля и формат новых заметок библиотеки.',
     settingsParticleIntensity: 'Интенсивность частиц',
     settingsFolder: 'Путь к папке',
     settingsGames: 'Игры',
@@ -1006,10 +1195,18 @@ const RU: Record<TranslationKey, string> = {
     settingsBooks: 'Книги',
     settingsManga: 'Манга',
     settingsMedia: 'Медиа',
-    settingsMediaDesc: 'Настройте каждый тип библиотеки в одном разделе.',
+    settingsMediaDesc: 'Выберите, какие библиотеки показывать и где хранить их заметки.',
+    settingsMediaLibraries: 'Библиотеки',
+    settingsMediaVisibility: 'Показывать',
+    settingsMediaShown: 'Показано {count} из {total}',
+    settingsMediaKeepOne: 'Оставьте хотя бы одну библиотеку видимой.',
+    settingsMediaFolderEdit: 'Изменить путь к папке',
+    settingsMediaFolderSave: 'Сохранить путь',
+    settingsMediaFolderHelp: 'Нажмите на путь, чтобы изменить его. Существующие папки появятся в подсказках.',
     settingsMediaTabs: 'Настройки типа медиа',
     settingsIntegrationTemplateTabs: 'Шаблон типа медиа',
     settingsAnime: 'Аниме',
+    settingsSync: 'Sync',
     settingsExperiment: 'Эксперимент',
     settingsTitle: 'Настройки LOREBASE',
     settingsLayoutMode: 'Отображение настроек',
@@ -1018,15 +1215,15 @@ const RU: Record<TranslationKey, string> = {
     settingsSupportTitle: 'Поддержать LOREBASE',
     settingsSupportDesc: 'Discord, Ko-fi и Patreon.',
     settingsSectionGeneralDesc: 'Язык, эффекты и акцентный цвет.',
-    settingsSectionCustomizationDesc: 'Превью, бейджи, статусы и планы.',
+    settingsSectionCustomizationDesc: 'Оформление, размеры, статусы и планы.',
     settingsSectionMediaDesc: 'Настройки библиотеки для каждого типа медиа.',
-    settingsSectionIntegrationsDesc: 'Провайдеры и шаблоны заметок.',
+    settingsSectionIntegrationsDesc: 'Провайдеры метаданных, синхронизация и диагностика.',
     settingsSectionSyncDesc: 'Импорт и синхронизация внешних библиотек.',
     settingsSectionExperimentDesc: 'Экспериментальные функции и локальные изображения.',
     settingsSectionDangerDesc: 'Полный сброс настроек LOREBASE.',
     settingsSectionAboutDesc: 'Версия и информация о плагине.',
     settingsAbout: 'О плагине',
-    settingsAboutDesc: 'LOREBASE — медиахаб для игр, аниме, фильмов, сериалов, книг и манги с настраиваемыми карточками, прогрессом, рейтингами и интеграциями метаданных.',
+    settingsAboutDesc: 'LOREBASE — медиахаб для игр, аниме, фильмов, сериалов, книг, манги и музыки с настраиваемыми карточками, прогрессом, рейтингами и интеграциями метаданных.',
     settingsAboutVersion: 'Версия',
     settingsAboutAuthor: 'Автор',
     settingsAboutObsidian: 'Obsidian',
@@ -1046,8 +1243,17 @@ const RU: Record<TranslationKey, string> = {
     settingsResetAllButton: 'Сбросить все настройки',
     settingsGeneral: 'Общие',
     settingsShowAdult: 'Показывать 18+',
-    settingsBadges: 'Кастомизация карточек',
+    settingsBadges: 'Карточки',
     settingsPreviewMode: 'Режим превью',
+    settingsImportBusy: 'Импорт заметок уже открыт.',
+    settingsImportScanning: 'Поиск заметок…',
+    settingsImportEmpty: 'В выбранной папке нет заметок Markdown.',
+    settingsImportFailed: 'Не удалось импортировать заметки',
+    settingsPreview: 'Превью',
+    settingsPreviewHelp: 'Как редактировать',
+    settingsProviderSelect: 'Выберите провайдера, чтобы открыть его настройки.',
+    settingsDiagnostics: 'Диагностика',
+    settingsDiagnosticErrors: 'Ошибки',
     settingsPreviewGame: 'Игра',
     settingsPreviewAnime: 'Аниме',
     settingsPreviewMovie: 'Фильм',
@@ -1057,6 +1263,8 @@ const RU: Record<TranslationKey, string> = {
     settingsDescriptionLines: 'Строк описания',
     settingsDescriptionLinesDesc: 'По умолчанию 4. Потяни слайдер, чтобы увеличить.',
     settingsBookCoverEffect: 'Эффект твердой обложки',
+    settingsBookshelf: 'Книжная полка',
+    settingsBookshelfDesc: 'Показывает книги корешками наружу на деревянных полках: разные цвета, высота и толщина. Нажмите на корешок, чтобы увидеть обложку; на обложку — чтобы открыть книгу. Escape возвращает корешок.',
     settingsBookCoverEffectDesc: 'Добавляет корешок, внутреннюю тень обложки и легкий подъем при наведении для книжных карточек.',
     settingsBadgesStatus: 'Бейдж статуса',
     settingsBadgesRating: 'Бейдж рейтинга',
@@ -1064,8 +1272,10 @@ const RU: Record<TranslationKey, string> = {
     settingsBadgesStatusPosition: 'Позиция статуса',
     settingsBadgesRatingPosition: 'Позиция рейтинга',
     settingsBadgesFavoritePosition: 'Позиция избранного',
+    settingsBadgesReleaseCountdown: 'Дни до выхода на плашке статуса',
     settingsBadgesStatusIconOnly: 'Статус только иконкой',
     settingsBadgesFavoritePulse: 'Легкое мигание избранного',
+    settingsMangaWorkTypeBadge: 'Плашка типа на карточках манги',
     settingsBadgesRatingMode: 'Стиль рейтинга',
     settingsBadgesRatingModeStar: 'Звезда',
     settingsBadgesRatingModeEmoji: 'Эмоджи',
@@ -1125,7 +1335,7 @@ const RU: Record<TranslationKey, string> = {
     settingsIntegrationsProviderSteam: 'Steam (Игры)',
     settingsIntegrationsProviderIgdb: 'IGDB (Игры)',
     settingsIntegrationsProviderAnilist: 'AniList (Аниме)',
-    settingsIntegrationsProviderJikan: 'Jikan / MyAnimeList (Аниме)',
+    settingsIntegrationsProviderKitsu: 'Kitsu (Аниме)',
     settingsIntegrationsProviderShikimori: 'Shikimori (Аниме)',
     settingsIntegrationsProviderTmdb: 'TMDB (Фильмы и сериалы)',
     settingsIntegrationsProviderTvmaze: 'TVmaze (Сериалы)',
@@ -1133,6 +1343,9 @@ const RU: Record<TranslationKey, string> = {
     settingsIntegrationsProviderHardcover: 'Hardcover (Книги)',
     settingsIntegrationsProviderGooglebooks: 'Google Books (Книги)',
     settingsIntegrationsProviderMangaupdates: 'MangaUpdates (Манга)',
+    settingsIntegrationsProviderComicVine: 'Comic Vine (Комиксы)',
+    settingsMangaAndComics: 'Манга и комиксы',
+    settingsIntegrationsComicVineKeyHelp: 'Войдите в Comic Vine и скопируйте ключ со страницы API.',
     settingsIntegrationsProviderMangadex: 'MangaDex (Манга)',
     settingsIntegrationsProviderKeyRequired: 'Нужен API ключ',
     settingsIntegrationsProviderKeyOptional: 'API ключ не нужен',
@@ -1156,7 +1369,7 @@ const RU: Record<TranslationKey, string> = {
     settingsIntegrationsProviderOmdbHelpText: 'Запросите API key на OMDb и вставьте его сюда.',
     settingsIntegrationsProviderOmdbLink: 'Открыть страницу OMDb API key',
     settingsIntegrationsProviderHardcoverHelpTitle: 'API key Hardcover',
-    settingsIntegrationsProviderHardcoverHelpText: 'Hardcover используется как основной провайдер книг. Создайте API token в аккаунте Hardcover и вставьте его сюда.',
+    settingsIntegrationsProviderHardcoverHelpText: 'Hardcover используется как основной провайдер книг. Создайте API token с правом read:catalog или read:catalog:search и вставьте его сюда.',
     settingsIntegrationsProviderHardcoverLink: 'Открыть настройки API Hardcover',
     settingsIntegrationsProviderGooglebooksHelpTitle: 'API key Google Books',
     settingsIntegrationsProviderGooglebooksHelpText: 'Публичные запросы Google Books часто упираются в rate limit. Добавьте API key, чтобы провайдер работал стабильно.',
@@ -1197,7 +1410,7 @@ const RU: Record<TranslationKey, string> = {
     settingsIntegrationsSteamGridDbHelpTitle: 'Как получить API ключ SteamGridDB',
     settingsIntegrationsSteamGridDbHelpText: 'Войдите в SteamGridDB, откройте Preferences и скопируйте API key.',
     settingsIntegrationsSteamGridDbLink: 'Открыть Preferences SteamGridDB',
-    templateFieldType: 'Тип',
+    templateFieldType: 'Тип медиа',
     templateFieldName: 'Название',
     templateFieldImage: 'Изображение',
     templateFieldImageHorizontal: 'Горизонтальное изображение',
@@ -1247,6 +1460,20 @@ const RU: Record<TranslationKey, string> = {
     templateFieldVolumeCurrent: 'Текущий том',
     templateFieldVolumeTotal: 'Всего томов',
     templateFieldMangaParts: 'Тома манги',
+    templateFieldCountryOfOrigin: 'Страна',
+    templateFieldWorkType: 'Тип',
+    templateFieldAlternativeTitles: 'Альтернативное название',
+    alternativeTitleLanguage: 'Язык альтернативного названия',
+    alternativeTitleLanguageDesc: 'Выберите, какие названия сохранять из этого источника. У каждого типа медиа свой переключатель. При выключении выбранный язык запоминается.',
+    alternativeTitleScriptDesc: 'MangaUpdates не указывает язык названий. Выберите письменность или все доступные названия. Выбор запоминается, даже когда сохранение выключено.',
+    alternativeTitles: 'Альтернативные названия',
+    alternativeTitleSave: 'Сохранять альтернативные названия',
+    alternativeTitleAll: 'Все доступные',
+    alternativeTitleNative: 'Оригинальная письменность',
+    alternativeTitleDefault: 'Основное название источника',
+    settingsTmdbLanguage: 'Язык TMDB',
+    settingsTmdbLanguageDesc: 'Язык названий, описаний, жанров и доступных постеров из TMDB. На другие источники не влияет.',
+    alternativeTitleAdvancedDesc: 'Добавьте в шаблон alt_titles: {{VALUE:alternativeTitles}}.',
     editProgressMain: 'Основной сюжет',
     editProgressMainPlusSides: 'Основной + сайд квесты',
     editProgressPerfectionist: 'Перфекционист',
@@ -1255,6 +1482,7 @@ const RU: Record<TranslationKey, string> = {
     templateFieldPlaying: 'Играю',
     resetTitle: 'Сбросить настройки',
     resetSubtitle: 'Все настройки плагина будут возвращены к значениям по умолчанию.',
+    settingsResetFailed: 'Не удалось сбросить настройки.',
     resetWarning: 'Отменить это действие нельзя.',
     resetConfirm: 'Сбросить',
     resetConfirmAck: 'Я понимаю, что это действие нельзя отменить',
@@ -1287,6 +1515,8 @@ const RU: Record<TranslationKey, string> = {
     yearNotSpecified: 'Год не указан',
     noDescription: 'Нет описания',
     noSeries: 'Без серии',
+    noDate: 'Без даты',
+    viewNew: 'Новый вид',
     randomGame: 'Случайная игра',
     noGamesFound: 'Игр не найдено',
     noAnimeFound: 'Аниме не найдено',
@@ -1335,6 +1565,15 @@ const RU: Record<TranslationKey, string> = {
     editDetails: 'Детали',
     editAdvanced: 'Дополнительно',
     editClear: 'Очистить',
+    communityRatingTitle: 'Оценка сообщества',
+    communityRatingRefresh: 'Обновить оценку',
+    communityRatingScore: 'оценка',
+    communityRatingNoSource: 'Нет источника',
+    communityRatingNoVotes: 'Нет голосов',
+    communityRatingVotes: 'голосов',
+    communityRatingNotFound: 'Оценка сообщества не найдена.',
+    communityRatingUpdated: 'Оценка сообщества обновлена.',
+    communityRatingRefreshFailed: 'Не удалось обновить оценку сообщества.',
     editSeasonCurrent: 'Сезон (текущий)',
     editSeasonTotal: 'Сезонов (всего)',
     editEpisodeCurrent: 'Эпизод (текущий)',
@@ -1400,6 +1639,8 @@ const RU: Record<TranslationKey, string> = {
     editBreadcrumbAnime: 'Редактирование / Аниме',
     editBreadcrumbBooks: 'Редактирование / Книги',
     editBreadcrumbManga: 'Редактирование / Манга',
+    editBreadcrumbMovies: 'Редактирование / Фильмы',
+    editBreadcrumbSeries: 'Редактирование / Сериалы',
     editMovieTitle: 'Редактирование фильма',
     editSeriesTitle: 'Редактирование сериала',
     editBookTitle: 'Редактирование книги',
@@ -1429,7 +1670,7 @@ const RU: Record<TranslationKey, string> = {
     planWaitEarlyAccess: 'Ждать окончания раннего доступа',
     planNextInQueue: 'Следующая в списке',
     settingsStatusPlans: 'Статусы и планы',
-    settingsStatusPlansDesc: 'Переименовывает отображение статусов и управляет быстрыми план-метками игр.',
+    settingsStatusPlansDesc: 'Настройте статусы, иконки и цвета. План-метки доступны во вкладке игр.',
     settingsGameStatusLabels: 'Названия статусов игр',
     settingsAnimeStatusLabels: 'Названия статусов аниме',
     settingsMovieStatusLabels: 'Названия статусов фильмов',
@@ -1485,6 +1726,10 @@ const RU: Record<TranslationKey, string> = {
     commandAddSeries: 'Добавить сериал',
     commandAddBook: 'Добавить книгу',
     commandAddManga: 'Добавить мангу',
+    commandAddMusic: 'Добавить музыку',
+    commandOpenMusicLibrary: 'Открыть музыку',
+    commandAniListSync: 'Синхронизировать AniList',
+    commandAniListImport: 'Импортировать из AniList',
     commandSteamSync: 'Синхронизация Steam',
     commandImportNotes: 'Импортировать заметки в LOREBASE',
     ribbonLibrary: 'Библиотека LOREBASE',
@@ -1501,7 +1746,10 @@ const RU: Record<TranslationKey, string> = {
     promptSelectResult: 'Выберите элемент',
     promptIncludeDlc: 'DLC',
     promptSearchAction: 'Поиск',
+    promptSearchOtherCatalogs: 'Поиск в других каталогах',
     promptAddSelected: 'Добавить',
+    promptAlreadyInLibrary: 'Уже в библиотеке',
+    promptInLibraryShort: 'В библиотеке',
     promptSelectedLabel: 'Выбрано',
     promptReviewSelected: 'Проверить выбранное',
     promptReviewSelectedSubtitle: 'Элементы импортируются по одному, чтобы защитить доступ к провайдеру. Большая пачка может занять время.',
@@ -1510,21 +1758,22 @@ const RU: Record<TranslationKey, string> = {
     promptPage: 'Страница',
     promptPreviousPage: 'Назад',
     promptNextPage: 'Вперёд',
-    promptAddModeTitle: 'Добавить карточку',
-    promptAddModeProvider: 'Найти через провайдер',
+    addWorkspaceTitle: 'Добавить',
     promptAddModeManual: 'Создать вручную',
-    promptAddModeProviderDesc: 'Поиск через интеграции.',
-    promptAddModeManualDesc: 'Пустая карточка со своими полями.',
     manualCreateTitle: 'Создать вручную',
     manualCreateAction: 'Создать',
     manualMediaType: 'Тип медиа',
     manualTitleRequired: 'Введите название.',
     manualSectionMain: 'Основное',
     manualSectionProgress: 'Прогресс',
+    manualSeasonsProgress: 'Сезоны и прогресс',
     manualSectionExtra: 'Дополнительно',
     manualCoverTitle: 'Обложка',
     manualCoverUrl: 'URL обложки',
     manualCoverChoose: 'Выбрать файл',
+    manualCoverLink: 'Добавить по ссылке',
+    manualBackToSearch: 'К поиску',
+    manualNoRating: 'Без оценки',
     manualCoverClear: 'Очистить',
     promptAddAnotherTitle: 'Добавить ещё?',
     promptAddAnotherBodyGame: 'Найти и добавить ещё одну игру?',
@@ -1536,6 +1785,7 @@ const RU: Record<TranslationKey, string> = {
     noticeProviderDisabled: 'Провайдер отключен в настройках.',
     noticeIntegrationsDisabled: 'Интеграции отключены в настройках.',
     noticeCreated: 'Заметка создана.',
+    noticeSteamDetailsUnavailable: 'Steam не вернул подробности игры. Создаём заметку по данным поиска; часть полей останется пустой.',
     noticeSkipped: 'Пропущено.',
     noticeProviderTestSuccess: 'Проверка провайдера успешна.',
     noticeProviderTestFail: 'Проверка провайдера не удалась.',
@@ -1576,6 +1826,7 @@ const UK: Record<TranslationKey, string> = {
     statusPaused: 'На паузі',
     statusPlanToRead: 'У планах',
     statusReading: 'Читаю',
+    statusToBeReleased: 'Очікує релізу',
 
     // UI elements
     search: 'Пошук',
@@ -1606,6 +1857,41 @@ const UK: Record<TranslationKey, string> = {
     randomManga: 'Випадкова манга',
     stats: 'Статистика',
     settings: 'Налаштування',
+    releaseCalendar: 'Календар релізів',
+    releaseCalendarLoading: 'Збираємо дати релізів…',
+    releaseCalendarView: 'Календар',
+    releaseAgendaView: 'За місяцями',
+    releaseCalendarItems: 'релізів',
+    releaseCalendarError: 'Не вдалося завантажити календар релізів.',
+    releaseCalendarEmpty: 'Релізів не знайдено',
+    releaseCalendarEmptyHint: 'Додайте точну дату релізу до нотатки або увімкніть інший тип медіа.',
+    releasePreviousMonth: 'Попередній місяць',
+    releaseNextMonth: 'Наступний місяць',
+    releaseToday: 'Сьогодні',
+    releaseUpcoming: 'Майбутні',
+    releaseAll: 'Усі релізи',
+    releaseOldestFirst: 'Спочатку старі',
+    releaseNewestFirst: 'Спочатку нові',
+    releaseCalendarNoUpcoming: 'Майбутніх релізів немає. Перемкніться на «Усі релізи», щоб переглянути архів.',
+    releaseNextReleases: 'Найближчі релізи',
+    releaseMoreItems: 'ще',
+    releaseDaysShort: 'дн.',
+    customGroups: 'Користувацькі групи',
+    customGroupsList: 'Групи',
+    customGroupsSubtitle: 'Збирайте ігри, аніме, фільми, книги та інші медіа в одній колекції.',
+    customGroupsCreate: 'Створити групу',
+    customGroupsNamePlaceholder: 'Назва групи',
+    customGroupsEmpty: 'Груп поки немає',
+    customGroupsEmptyHint: 'Створіть першу колекцію, наприклад «Найкраще за весь час».',
+    customGroupsItems: 'елементів',
+    customGroupsSearchPlaceholder: 'Пошук у всій бібліотеці…',
+    customGroupsAddItems: 'Додати медіа',
+    customGroupsNoResults: 'Більше нічого не знайдено',
+    customGroupsRename: 'Перейменувати групу',
+    customGroupsDelete: 'Видалити групу',
+    customGroupsRemoveItem: 'Прибрати з групи',
+    customGroupsManage: 'Керування групами…',
+    contextGroups: 'Групи',
     commandSteamSync: 'Синхронізація Steam',
 
     // View and display modes
@@ -1651,6 +1937,11 @@ const UK: Record<TranslationKey, string> = {
     settingsShowAddModeChoiceDesc: 'Під час натискання плюса вибирати між пошуком через провайдер і ручним створенням. Вимкніть, щоб одразу відкривати пошук.',
     settingsLanguage: 'Мова',
     settingsReset: 'Скинути налаштування',
+    settingsDefaults: 'Типові налаштування',
+    settingsCardClick: 'Клік по картці',
+    settingsCardClickDesc: 'Що робити при звичайному кліку по картці в бібліотеці.',
+    settingsCardClickOpenNote: 'Відкривати нотатку',
+    settingsCardClickEditItem: 'Відкривати редагування',
     settingsMediaGames: 'Показувати ігри',
     settingsMediaAnime: 'Показувати аніме',
     settingsMediaMovies: 'Показувати фільми',
@@ -1659,8 +1950,16 @@ const UK: Record<TranslationKey, string> = {
     settingsMediaManga: 'Показувати мангу',
     settingsParticle: 'Ефект частинок',
     settingsParticleNone: 'Немає',
-    settingsParticleSakura: '🌸 Сакура',
-    settingsParticleSnow: '❄️ Сніг',
+    settingsParticleSakura: 'Сакура',
+    settingsParticleSnow: 'Сніг',
+    settingsParticleLeaves: 'Листя',
+    settingsParticleFireflies: 'Світлячки',
+    settingsParticleRain: 'Дощ',
+    settingsAppearance: 'Вигляд',
+    settingsCardBadges: 'Бейджі',
+    settingsCardProgress: 'Прогрес',
+    settingsCardLayout: 'Розмір і сітка',
+    settingsTemplatesDesc: 'Налаштуйте поля й формат нових нотаток бібліотеки.',
     settingsParticleIntensity: 'Інтенсивність частинок',
     settingsFolder: 'Шлях до папки',
     settingsGames: 'Ігри',
@@ -1670,9 +1969,17 @@ const UK: Record<TranslationKey, string> = {
     settingsBooks: 'Книги',
     settingsManga: 'Манга',
     settingsMedia: 'Медіа',
-    settingsMediaDesc: 'Налаштування кожного типу бібліотеки в одному місці.',
+    settingsMediaDesc: 'Виберіть, які бібліотеки показувати й де зберігати їхні нотатки.',
+    settingsMediaLibraries: 'Бібліотеки',
+    settingsMediaVisibility: 'Показувати',
+    settingsMediaShown: 'Показано {count} із {total}',
+    settingsMediaKeepOne: 'Залиште видимою хоча б одну бібліотеку.',
+    settingsMediaFolderEdit: 'Змінити шлях до папки',
+    settingsMediaFolderSave: 'Зберегти шлях',
+    settingsMediaFolderHelp: 'Натисніть шлях, щоб змінити його. Наявні папки з’являться в підказках.',
     settingsMediaTabs: 'Налаштування типів медіа',
     settingsIntegrationTemplateTabs: 'Шаблон типу медіа',
+    settingsSync: 'Sync',
     settingsExperiment: 'Експеримент',
     settingsTitle: 'Налаштування LOREBASE',
     settingsLayoutMode: 'Макет налаштувань',
@@ -1682,15 +1989,15 @@ const UK: Record<TranslationKey, string> = {
     settingsSupportDesc: 'Discord, Ko-fi і Patreon.',
     settingsSupportUnavailable: 'Посилання ще не налаштоване',
     settingsSectionGeneralDesc: 'Мова, ефекти та акцентний колір.',
-    settingsSectionCustomizationDesc: 'Превʼю картки, бейджі, статуси та плани.',
+    settingsSectionCustomizationDesc: 'Оформлення, розміри, статуси й плани.',
     settingsSectionMediaDesc: 'Налаштування бібліотек для кожного типу медіа.',
-    settingsSectionIntegrationsDesc: 'Провайдери та шаблони нотаток.',
+    settingsSectionIntegrationsDesc: 'Провайдери метаданих, синхронізація й діагностика.',
     settingsSectionSyncDesc: 'Імпорт і синхронізація зовнішніх бібліотек.',
     settingsSectionExperimentDesc: 'Експериментальні функції та локальні зображення.',
     settingsSectionDangerDesc: 'Скидання всіх налаштувань LOREBASE.',
     settingsSectionAboutDesc: 'Версія та інформація про плагін.',
     settingsAbout: 'Про плагін',
-    settingsAboutDesc: 'LOREBASE — медіахаб для ігор, аніме, фільмів, серіалів, книг і манги з налаштовуваними картками, прогресом, рейтингами та інтеграціями метаданих.',
+    settingsAboutDesc: 'LOREBASE — медіахаб для ігор, аніме, фільмів, серіалів, книг, манги й музики з налаштовуваними картками, прогресом, рейтингами та інтеграціями метаданих.',
     settingsAboutVersion: 'Версія',
     settingsAboutAuthor: 'Автор',
     settingsAboutObsidian: 'Obsidian',
@@ -1709,8 +2016,17 @@ const UK: Record<TranslationKey, string> = {
     settingsResetAllButton: 'Скинути всі налаштування',
     settingsGeneral: 'Загальні',
     settingsShowAdult: 'Показувати 18+ контент',
-    settingsBadges: 'Налаштування карток',
+    settingsBadges: 'Картки',
     settingsPreviewMode: 'Режим превʼю',
+    settingsImportBusy: 'Імпорт нотаток уже відкрито.',
+    settingsImportScanning: 'Пошук нотаток…',
+    settingsImportEmpty: 'У вибраній папці немає нотаток Markdown.',
+    settingsImportFailed: 'Не вдалося імпортувати нотатки',
+    settingsPreview: 'Попередній перегляд',
+    settingsPreviewHelp: 'Як редагувати',
+    settingsProviderSelect: 'Оберіть провайдера, щоб відкрити його налаштування.',
+    settingsDiagnostics: 'Діагностика',
+    settingsDiagnosticErrors: 'Помилки',
     settingsPreviewGame: 'Гра',
     settingsPreviewAnime: 'Аніме',
     settingsPreviewMovie: 'Фільм',
@@ -1720,6 +2036,8 @@ const UK: Record<TranslationKey, string> = {
     settingsDescriptionLines: 'Рядки опису',
     settingsDescriptionLinesDesc: 'За замовчуванням 4. Перетягніть слайдер, щоб збільшити кількість рядків.',
     settingsBookCoverEffect: 'Ефект книжкової обкладинки',
+    settingsBookshelf: 'Книжкова полиця',
+    settingsBookshelfDesc: 'Показує книги корінцями назовні на дерев’яних полицях: різні кольори, висота й товщина. Натисніть на корінець, щоб побачити обкладинку; на обкладинку — щоб відкрити книгу. Escape повертає корінець.',
     settingsBookCoverEffectDesc: 'Додає корінець книги, внутрішню тінь обкладинки та легкий підйом при наведенні для книжкових карток.',
     settingsBadgesStatus: 'Бейдж статусу',
     settingsBadgesRating: 'Бейдж рейтингу',
@@ -1727,8 +2045,10 @@ const UK: Record<TranslationKey, string> = {
     settingsBadgesStatusPosition: 'Позиція статусу',
     settingsBadgesRatingPosition: 'Позиція рейтингу',
     settingsBadgesFavoritePosition: 'Позиція обраного',
+    settingsBadgesReleaseCountdown: 'Дні до виходу на плашці статусу',
     settingsBadgesStatusIconOnly: 'Статус тільки іконкою',
     settingsBadgesFavoritePulse: 'Легка пульсація обраного',
+    settingsMangaWorkTypeBadge: 'Плашка типу на картках манґи',
     settingsBadgesRatingMode: 'Стиль рейтингу',
     settingsBadgesRatingModeStar: 'Зірка',
     settingsBadgesRatingModeEmoji: 'Емодзі',
@@ -1790,7 +2110,7 @@ const UK: Record<TranslationKey, string> = {
     settingsIntegrationsProviderSteam: 'Steam (Ігри)',
     settingsIntegrationsProviderIgdb: 'IGDB (Ігри)',
     settingsIntegrationsProviderAnilist: 'AniList (Аніме)',
-    settingsIntegrationsProviderJikan: 'Jikan / MyAnimeList (Аніме)',
+    settingsIntegrationsProviderKitsu: 'Kitsu (Аніме)',
     settingsIntegrationsProviderShikimori: 'Shikimori (Аніме)',
     settingsIntegrationsProviderTmdb: 'TMDB (Фільми та серіали)',
     settingsIntegrationsProviderTvmaze: 'TVmaze (Серіали)',
@@ -1798,6 +2118,9 @@ const UK: Record<TranslationKey, string> = {
     settingsIntegrationsProviderHardcover: 'Hardcover (Книги)',
     settingsIntegrationsProviderGooglebooks: 'Google Books (Книги)',
     settingsIntegrationsProviderMangaupdates: 'MangaUpdates (Манга)',
+    settingsIntegrationsProviderComicVine: 'Comic Vine (Комікси)',
+    settingsMangaAndComics: 'Манґа й комікси',
+    settingsIntegrationsComicVineKeyHelp: 'Увійдіть у Comic Vine і скопіюйте ключ зі сторінки API.',
     settingsIntegrationsProviderMangadex: 'MangaDex (Манга)',
     settingsIntegrationsProviderKeyRequired: 'Потрібен API key',
     settingsIntegrationsProviderKeyOptional: 'API key не потрібен',
@@ -1821,7 +2144,7 @@ const UK: Record<TranslationKey, string> = {
     settingsIntegrationsProviderOmdbHelpText: 'Запросіть API key на OMDb і вставте його тут.',
     settingsIntegrationsProviderOmdbLink: 'Відкрити сторінку OMDb API key',
     settingsIntegrationsProviderHardcoverHelpTitle: 'API key Hardcover',
-    settingsIntegrationsProviderHardcoverHelpText: 'Hardcover використовується як основний провайдер книг. Створіть API token в акаунті Hardcover і вставте його тут.',
+    settingsIntegrationsProviderHardcoverHelpText: 'Hardcover використовується як основний провайдер книг. Створіть API token із правом read:catalog або read:catalog:search і вставте його тут.',
     settingsIntegrationsProviderHardcoverLink: 'Відкрити налаштування API Hardcover',
     settingsIntegrationsProviderGooglebooksHelpTitle: 'API key Google Books',
     settingsIntegrationsProviderGooglebooksHelpText: 'Публічні запити Google Books часто впираються в rate limit. Додайте API key, щоб провайдер працював стабільніше.',
@@ -1864,7 +2187,7 @@ const UK: Record<TranslationKey, string> = {
     settingsIntegrationsSteamGridDbLink: 'Відкрити SteamGridDB preferences',
 
     // Template fields
-    templateFieldType: 'Тип',
+    templateFieldType: 'Тип медіа',
     templateFieldName: 'Назва',
     templateFieldImage: 'Зображення',
     templateFieldImageHorizontal: 'Горизонтальне зображення',
@@ -1914,6 +2237,20 @@ const UK: Record<TranslationKey, string> = {
     templateFieldVolumeCurrent: 'Поточний том',
     templateFieldVolumeTotal: 'Усього томів',
     templateFieldMangaParts: 'Томи манги',
+    templateFieldCountryOfOrigin: 'Країна',
+    templateFieldWorkType: 'Тип',
+    templateFieldAlternativeTitles: 'Альтернативна назва',
+    alternativeTitleLanguage: 'Мова альтернативної назви',
+    alternativeTitleLanguageDesc: 'Виберіть, які назви зберігати з цього джерела. Кожен тип медіа має свій перемикач. Вибрана мова зберігається після вимкнення.',
+    alternativeTitleScriptDesc: 'MangaUpdates не вказує мову назв. Виберіть письмо або всі доступні назви. Вибір зберігається, навіть коли збереження вимкнено.',
+    alternativeTitles: 'Альтернативні назви',
+    alternativeTitleSave: 'Зберігати альтернативні назви',
+    alternativeTitleAll: 'Усі доступні',
+    alternativeTitleNative: 'Оригінальна писемність',
+    alternativeTitleDefault: 'Основна назва джерела',
+    settingsTmdbLanguage: 'Мова TMDB',
+    settingsTmdbLanguageDesc: 'Мова назв, описів, жанрів і доступних постерів із TMDB. Не впливає на інші джерела.',
+    alternativeTitleAdvancedDesc: 'Додайте до шаблону alt_titles: {{VALUE:alternativeTitles}}.',
     editProgressMain: 'Сюжет',
     editProgressMainPlusSides: 'Сюжет + додаткові завдання',
     editProgressPerfectionist: 'Перфекціоніст',
@@ -1924,6 +2261,7 @@ const UK: Record<TranslationKey, string> = {
     // Statistics, ratings and misc
     resetTitle: 'Відновити стандартні налаштування',
     resetSubtitle: 'Це поверне всі налаштування плагіна до стандартних значень.',
+    settingsResetFailed: 'Не вдалося скинути налаштування.',
     resetWarning: 'Цю дію не можна скасувати.',
     resetConfirm: 'Відновити стандартні',
     resetConfirmAck: 'Я розумію, що цю дію не можна скасувати',
@@ -1949,6 +2287,8 @@ const UK: Record<TranslationKey, string> = {
     yearNotSpecified: 'Рік не вказано',
     noDescription: 'Опису немає',
     noSeries: 'Без серії',
+    noDate: 'Без дати',
+    viewNew: 'Новий вигляд',
     randomGame: 'Випадкова гра',
     noGamesFound: 'Ігри не знайдені',
     noAnimeFound: 'Аніме не знайдено',
@@ -1995,6 +2335,15 @@ const UK: Record<TranslationKey, string> = {
     editDetails: 'Деталі',
     editAdvanced: 'Розширене',
     editClear: 'Очистити',
+    communityRatingTitle: 'Оцінка спільноти',
+    communityRatingRefresh: 'Оновити оцінку',
+    communityRatingScore: 'оцінка',
+    communityRatingNoSource: 'Немає джерела',
+    communityRatingNoVotes: 'Немає голосів',
+    communityRatingVotes: 'голосів',
+    communityRatingNotFound: 'Оцінку спільноти не знайдено.',
+    communityRatingUpdated: 'Оцінку спільноти оновлено.',
+    communityRatingRefreshFailed: 'Не вдалося оновити оцінку спільноти.',
     editSeasonCurrent: 'Сезон (поточний)',
     editSeasonTotal: 'Сезони (усього)',
     editEpisodeCurrent: 'Епізод (поточний)',
@@ -2060,6 +2409,8 @@ const UK: Record<TranslationKey, string> = {
     editBreadcrumbAnime: 'Редагування / Аніме',
     editBreadcrumbBooks: 'Редагування / Книги',
     editBreadcrumbManga: 'Редагування / Манга',
+    editBreadcrumbMovies: 'Редагування / Фільми',
+    editBreadcrumbSeries: 'Редагування / Серіали',
     editMovieTitle: 'Редагувати фільм',
     editSeriesTitle: 'Редагувати серіал',
     editBookTitle: 'Редагувати книгу',
@@ -2091,7 +2442,7 @@ const UK: Record<TranslationKey, string> = {
     planWaitEarlyAccess: 'Дочекатися завершення раннього доступу',
     planNextInQueue: 'Наступне в черзі',
     settingsStatusPlans: 'Статуси та плани',
-    settingsStatusPlansDesc: 'Налаштуйте назви статусів і теги планів.',
+    settingsStatusPlansDesc: 'Налаштуйте статуси, іконки й кольори. Плани доступні у вкладці ігор.',
     settingsGameStatusLabels: 'Назви статусів ігор',
     settingsAnimeStatusLabels: 'Назви статусів аніме',
     settingsMovieStatusLabels: 'Назви статусів фільмів',
@@ -2145,6 +2496,10 @@ const UK: Record<TranslationKey, string> = {
     commandAddSeries: 'Додати серіал',
     commandAddBook: 'Додати книгу',
     commandAddManga: 'Додати мангу',
+    commandAddMusic: 'Додати музику',
+    commandOpenMusicLibrary: 'Відкрити музику',
+    commandAniListSync: 'Синхронізувати AniList',
+    commandAniListImport: 'Імпортувати з AniList',
     commandImportNotes: 'Імпортувати нотатки в LOREBASE',
     ribbonLibrary: 'LOREBASE',
     errorInitView: 'Не вдалося ініціалізувати перегляд LOREBASE',
@@ -2160,7 +2515,10 @@ const UK: Record<TranslationKey, string> = {
     promptSelectResult: 'Виберіть результат',
     promptIncludeDlc: 'Включити DLC',
     promptSearchAction: 'Пошук',
+    promptSearchOtherCatalogs: 'Пошук в інших каталогах',
     promptAddSelected: 'Додати вибране',
+    promptAlreadyInLibrary: 'Уже в бібліотеці',
+    promptInLibraryShort: 'У бібліотеці',
     promptSelectedLabel: 'Вибрано',
     promptReviewSelected: 'Перевірити вибране',
     promptReviewSelectedSubtitle: 'Елементи імпортуються по одному, щоб захистити доступ до провайдера. Велика добірка може потребувати часу.',
@@ -2169,21 +2527,22 @@ const UK: Record<TranslationKey, string> = {
     promptPage: 'Сторінка',
     promptPreviousPage: 'Назад',
     promptNextPage: 'Вперед',
-    promptAddModeTitle: 'Як додати елемент?',
-    promptAddModeProvider: 'Через провайдера',
+    addWorkspaceTitle: 'Додати',
     promptAddModeManual: 'Створити вручну',
-    promptAddModeProviderDesc: 'Пошук через інтеграції та створення з даних провайдера.',
-    promptAddModeManualDesc: 'Створити порожню картку зі своїми полями.',
     manualCreateTitle: 'Створити вручну',
     manualCreateAction: 'Створити',
     manualMediaType: 'Тип медіа',
     manualTitleRequired: 'Назва обовʼязкова.',
     manualSectionMain: 'Основне',
     manualSectionProgress: 'Прогрес',
+    manualSeasonsProgress: 'Сезони й прогрес',
     manualSectionExtra: 'Додатково',
     manualCoverTitle: 'Обкладинка',
     manualCoverUrl: 'URL обкладинки',
     manualCoverChoose: 'Вибрати файл',
+    manualCoverLink: 'Додати за посиланням',
+    manualBackToSearch: 'До пошуку',
+    manualNoRating: 'Без оцінки',
     manualCoverClear: 'Очистити',
     promptAddAnotherTitle: 'Додати ще?',
     promptAddAnotherBodyGame: 'Елемент створено. Можна одразу додати ще одну гру.',
@@ -2195,6 +2554,7 @@ const UK: Record<TranslationKey, string> = {
     noticeProviderDisabled: 'Провайдер вимкнено.',
     noticeIntegrationsDisabled: 'Інтеграції вимкнено.',
     noticeCreated: 'Створено.',
+    noticeSteamDetailsUnavailable: 'Steam не повернув подробиці гри. Створюємо нотатку за даними пошуку; частина полів залишиться порожньою.',
     noticeSkipped: 'Пропущено.',
     noticeProviderTestSuccess: 'Перевірка провайдера успішна.',
     noticeProviderTestFail: 'Перевірка провайдера не вдалася.',
@@ -2224,6 +2584,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     en: EN,
     ru: RU,
     uk: UK,
+    'zh-CN': ZH_CN,
 };
 
 // =============================================================================
@@ -2250,6 +2611,17 @@ class Localization {
         return this.currentLanguage;
     }
 
+    /** Locale used for dates, sorting, and other locale-aware formatting. */
+    getLocale(): string {
+        const locales: Record<Language, string> = {
+            en: 'en-US',
+            ru: 'ru-RU',
+            uk: 'uk-UA',
+            'zh-CN': 'zh-CN',
+        };
+        return locales[this.currentLanguage];
+    }
+
     /**
      * Get translation for a key
      */
@@ -2262,6 +2634,7 @@ class Localization {
      */
     getStatusLabels(): Record<string, string> {
         return {
+            to_be_released: this.t('statusToBeReleased'),
             completed: this.t('statusCompleted'),
             playing: this.t('statusPlaying'),
             dropped: this.t('statusDropped'),

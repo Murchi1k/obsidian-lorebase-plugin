@@ -1,36 +1,89 @@
+import { configureOnlineExtras, onOnlineExtrasChange, readOnlineExtrasPreference } from './services/onlineExtras';
+import { StatisticsDeletionJournal } from './services/media/statisticsDeletions';
+import { CredentialStore } from './services/CredentialStore';
+import { TraktSyncService } from './services/TraktSyncService';
+import { PlayStationSyncService } from './services/PlayStationSyncService';
+import { createPlayStationProgressPreference } from './components/PlayStationProgressPreference';
+import { normalizePlayStationSettings } from './services/playstation/types';
+import { PlayStationImportModal } from './modals/PlayStationImportModal';
+import { pt, psnError } from './localization/playstation';
+import { normalizeTraktSettings } from './services/trakt/types';
+import { TraktLoginModal } from './modals/TraktLoginModal';
+import { TraktImportModal } from './modals/TraktImportModal';
+import { tt, traktError } from './localization/trakt';
+import { CommunityLinksService } from './services/CommunityLinksService';
+import { enableCompleteTemplate, enableGameTrackingTemplateFields, enableCountriesTemplateField } from './services/integrations/templatePreferences';
+import { includeDeferredTemplateFields } from './services/integrations/templateSchema';
+import { synchronizeReleaseStatuses } from './services/ReleaseStatusService';
+import { dateKey } from './views/library/releaseCalendar';
+import { MusicService } from './services/MusicService';
+import { InboxService } from './services/InboxService';
+import { InboxImporter } from './services/inbox/InboxImporter';
+import { InboxModal, mountInbox } from './modals/InboxModal';
+import { inboxText } from './localization/inbox';
+import { MusicEditModal } from './modals/MusicEditModal';
+import { gt } from './localization/gameTracking';
+import { PeopleService } from './services/PeopleService';
+import { RecommendationsService } from './services/RecommendationsService';
+import { RecommendationLibraryService } from './services/RecommendationLibraryService';
+import { EpisodeMetadataService } from './services/EpisodeMetadataService';
+import { MusicSearchModal } from './modals/MusicSearchModal';
+import { WhatsNewModal } from './modals/WhatsNewModal';
+import { highlightReleaseTarget, mountReleaseReturn } from './releases/navigation';
+import { getReleaseStartupAction } from './releases/versionState';
+import { getReleaseCopy } from './releases/copy';
+import type { ReleaseTarget } from './releases/catalog';
+import { mt } from './localization/music';
 /**
  * LOREBASE - Main Plugin Entry Point
- * v3.0.1
+ * Runtime version is read from manifest.json.
  */
 
 import { Plugin, WorkspaceLeaf, Menu, Notice, addIcon, TFile, type Command } from 'obsidian';
-import { CommunityRating, GameDlc, LorebaseSettings, MediaItem, GameStats, AnimeStats, MediaType, RelatedMediaLink, IntegrationTemplateSettings } from './types';
+import { GameDlc, LorebaseSettings, MediaItem, MediaType, RelatedMediaLink, NoteTemplateSettings } from './types';
 import { DEFAULT_SETTINGS, VIEW_TYPE_LIBRARY, LOREBASE_ICON_ID, LOREBASE_ICON_SVG, DEFAULT_COVER, PARTICLE_INTENSITY_MAX, PARTICLE_INTENSITY_MIN } from './constants';
 import { i18n, t, type TranslationKey } from './localization';
 import { LibraryView } from './views/LibraryView';
 import { LorebaseSettingTab } from './settings/SettingsTab';
 import { EditModal } from './modals/EditModal';
+import { bindPosterGallery } from './modals/PosterGalleryModal';
 import { AnimeEditModal } from './modals/AnimeEditModal';
 import { VideoEditModal } from './modals/VideoEditModal';
 import { ReadingEditModal } from './modals/ReadingEditModal';
+import type { ReadingItem } from './types';
 import { StatsModal } from './modals/StatsModal';
+import { loadStatisticsLibrary } from './services/StatisticsService';
 import { DeleteModal } from './modals/DeleteModal';
 import { SteamSyncReviewModal } from './modals/SteamSyncReviewModal';
+import { renderInlineImportState, renderInlineSteamState, waitForInlinePreview, type InlineSyncPresentation } from './modals/inlineSync';
 import { SteamSyncProgressModal } from './modals/SteamSyncProgressModal';
-import { NoteImportReviewModal } from './modals/NoteImportReviewModal';
+import { AniListImportReviewModal } from './modals/AniListImportReviewModal';
+import { NoteImportReviewModal, reviewNoteImportInline, type NoteImportReviewOptions } from './modals/NoteImportReviewModal';
 import { GameService } from './services/GameService';
 import { AnimeService } from './services/AnimeService';
 import { VideoService } from './services/VideoService';
 import { ReadingService } from './services/ReadingService';
+import { configureStatusPresentation, normalizeStatusCustomization } from './statusPresentation';
+import { registerLorebaseTooltips } from './utils/tooltips';
+
+import { configureMediaWorkTypes, normalizeAnimeCountryCatalog, normalizeMediaWorkTypeCatalog, type WorkTypeMedia } from './utils/mediaWorkType';
+import { addComicsWorkType, replaceWorkTypeInView, normalizeWorkTypeCatalog } from './utils/mangaWorkType';
 import { ParticleService } from './services/ParticleService';
 import { IntegrationService } from './services/IntegrationService';
 import { SteamSyncService } from './services/SteamSyncService';
+
+import { AniListSyncService } from './services/AniListSyncService';
 import { MetadataService } from './services/MetadataService';
 import { NoteConversionService } from './services/NoteConversionService';
+import { normalizeReleaseCalendarMediaTypes, normalizeReleaseCalendarScope, normalizeReleaseCalendarViewMode } from './views/library/releaseCalendar';
+import { normalizeCustomGroups } from './services/media/customGroups';
+import { normalizeCardGrid } from './services/media/cardGrid';
 import {
     mergeOverlayLayout,
     mergeOverlayVisibility,
     migrateLegacyJikanMangaSettings,
+    migrateKitsuProviderSettings,
+    migrateUpdatedEditorSetting,
     normalizeDescriptionLines,
     normalizeLibraryViewSettings,
     normalizeNoteImportSettings,
@@ -38,9 +91,12 @@ import {
     parseBadges,
 } from './settings/settingsNormalization';
 import { parseRelatedMedia } from './services/media/parsers';
-import type { MediaKind, MediaSourceSelection } from './services/integrations/types';
-import { buildSimpleTemplate, getDefaultTemplateFields, getEffectiveSimpleTemplateFields } from './services/integrations/templateUtils';
+import { normalizePosterMode } from './services/media/partPoster';
+import type { MediaSourceSelection, TemplateKind } from './services/integrations/types';
+import { buildSimpleTemplate, getDefaultTemplateFields, getEffectiveSimpleTemplateFields, migrateAlternativeTitleTemplate } from './services/integrations/templateUtils';
 import { mediaTypeToKind, synchronizeProviderMetadata } from './services/integrations/enrichment';
+import { normalizeRatingSettings } from './utils/rating';
+import { MEDIA_ICONS } from './mediaPresentation';
 
 // =============================================================================
 // LOREBASE PLUGIN
@@ -50,46 +106,148 @@ import { mediaTypeToKind, synchronizeProviderMetadata } from './services/integra
  * Main plugin class
  */
 export default class LorebasePlugin extends Plugin {
+    private credentialStore?: CredentialStore;
+
+    async saveData(data: unknown): Promise<void> {
+        this.credentialStore ??= new CredentialStore(this.app.secretStorage);
+        await this.credentialStore.save(data, snapshot => super.saveData(snapshot));
+    }
+    private traktSyncService: TraktSyncService | null = null;
+    private traktLoginModal?: TraktLoginModal;
+    private traktImportModal?: TraktImportModal;
+    private traktControllers = new Set<AbortController>();
+    private traktSyncRunning = false;
+    private playstationSyncService: PlayStationSyncService | null = null;
+    private playstationImportModal?: PlayStationImportModal;
+    private playstationControllers = new Set<AbortController>();
+    private playstationSyncRunning = false;
+    private communityLinksService?: CommunityLinksService;
+    private statisticsJournal?: StatisticsDeletionJournal;
     settings: LorebaseSettings = DEFAULT_SETTINGS;
+    private readonly playstationProgressPreference = createPlayStationProgressPreference(
+        () => this.settings.playstationSync.showProgress,
+        visible => { this.settings.playstationSync.showProgress = visible; void this.saveData(this.settings); }
+    );
     private gameService: GameService | null = null;
     private animeService: AnimeService | null = null;
     private movieService: VideoService | null = null;
     private seriesService: VideoService | null = null;
     private bookService: ReadingService | null = null;
     private mangaService: ReadingService | null = null;
+    private musicService: MusicService | null = null;
     private mediaType: MediaType = 'game';
     private particleService: ParticleService | null = null;
     private integrationService: IntegrationService | null = null;
+    private inboxService: InboxService | null = null;
+    private inboxImporter: InboxImporter | null = null;
+    private peopleService: PeopleService | null = null;
+    private recommendationsService: RecommendationsService | null = null;
+    private episodeMetadataService: EpisodeMetadataService | null = null;
     private steamSyncService: SteamSyncService | null = null;
+    private noteImportRunning = false;
     private steamSyncRunning = false;
+    private aniListSyncService: AniListSyncService | null = null;
+    private aniListSyncRunning = false;
     private metadataService: MetadataService | null = null;
     private noteConversionService: NoteConversionService | null = null;
+    private lorebaseSettingTab?: LorebaseSettingTab;
+    private existingInstall = false;
+    private releaseStatusRunning = false;
+    private releaseStatusPending = false;
+    private releaseStatusTimer: number | undefined;
+    private releaseStatusDay = "";
+    private releaseStatusFolders = "";
+    private readonly releaseStatusFiles = new Map<string, TFile>();
+    private releaseModal?: WhatsNewModal;
+    private releaseReturnCleanup?: () => void;
+    private releaseDestination?: { close: () => void };
     private readonly localizedCommands: Array<{ command: Command; key: TranslationKey }> = [];
 
     async onload(): Promise<void> {
+        this.register(registerLorebaseTooltips(document));
+        this.registerEvent(this.app.workspace.on('window-open', (_workspaceWindow, ownerWindow) => {            this.register(registerLorebaseTooltips(ownerWindow.document));
+        }));
         // Load settings
         await this.loadSettings();
         this.normalizeMediaType();
 
         // Initialize localization
         i18n.setLanguage(this.settings.language);
+        configureOnlineExtras(this.settings.onlineExtrasEnabled);
+        this.register(onOnlineExtrasChange(() => this.refreshViews()));
 
         // Initialize game service
-        this.metadataService = new MetadataService(this.app);
+        this.metadataService = new MetadataService(this.app, () => this.settings);
+        const invalidateImages = (file: unknown): void => {
+            if (!(file instanceof TFile) || file.extension !== 'md') this.metadataService?.invalidateImageCache();
+        };
+        this.registerEvent(this.app.vault.on('create', invalidateImages));
+        this.registerEvent(this.app.vault.on('modify', invalidateImages));
+        this.registerEvent(this.app.vault.on('delete', invalidateImages));
+        this.registerEvent(this.app.vault.on('rename', invalidateImages));
         this.gameService = new GameService(this.app, this.metadataService);
         this.gameService.setFolderPath(this.settings.games.folderPath);
         this.animeService = new AnimeService(this.app, this.metadataService);
         this.animeService.setFolderPath(this.settings.anime.folderPath);
+        this.animeService.setPosterMode(this.settings.anime.posterMode);
         this.movieService = new VideoService(this.app, 'movie', this.settings.movies.folderPath, this.metadataService);
         this.seriesService = new VideoService(this.app, 'series', this.settings.series.folderPath, this.metadataService);
+        this.seriesService.setPosterMode(this.settings.series.posterMode);
         this.bookService = new ReadingService(this.app, 'book', this.settings.books.folderPath, this.metadataService);
         this.mangaService = new ReadingService(this.app, 'manga', this.settings.manga.folderPath, this.metadataService);
-        this.integrationService = new IntegrationService(this.app, () => this.settings, () => {
-            void this.runSteamSync();
-        });
-        this.steamSyncService = new SteamSyncService(this.app, this.metadataService);
-        this.noteConversionService = new NoteConversionService(this.app);
+        this.musicService = new MusicService(this.app, this.settings.music.folderPath, this.metadataService, () => this.settings);
+        this.integrationService = new IntegrationService(this.app, () => this.settings, presentation => this.runSteamSync(presentation), presentation => this.runAniListImport(presentation),
+            (kind, presentation) => this.showInbox(kind, presentation));
+        this.steamSyncService = new SteamSyncService(this.app, this.metadataService, () => this.settings);
+        this.episodeMetadataService = new EpisodeMetadataService(() => this.settings);
+        this.recommendationsService = new RecommendationsService(() => this.settings, undefined,
+            new RecommendationLibraryService(this.app, () => this.settings, this.metadataService, async (kind, selection) => {
+                const file = kind === 'anime' ? await this.integrationService?.addAnimeSelection(selection) ?? null
+                    : await this.integrationService?.addVideoSelection(kind, selection) ?? null;
+                if (file) { this.animeService?.invalidateCache(); this.movieService?.invalidateCache(); this.seriesService?.invalidateCache(); this.refreshViews(); }
+                return file;
+            }));
+        this.peopleService = new PeopleService(this.app, () => this.settings, this.metadataService,
+            async (kind, selection) => {
+                const file = await this.integrationService?.addVideoSelection(kind, selection) ?? null;
+                if (file) { this.movieService?.invalidateCache(); this.seriesService?.invalidateCache(); this.refreshViews(); }
+                return file;
+            });
+        this.aniListSyncService = new AniListSyncService(this.app, this.metadataService, () => this.settings);
+        this.traktSyncService = new TraktSyncService(this.app, () => this.settings, this.metadataService, this.integrationService, () => this.saveData(this.settings));
+        this.playstationSyncService = new PlayStationSyncService(this.app, () => this.settings, this.metadataService, this.integrationService, () => this.saveData(this.settings));
+        this.noteConversionService = new NoteConversionService(this.app, () => this.settings);
         addIcon(LOREBASE_ICON_ID, LOREBASE_ICON_SVG);
+
+        this.statisticsJournal = new StatisticsDeletionJournal(this.settings.statisticsDeletions, events => { this.settings.statisticsDeletions = events; void this.saveSettings(); });
+        if (!this.settings.statisticsDeletionStarted) { this.settings.statisticsDeletionStarted = Date.now(); void this.saveSettings(); }
+        const observeStatistics = (file:TFile):void => {
+            const path=file.path.replace(/\\/g,'/');
+            const sources=[['game',this.settings.games.folderPath,this.gameService],['anime',this.settings.anime.folderPath,this.animeService],['movie',this.settings.movies.folderPath,this.movieService],['series',this.settings.series.folderPath,this.seriesService],['book',this.settings.books.folderPath,this.bookService],['manga',this.settings.manga.folderPath,this.mangaService],['music',this.settings.music.folderPath,this.musicService]] as const;
+            for(const [type,folder,service] of sources){if(!folder||!path.startsWith(folder.replace(/\\/g,'/').replace(/\/$/,'')+'/'))continue;const item=type==='game'?(service as GameService).parseGameFromCache(file):type==='anime'?(service as AnimeService).parseAnimeFromCache(file):(service as VideoService|ReadingService|MusicService).parseFromCache(file);if(item){this.statisticsJournal?.observe(item,file.stat.ctime);return;}}
+            this.statisticsJournal?.forget(file.path);
+        };
+        let statisticsStartupCancelled = false;
+        this.register(() => { statisticsStartupCancelled = true; });
+        this.app.workspace.onLayoutReady(() => {
+            void (async () => {
+                let processed = 0;
+                for (const file of this.app.vault.getMarkdownFiles()) {
+                    if (statisticsStartupCancelled) return;
+                    observeStatistics(file);
+                    if (++processed % 100 === 0) await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+                }
+            })().catch(error => console.error('Could not index statistics', error));
+        });
+        this.registerEvent(this.app.metadataCache.on('changed',file=>observeStatistics(file)));
+        this.registerEvent(this.app.vault.on('rename',(file,oldPath)=>{
+            if (this.aniListSyncService?.recordLocalRename(this.settings.anilistSync, oldPath, file.path)) void this.saveData(this.settings);
+            if(file instanceof TFile){this.statisticsJournal?.rename(oldPath,file.path);observeStatistics(file);}
+        }));
+        this.registerEvent(this.app.vault.on('delete',file=>{
+            if (this.aniListSyncService?.recordLocalDeletion(this.settings.anilistSync, file.path)) void this.saveData(this.settings);
+            if(file instanceof TFile)this.statisticsJournal?.remove(file.path);
+        }));
 
         // Register the library view
         this.registerView(
@@ -111,6 +269,8 @@ export default class LorebasePlugin extends Plugin {
         });
 
         this.registerOpenLibraryCommands();
+        this.addCommand({ id: 'open-inbox', name: inboxText('command'), callback: () => this.showInbox() });
+        this.addLocalizedCommand('statsTitle', { id: 'library-statistics', callback: () => this.showStatsModal() });
 
         this.addLocalizedCommand('commandAddGame', {
             id: 'add-game',
@@ -154,11 +314,26 @@ export default class LorebasePlugin extends Plugin {
             }
         });
 
+        this.addLocalizedCommand('commandAddMusic', {
+            id: 'add-music',
+            callback: () => this.addMediaItem('music'),
+        });
+
         this.addLocalizedCommand('commandSteamSync', {
             id: 'steam-sync',
             callback: () => {
                 void this.runSteamSync();
             }
+        });
+
+        this.addLocalizedCommand('commandAniListSync', {
+            id: 'anilist-sync',
+            callback: () => void this.runAniListSync(),
+        });
+
+        this.addLocalizedCommand('commandAniListImport', {
+            id: 'anilist-import',
+            callback: () => void this.runAniListImport(),
         });
 
         this.addLocalizedCommand('commandImportNotes', {
@@ -169,24 +344,109 @@ export default class LorebasePlugin extends Plugin {
         });
 
         // Register settings tab
-        this.addSettingTab(new LorebaseSettingTab(this.app, this));
+        this.lorebaseSettingTab = new LorebaseSettingTab(this.app, this);
+        this.addSettingTab(this.lorebaseSettingTab);
 
         // Apply accent color on load
         this.applyAccentColor();
         this.applyParticles();
 
+        let unloaded = false;
+        this.register(() => {
+            unloaded = true;
+            this.releaseModal?.close();
+            this.releaseReturnCleanup?.();
+        });
+        this.app.workspace.onLayoutReady(() => {
+            if (!unloaded) {
+                void this.checkReleaseUpdate();
+                void this.synchronizeMediaReleaseStatuses();
+                if (this.settings.traktSync.autoSyncOnStartup && this.settings.traktSync.accessToken) void this.runTraktSync(true);
+                if (this.settings.playstationSync.autoSyncOnStartup && this.settings.playstationSync.accountId) void this.runPlayStationSync(true);
+            }
+        });
+
+        this.registerEvent(this.app.metadataCache.on('changed', file => {
+            const folders = [this.settings.games, this.settings.anime, this.settings.movies, this.settings.series, this.settings.books, this.settings.manga, this.settings.music];
+            if (!folders.some(config => this.isFileInFolder(file.path, config.folderPath))) return;
+            this.releaseStatusFiles.set(file.path, file);
+            if (this.releaseStatusRunning) { this.releaseStatusPending = true; return; }
+            window.clearTimeout(this.releaseStatusTimer);
+            this.releaseStatusTimer = window.setTimeout(() => void this.synchronizeMediaReleaseStatuses(), 1500);
+        }));
+        this.registerInterval(window.setInterval(() => {
+            if (dateKey(new Date()) !== this.releaseStatusDay) void this.synchronizeMediaReleaseStatuses();
+        }, 30_000));
+        this.register(() => window.clearTimeout(this.releaseStatusTimer));
+
         if (this.settings.steamSync.autoSyncPlaytimeOnStartup && this.settings.steamSync.steamId) {
             void this.runSteamPlaytimeSync();
+        }
+        if (this.settings.anilistSync.autoSyncOnStartup && this.settings.anilistSync.accessToken) {
+            void this.runAniListSync();
+        }
+    }
+
+    private async synchronizeMediaReleaseStatuses(): Promise<void> {
+        if (this.releaseStatusRunning || !this.metadataService) return;
+        this.releaseStatusRunning = true;
+        const today = dateKey(new Date());
+        const folderSignature = JSON.stringify([this.settings.games, this.settings.anime, this.settings.movies, this.settings.series, this.settings.books, this.settings.manga, this.settings.music].map(config => config.folderPath));
+        const fullScan = today !== this.releaseStatusDay || folderSignature !== this.releaseStatusFolders;
+        const changedFiles = fullScan ? undefined : [...this.releaseStatusFiles.values()];
+        this.releaseStatusFiles.clear();
+        const dayChanged = Boolean(this.releaseStatusDay) && this.releaseStatusDay !== today;
+        try {
+            const sources = [
+                { folder: this.settings.games.folderPath, parse: (file: TFile) => this.gameService?.parseGameFromCache(file) ?? null },
+                { folder: this.settings.anime.folderPath, parse: (file: TFile) => this.animeService?.parseAnimeFromCache(file) ?? null },
+                { folder: this.settings.movies.folderPath, parse: (file: TFile) => this.movieService?.parseFromCache(file) ?? null },
+                { folder: this.settings.series.folderPath, parse: (file: TFile) => this.seriesService?.parseFromCache(file) ?? null },
+                { folder: this.settings.books.folderPath, parse: (file: TFile) => this.bookService?.parseFromCache(file) ?? null },
+                { folder: this.settings.manga.folderPath, parse: (file: TFile) => this.mangaService?.parseFromCache(file) ?? null },
+                { folder: this.settings.music.folderPath, parse: (file: TFile) => this.musicService?.parseFromCache(file) ?? null },
+            ];
+            if (await synchronizeReleaseStatuses(this.app, this.metadataService, sources, new Date(), changedFiles)) {
+                for (const service of [this.gameService, this.animeService, this.movieService, this.seriesService, this.bookService, this.mangaService, this.musicService]) service?.invalidateCache();
+                this.refreshViews();
+            } else if (dayChanged) {
+                this.refreshViewsVisuals();
+            }
+            this.releaseStatusDay = today;
+            this.releaseStatusFolders = folderSignature;
+        } catch (error) {
+            console.error('Could not synchronize release statuses', error);
+        } finally {
+            this.releaseStatusRunning = false;
+            if (this.releaseStatusPending && this.metadataService) {
+                this.releaseStatusPending = false;
+                window.clearTimeout(this.releaseStatusTimer);
+                this.releaseStatusTimer = window.setTimeout(() => void this.synchronizeMediaReleaseStatuses(), 1500);
+            }
         }
     }
 
     onunload(): void {
+        this.inboxImporter?.dispose(); this.inboxImporter = null; this.inboxService = null;
+        this.steamSyncService?.dispose();
+        this.musicService?.dispose();
+        this.noteConversionService?.dispose();
+        this.metadataService?.dispose();
+        this.integrationService?.dispose();
+        this.aniListSyncService?.dispose();
+        this.playstationImportModal?.close();
+        for (const controller of this.playstationControllers) controller.abort();
+        this.playstationControllers.clear(); this.playstationSyncService = null;
+        this.traktLoginModal?.close(); this.traktImportModal?.close();
+        for (const controller of this.traktControllers) controller.abort();
+        this.traktControllers.clear(); this.traktSyncService = null;
         this.gameService = null;
         this.animeService = null;
         this.movieService = null;
         this.seriesService = null;
         this.bookService = null;
         this.mangaService = null;
+        this.musicService = null;
 
         if (this.particleService) {
             this.particleService.destroy();
@@ -194,7 +454,11 @@ export default class LorebasePlugin extends Plugin {
         }
 
         this.integrationService = null;
+        this.peopleService = null;
+        this.recommendationsService = null;
+        this.episodeMetadataService = null;
         this.steamSyncService = null;
+        this.aniListSyncService = null;
         this.metadataService = null;
         this.noteConversionService = null;
     }
@@ -203,16 +467,37 @@ export default class LorebasePlugin extends Plugin {
      * Load plugin settings
      */
     async loadSettings(): Promise<void> {
-        const loaded: unknown = await this.loadData();
+        let removedProviderSettings = false;
+        this.credentialStore ??= new CredentialStore(this.app.secretStorage);
+        const loaded: unknown = this.credentialStore.restore(await this.loadData());
+        this.existingInstall = this.isSettingsRecord(loaded) && Object.keys(loaded).length > 0;
         const sanitized = this.isSettingsRecord(loaded) ? { ...loaded } : {};
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, sanitized);
+        const editorMigrated = migrateUpdatedEditorSetting(sanitized);
+        this.settings = Object.assign({}, structuredClone(DEFAULT_SETTINGS), sanitized);
+        this.settings.updatedEditor = sanitized.updatedEditor === true;
+        this.settings.onlineExtrasEnabled = readOnlineExtrasPreference(sanitized);
+        delete (this.settings as unknown as Record<string, unknown>).offlineMode;
+        this.settings.playstationSync = normalizePlayStationSettings(sanitized.playstationSync);
+        this.settings.scrollCardDescriptions = sanitized.scrollCardDescriptions === true;
+        this.settings.showDiscoveryBadge = sanitized.showDiscoveryBadge !== false;
+        this.settings.traktSync = normalizeTraktSettings(sanitized.traktSync);
+        const mangaWorkTypes = normalizeWorkTypeCatalog(sanitized.mediaWorkTypes?.manga);
+        const comicsTypeMigrated = !this.settings.migrations?.comicsWorkType;
+        if (comicsTypeMigrated) this.settings.migrations = { ...this.settings.migrations, comicsWorkType: true };
+        this.settings.mediaWorkTypes = { ...sanitized.mediaWorkTypes, manga: comicsTypeMigrated ? addComicsWorkType(mangaWorkTypes) : mangaWorkTypes };
+        for (const type of ['game', 'movie', 'series'] as WorkTypeMedia[]) this.settings.mediaWorkTypes[type] = normalizeMediaWorkTypeCatalog(type, sanitized.mediaWorkTypes?.[type]);
+        this.settings.mediaWorkTypes.anime = normalizeAnimeCountryCatalog(sanitized.mediaWorkTypes?.anime);
+        configureMediaWorkTypes(this.settings.mediaWorkTypes);
+        this.settings.statusEditorLayout = sanitized.statusEditorLayout === 'columns' ? 'columns' : 'list';
         const particleIntensity = Number(sanitized.particleIntensity);
         this.settings.particleIntensity = Number.isFinite(particleIntensity)
             ? Math.min(PARTICLE_INTENSITY_MAX, Math.max(PARTICLE_INTENSITY_MIN, Math.round(particleIntensity)))
             : DEFAULT_SETTINGS.particleIntensity;
+        this.settings.animateParticlesWithReducedMotion = sanitized.animateParticlesWithReducedMotion === true;
         this.settings.settingsLayoutMode = sanitized.settingsLayoutMode === 'accordion'
             ? 'accordion'
             : 'tabs';
+        this.settings.ratingScale = normalizeRatingSettings(sanitized.ratingScale);
         this.settings.completionDateBadgeFormat = sanitized.completionDateBadgeFormat === 'full'
             ? 'full'
             : 'short';
@@ -221,6 +506,7 @@ export default class LorebasePlugin extends Plugin {
             value === 'full' || value === 'short' ? value : completionDateFallback
         );
         this.settings.completionDateBadgeFormats = {
+            music: normalizeCompletionDateBadgeFormat(sanitized?.completionDateBadgeFormats?.music),
             games: normalizeCompletionDateBadgeFormat(sanitized?.completionDateBadgeFormats?.games),
             anime: normalizeCompletionDateBadgeFormat(sanitized?.completionDateBadgeFormats?.anime),
             movies: normalizeCompletionDateBadgeFormat(sanitized?.completionDateBadgeFormats?.movies),
@@ -249,9 +535,21 @@ export default class LorebasePlugin extends Plugin {
         if (sanitized?.manga) {
             this.settings.manga = Object.assign({}, DEFAULT_SETTINGS.manga, sanitized.manga);
         }
-        for (const key of ['games', 'anime', 'movies', 'series', 'books', 'manga'] as const) {
+        this.settings.music = Object.assign({}, DEFAULT_SETTINGS.music, sanitized.music ?? {});
+        this.settings.music.noteTemplate = { ...structuredClone(DEFAULT_SETTINGS.music.noteTemplate!), ...sanitized.music?.noteTemplate };
+        for (const key of ['anime', 'series'] as const) {
+            this.settings[key].posterMode = normalizePosterMode(this.settings[key].posterMode);
+        }
+        for (const key of ['albumCoverMode', 'trackCoverMode'] as const) {
+            const mode = this.settings.music[key];
+            this.settings.music[key] = mode === 'vinyl' || mode === 'cd' ? mode : 'square';
+        }
+        this.settings.music.provider = ['lastfm', 'deezer'].includes(this.settings.music.provider) ? this.settings.music.provider : 'musicbrainz';
+        this.settings.music.lastfmApiKey = typeof this.settings.music.lastfmApiKey === 'string' ? this.settings.music.lastfmApiKey : '';
+        for (const key of ['games', 'anime', 'movies', 'series', 'books', 'manga', 'music'] as const) {
             const normalizedView = normalizeLibraryViewSettings(sanitized?.[key], DEFAULT_SETTINGS[key].viewState);
-            this.settings[key] = Object.assign({}, this.settings[key]);
+            Object.assign(this.settings, { [key]: Object.assign({}, this.settings[key]) });
+            this.settings[key].cardGrid = normalizeCardGrid(sanitized[key]?.cardGrid, this.settings[key]);
             Object.assign(this.settings[key], normalizedView);
             this.settings[key].sortField = normalizedView.viewState.sort.field;
             this.settings[key].sortOrder = normalizedView.viewState.sort.order;
@@ -259,7 +557,24 @@ export default class LorebasePlugin extends Plugin {
         if (sanitized?.enabledMedia) {
             this.settings.enabledMedia = Object.assign({}, DEFAULT_SETTINGS.enabledMedia, sanitized.enabledMedia);
         }
+        this.settings.releaseCalendarMediaTypes = normalizeReleaseCalendarMediaTypes(
+            sanitized.releaseCalendarMediaTypes
+        );
+        this.settings.releaseCalendarViewMode = normalizeReleaseCalendarViewMode(sanitized.releaseCalendarViewMode);
+        this.settings.releaseCalendarScope = normalizeReleaseCalendarScope(sanitized.releaseCalendarScope);
+        this.settings.customGroups = normalizeCustomGroups(sanitized.customGroups);
         this.settings.migrations = Object.assign({}, DEFAULT_SETTINGS.migrations, sanitized?.migrations ?? {});
+        // Start the revised grid in the requested column mode once; later edits are retained.
+        if (!this.settings.migrations.columnGridDefaults) {
+            for (const key of ['games', 'anime', 'movies', 'series', 'books', 'manga', 'music'] as const) {
+                const grid = this.settings[key].cardGrid!;
+                for (const device of ['desktop', 'mobile'] as const) {
+                    grid[device].mode = 'columns';
+                    grid[device].columns = grid[device].horizontalColumns = key === 'music' ? 7 : 5;
+                }
+            }
+            this.settings.migrations.columnGridDefaults = true;
+        }
         if (!this.settings.migrations.animeProgressCardStyle && this.settings.anime.cardStyle === 'hover') {
             this.settings.anime.cardStyle = 'progress';
             this.settings.migrations.animeProgressCardStyle = true;
@@ -270,6 +585,13 @@ export default class LorebasePlugin extends Plugin {
             {},
             DEFAULT_SETTINGS.steamSync.fields,
             sanitized?.steamSync?.fields ?? {}
+        );
+        this.settings.anilistSync = Object.assign({}, DEFAULT_SETTINGS.anilistSync, sanitized?.anilistSync ?? {});
+        this.settings.anilistSync.syncDeletions = sanitized?.anilistSync?.syncDeletions === true;
+        this.settings.anilistSync.lastSynced = Object.assign(
+            {},
+            DEFAULT_SETTINGS.anilistSync.lastSynced,
+            sanitized?.anilistSync?.lastSynced ?? {}
         );
         if (this.settings.steamSync.statusWithPlaytime === 'playing' || this.settings.steamSync.statusWithPlaytime === 'completed') {
             this.settings.steamSync.statusWithPlaytime = DEFAULT_SETTINGS.steamSync.statusWithPlaytime;
@@ -284,7 +606,10 @@ export default class LorebasePlugin extends Plugin {
             series: Object.assign({}, DEFAULT_SETTINGS.statusLabels.series, sanitized?.statusLabels?.series ?? {}),
             books: Object.assign({}, DEFAULT_SETTINGS.statusLabels.books, sanitized?.statusLabels?.books ?? {}),
             manga: Object.assign({}, DEFAULT_SETTINGS.statusLabels.manga, sanitized?.statusLabels?.manga ?? {}),
+            music: Object.assign({}, sanitized?.statusLabels?.music ?? {}),
         };
+        this.settings.statusCustomization = normalizeStatusCustomization(sanitized.statusCustomization);
+        configureStatusPresentation(this.settings);
         const legacyCompletedLabel = t('statusPlayed').trim().toLowerCase();
         for (const labels of [this.settings.statusLabels.movies, this.settings.statusLabels.series]) {
             if (labels.completed?.trim().toLowerCase() === legacyCompletedLabel) {
@@ -293,21 +618,11 @@ export default class LorebasePlugin extends Plugin {
         }
         const watchCompletedLabel = t('statusCompleted').trim().toLowerCase();
         for (const labels of [this.settings.statusLabels.books, this.settings.statusLabels.manga]) {
+            if (labels.planned?.trim() === 'Plan to Read') delete labels.planned;
+            if (labels.watching?.trim() === 'Reading') delete labels.watching;
             if (labels.completed?.trim().toLowerCase() === watchCompletedLabel) {
                 delete labels.completed;
             }
-        }
-        if (!Object.keys(this.settings.statusLabels.books).length && !sanitized?.statusLabels?.books) {
-            this.settings.statusLabels.books = {
-                planned: t('statusPlanToRead'),
-                watching: t('statusReading'),
-            };
-        }
-        if (!Object.keys(this.settings.statusLabels.manga).length && !sanitized?.statusLabels?.manga) {
-            this.settings.statusLabels.manga = {
-                planned: t('statusPlanToRead'),
-                watching: t('statusReading'),
-            };
         }
         this.settings.tagPresets = {
             games: normalizeTagPresets(sanitized?.tagPresets?.games),
@@ -327,7 +642,11 @@ export default class LorebasePlugin extends Plugin {
         const settingsRecord = this.settings as unknown as Record<string, unknown>;
         const sanitizedRecord = sanitized as Record<string, unknown>;
         const defaultsRecord = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
-        const mediaCustomization: Record<'game' | 'anime' | 'movie' | 'series' | 'book' | 'manga', Record<'vertical' | 'horizontal', CustomizationProfile>> = {
+        const mediaCustomization: Record<'game' | 'anime' | 'movie' | 'series' | 'book' | 'manga' | 'music', Record<'vertical' | 'horizontal', CustomizationProfile>> = {
+            music: {
+                vertical: { descriptionKey: 'musicDescriptionLines', layoutKey: 'musicOverlayTextLayout', visibilityKey: 'musicOverlayTextVisibility', badgesKey: 'musicBadges' },
+                horizontal: { descriptionKey: 'musicHorizontalDescriptionLines', layoutKey: 'musicHorizontalOverlayTextLayout', visibilityKey: 'musicHorizontalOverlayTextVisibility', badgesKey: 'musicHorizontalBadges' },
+            },
             game: {
                 vertical: {
                     descriptionKey: 'descriptionLines',
@@ -460,7 +779,7 @@ export default class LorebasePlugin extends Plugin {
         const readDefault = <T>(key: keyof LorebaseSettings): T => defaultsRecord[key as string] as T;
         const readSanitized = <T>(key: keyof LorebaseSettings): T | undefined => sanitizedRecord[key as string] as T | undefined;
 
-        for (const media of ['game', 'anime', 'movie', 'series', 'book', 'manga'] as const) {
+        for (const media of ['game', 'anime', 'movie', 'series', 'book', 'manga', 'music'] as const) {
             for (const orientation of ['vertical', 'horizontal'] as const) {
                 const profile = mediaCustomization[media][orientation];
                 settingsRecord[profile.descriptionKey as string] = normalizeDescriptionLines(
@@ -501,6 +820,30 @@ export default class LorebasePlugin extends Plugin {
                 );
             }
         }
+        if (!this.settings.migrations?.horizontalFourColumns) {
+            for (const key of ['games', 'anime', 'movies', 'series', 'books', 'manga', 'music'] as const) {
+                for (const device of ['desktop', 'mobile'] as const) this.settings[key].cardGrid![device].horizontalColumns = 4;
+            }
+            this.settings.migrations = { ...this.settings.migrations, horizontalFourColumns: true };
+        }
+        if (!this.settings.migrations?.raisedCardTextDefaults) {
+            const oldPositions = {
+                vertical: { title: { x: 7, y: 6.5 }, year: { x: 7, y: 15 }, format: { x: 30, y: 15 }, description: { x: 2, y: 24 } },
+                horizontal: { title: { x: 7, y: 11.2 }, year: { x: 7, y: 25.9 }, format: { x: 30, y: 25.9 }, description: { x: 2, y: 41.5 } },
+            };
+            for (const media of ['game', 'anime', 'movie', 'series', 'book', 'manga'] as const) {
+                for (const direction of ['vertical', 'horizontal'] as const) {
+                    const profile = mediaCustomization[media][direction];
+                    const current = readSetting<LorebaseSettings['overlayTextLayout']>(profile.layoutKey);
+                    const defaults = readDefault<LorebaseSettings['overlayTextLayout']>(profile.layoutKey);
+                    for (const field of ['title', 'year', 'format', 'description'] as const) {
+                        const old = oldPositions[direction][field];
+                        if (current[field].x === old.x && current[field].y === old.y) current[field] = { ...defaults[field] };
+                    }
+                }
+            }
+            this.settings.migrations = { ...this.settings.migrations, raisedCardTextDefaults: true };
+        }
         this.settings.overlayApplyToAllMedia = typeof sanitized?.overlayApplyToAllMedia === 'boolean'
             ? sanitized.overlayApplyToAllMedia
             : DEFAULT_SETTINGS.overlayApplyToAllMedia;
@@ -529,6 +872,14 @@ export default class LorebasePlugin extends Plugin {
                     sanitized.integrations.providers
                 );
             }
+            if (defaultIntegrations) {
+                for (const key of Object.keys(integrations.providers)) {
+                    if (!Object.prototype.hasOwnProperty.call(defaultIntegrations.providers, key)) {
+                        delete (integrations.providers as unknown as Record<string, unknown>)[key];
+                        removedProviderSettings = true;
+                    }
+                }
+            }
             if (defaultIntegrations) integrations.imageStorage = Object.assign(
                 {},
                 defaultIntegrations.imageStorage,
@@ -552,23 +903,30 @@ export default class LorebasePlugin extends Plugin {
             const animeProvider = String(integrations.media?.anime?.provider ?? '');
             if (animeProvider === 'omdb') {
                 integrations.media.anime.provider = 'anilist';
-            } else if (!['anilist', 'jikan', 'shikimori'].includes(animeProvider)) {
+            } else if (!['anilist', 'kitsu', 'jikan', 'shikimori'].includes(animeProvider)) {
                 integrations.media.anime.provider = 'anilist';
             }
             const booksProvider = String(integrations.media?.books?.provider ?? '');
-            if (!['hardcover', 'googlebooks'].includes(booksProvider)) {
+            if (!['hardcover', 'googlebooks', 'openlibrary'].includes(booksProvider)) {
                 integrations.media.books.provider = 'hardcover';
             }
             const mangaProvider = String(integrations.media?.manga?.provider ?? '');
-            if (mangaProvider !== 'jikan' && !['anilist', 'shikimori', 'mangaupdates', 'mangadex'].includes(mangaProvider)) {
+            if (mangaProvider !== 'jikan' && !['anilist', 'shikimori', 'mangaupdates', 'mangadex', 'comicvine'].includes(mangaProvider)) {
                 integrations.media.manga.provider = 'anilist';
             }
         }
 
         const settingsMigrated = migrateLegacyJikanMangaSettings(this.settings, sanitized.integrations);
+        const kitsuMigrated = migrateKitsuProviderSettings(this.settings, sanitized.integrations);
         const templatesMigrated = this.migrateIntegrationTemplates();
         const gameFiltersMigrated = this.migrateGameDefaultVisibilityFilters();
-        if (templatesMigrated || settingsMigrated || gameFiltersMigrated) {
+        const beforeTypeFilters = JSON.stringify([this.settings.manga.viewState, this.settings.manga.savedViews]);
+        for (const [from, to] of Object.entries(this.settings.mediaWorkTypes?.manga?.redirects ?? {})) {
+            replaceWorkTypeInView(this.settings.manga.viewState, from, to);
+            this.settings.manga.savedViews.forEach(view => replaceWorkTypeInView(view.state, from, to));
+        }
+        const typeFiltersMigrated = beforeTypeFilters !== JSON.stringify([this.settings.manga.viewState, this.settings.manga.savedViews]);
+        if (templatesMigrated || settingsMigrated || kitsuMigrated || gameFiltersMigrated || removedProviderSettings || typeFiltersMigrated || comicsTypeMigrated || editorMigrated || this.app.secretStorage) {
             await this.saveData(this.settings);
         }
     }
@@ -597,6 +955,15 @@ export default class LorebasePlugin extends Plugin {
         if (!media) return false;
 
         let changed = false;
+        for (const kind of ['anime', 'manga'] as const) {
+            const template = media[kind].template;
+            const migrated = migrateAlternativeTitleTemplate(template);
+            if (migrated !== template) {
+                media[kind].template = migrated;
+                changed = true;
+            }
+        }
+
         const stripTemplateFields = (fields: string[] | undefined, removed: string[]): string[] | undefined => {
             if (!fields) return fields;
             const next = fields.filter((field) => !removed.includes(field));
@@ -622,8 +989,8 @@ export default class LorebasePlugin extends Plugin {
             return left.every((value, index) => value === right[index]);
         };
         const syncSimpleTemplate = (
-            kind: MediaKind,
-            mediaSettings: IntegrationTemplateSettings | undefined,
+            kind: TemplateKind,
+            mediaSettings: NoteTemplateSettings | undefined,
             howLongToBeatEnabled = false
         ): void => {
             if (!mediaSettings || mediaSettings.templateMode === 'advanced') return;
@@ -631,7 +998,7 @@ export default class LorebasePlugin extends Plugin {
                 ? mediaSettings.templateFields
                 : getDefaultTemplateFields(kind);
             const nextFields = getEffectiveSimpleTemplateFields(kind, selected, { howLongToBeatEnabled });
-            const nextTemplate = buildSimpleTemplate(kind, nextFields);
+            const nextTemplate = buildSimpleTemplate(kind, nextFields, mediaSettings.fieldAliases, mediaSettings.wikilinkFields);
             if (!arraysEqual(mediaSettings.templateFields, nextFields)) {
                 mediaSettings.templateFields = nextFields;
                 changed = true;
@@ -697,13 +1064,86 @@ export default class LorebasePlugin extends Plugin {
                 changed = true;
             }
         }
+        if (!this.settings.migrations?.mangaTemplateWorkTypeField) {
+            if (media.manga?.templateMode !== 'advanced') {
+                const fields = Array.isArray(media.manga?.templateFields)
+                    ? media.manga.templateFields
+                    : [];
+                if (!fields.includes('workType')) {
+                    const typeIndex = fields.indexOf('type');
+                    const insertAt = typeIndex >= 0 ? typeIndex + 1 : 0;
+                    media.manga.templateFields = [
+                        ...fields.slice(0, insertAt),
+                        'workType',
+                        ...fields.slice(insertAt),
+                    ];
+                    changed = true;
+                }
+            }
+            if (this.settings.migrations) {
+                this.settings.migrations.mangaTemplateWorkTypeField = true;
+                changed = true;
+            }
+        }
 
+        if (!this.settings.migrations?.releaseCalendarTemplateDates) {
+            for (const mediaSettings of [media.anime, media.series, media.manga]) {
+                if (!mediaSettings || mediaSettings.templateMode === 'advanced') continue;
+                const fields = Array.isArray(mediaSettings.templateFields)
+                    ? mediaSettings.templateFields
+                    : [];
+                if (fields.includes('released')) continue;
+                const yearIndex = fields.indexOf('year');
+                const insertAt = yearIndex >= 0 ? yearIndex + 1 : fields.length;
+                mediaSettings.templateFields = [
+                    ...fields.slice(0, insertAt),
+                    'released',
+                    ...fields.slice(insertAt),
+                ];
+                changed = true;
+            }
+            if (this.settings.migrations) {
+                this.settings.migrations.releaseCalendarTemplateDates = true;
+                changed = true;
+            }
+        }
+
+        if (!this.settings.migrations?.orderedTemplateFields) {
+            for (const kind of ['games', 'anime', 'movies', 'series', 'books', 'manga'] as const) {
+                const config = media[kind];
+                if (!config || config.templateMode === 'advanced') continue;
+                config.templateFields = includeDeferredTemplateFields(kind, config.templateFields ?? getDefaultTemplateFields(kind));
+            }
+            if (this.settings.migrations) this.settings.migrations.orderedTemplateFields = true;
+            changed = true;
+        }
+
+        if (!this.settings.migrations?.completeTemplateSchema) {
+            for (const kind of ['games', 'anime', 'movies', 'series', 'books', 'manga'] as const) {
+                if (media[kind]) enableCompleteTemplate(kind, media[kind]);
+            }
+            if (this.settings.migrations) this.settings.migrations.completeTemplateSchema = true;
+            changed = true;
+        }
+
+        if (!this.settings.migrations?.gameTrackingTemplateFields) {
+            if (media.games) enableGameTrackingTemplateFields(media.games);
+            if (this.settings.migrations) this.settings.migrations.gameTrackingTemplateFields = true;
+            changed = true;
+        }
+
+        if (!this.settings.migrations?.countriesTemplateFields) {
+            for (const kind of ['games','anime','movies','series','books','manga'] as const) if (media[kind]) enableCountriesTemplateField(kind,media[kind]);
+            if (this.settings.migrations) this.settings.migrations.countriesTemplateFields = true;
+            changed = true;
+        }
         syncSimpleTemplate('games', media.games, Boolean(media.games?.howLongToBeatEnabled));
         syncSimpleTemplate('anime', media.anime);
         syncSimpleTemplate('movies', media.movies);
         syncSimpleTemplate('series', media.series);
         syncSimpleTemplate('books', media.books);
         syncSimpleTemplate('manga', media.manga);
+        syncSimpleTemplate('music', this.settings.music.noteTemplate);
 
         return changed;
     }
@@ -722,7 +1162,13 @@ export default class LorebasePlugin extends Plugin {
     /**
      * Save plugin settings
      */
+    private templateConfigurationSignature = '';
+
     async saveSettings(): Promise<void> {
+        configureOnlineExtras(this.settings.onlineExtrasEnabled);
+        configureMediaWorkTypes(this.settings.mediaWorkTypes);
+        configureStatusPresentation(this.settings);
+        this.musicService?.setFolderPath(this.settings.music.folderPath);
         await this.saveData(this.settings);
 
         // Update game service folder path if changed
@@ -731,12 +1177,14 @@ export default class LorebasePlugin extends Plugin {
         }
         if (this.animeService) {
             this.animeService.setFolderPath(this.settings.anime.folderPath);
+            this.animeService.setPosterMode(this.settings.anime.posterMode);
         }
         if (this.movieService) {
             this.movieService.setFolderPath(this.settings.movies.folderPath);
         }
         if (this.seriesService) {
             this.seriesService.setFolderPath(this.settings.series.folderPath);
+            this.seriesService.setPosterMode(this.settings.series.posterMode);
         }
         if (this.bookService) {
             this.bookService.setFolderPath(this.settings.books.folderPath);
@@ -753,6 +1201,12 @@ export default class LorebasePlugin extends Plugin {
         this.applyAccentColor();
         this.normalizeMediaType();
         this.applyParticles();
+        const signature = JSON.stringify({ media: this.settings.integrations?.media, music: this.settings.music.noteTemplate, compactTemplates: this.settings.integrations?.compactTemplates });
+        if (signature !== this.templateConfigurationSignature) {
+            this.templateConfigurationSignature = signature;
+            for (const service of [this.gameService, this.animeService, this.movieService, this.seriesService, this.bookService, this.mangaService]) service?.invalidateCache();
+            this.refreshViews();
+        }
     }
 
     /**
@@ -795,6 +1249,7 @@ export default class LorebasePlugin extends Plugin {
             { type: 'series', id: 'open-series-library', key: 'commandOpenSeriesLibrary' },
             { type: 'book', id: 'open-books-library', key: 'commandOpenBooksLibrary' },
             { type: 'manga', id: 'open-manga-library', key: 'commandOpenMangaLibrary' },
+            { type: 'music', id: 'open-music-library', key: 'commandOpenMusicLibrary' },
         ];
 
         for (const command of commands) {
@@ -836,7 +1291,17 @@ export default class LorebasePlugin extends Plugin {
     /**
      * Show edit modal for a media item
      */
-    showEditModal(item: MediaItem, onSave: () => void, onBeforeSave?: () => void): void {
+    showEditModal(item: MediaItem, onSave: () => void, onBeforeSave?: () => void, partId?: string): void {
+        if (item.type === 'music') {
+            if (!this.musicService) return;
+            const service = this.musicService;
+            new MusicEditModal(this.app, item, this.settings, service, async draft => {
+                onBeforeSave?.();
+                await service.updateItem(item, draft);
+                onSave();
+            }, () => this.showDeleteModal(item, async () => { await service.deleteItem(item); onSave(); })).open();
+            return;
+        }
         if (item.type === 'anime') {
             const animeItem = item;
             const modal: AnimeEditModal = new AnimeEditModal(
@@ -856,9 +1321,9 @@ export default class LorebasePlugin extends Plugin {
                         onSave();
                     });
                 },
-                async () => {
+                async (request) => {
                     if (!this.integrationService || !this.animeService) return;
-                    const anime = animeItem;
+                    const anime = { ...animeItem, ...(request ? { parts: request.parts, activePartId: request.activePartId, status: request.status, partCatalog: request.partCatalog } : {}) };
                     if (!anime.integrationProvider || !anime.integrationId) {
                         new Notice(t('animePartsSourceMissing'));
                         return false;
@@ -869,26 +1334,8 @@ export default class LorebasePlugin extends Plugin {
                         new Notice(t('noticeNoResults'));
                         return false;
                     }
-                    const review = await this.integrationService.reviewAnimePartsForItem(anime, providerParts);
+                    const review = await this.integrationService.reviewAnimePartsForItem(anime, providerParts, request?.automatic);
                     if (!review) return false;
-                    const activePart = review.parts.find((part) => part.id === review.activePartId) ?? review.parts[0] ?? null;
-                    await this.animeService.updateAnime(anime, {
-                        status: review.status,
-                        integrationProvider: anime.integrationProvider,
-                        integrationId: anime.integrationId,
-                        parts: review.parts,
-                        activePartId: review.activePartId,
-                        seasonCurrent: activePart?.seasonNumber ?? null,
-                        episodeCurrent: activePart?.episodeCurrent ?? null,
-                        episodeTotal: activePart?.episodeTotal ?? null,
-                    });
-                    anime.status = review.status;
-                    anime.parts = review.parts;
-                    anime.activePartId = review.activePartId;
-                    anime.seasonCurrent = activePart?.seasonNumber ?? null;
-                    anime.episodeCurrent = activePart?.episodeCurrent ?? null;
-                    anime.episodeTotal = activePart?.episodeTotal ?? null;
-                    onSave();
                     return review;
                 },
                 () => this.refreshCommunityRatingForItem(animeItem, onSave),
@@ -904,14 +1351,21 @@ export default class LorebasePlugin extends Plugin {
                     true,
                     onSave,
                     () => modal.saveBeforeSourceRefresh()
-                )
+                ),
+                this.settings.ratingScale,
+                part => this.episodeMetadataService?.load(animeItem, part) ?? Promise.resolve([]),
+                this.recommendationsService ?? undefined,
+                this.settings.updatedEditor,
+                this.settings.updatedEditor ? this.collectIncomingRelatedMedia(animeItem.filePath) : undefined
             );
-            modal.open();
+            this.openEditorWithGallery(modal, animeItem);
+            if (partId) modal.showPart(partId);
             return;
         }
 
         if (item.type === 'movie' || item.type === 'series') {
             const service = item.type === 'movie' ? this.movieService : this.seriesService;
+            const episodeMetadata = this.episodeMetadataService;
             const modal: VideoEditModal = new VideoEditModal(
                 this.app,
                 item,
@@ -942,9 +1396,19 @@ export default class LorebasePlugin extends Plugin {
                     true,
                     onSave,
                     () => modal.saveBeforeSourceRefresh()
-                )
+                ),
+                this.settings.ratingScale,
+                (onChanged) => this.manageMediaWorkTypes(item.type, onChanged),
+                this.peopleService ?? undefined,
+                item.type === 'series' ? part => this.episodeMetadataService?.load(item, part) ?? Promise.resolve([]) : undefined,
+                this.recommendationsService ?? undefined,
+                this.settings.updatedEditor,
+                item.type === 'series' && episodeMetadata?.canRefreshSeries(item)
+                    ? () => episodeMetadata.refreshSeries(item)
+                    : undefined
             );
-            modal.open();
+            this.openEditorWithGallery(modal, item);
+            if (partId) modal.showPart(partId);
             return;
         }
 
@@ -983,9 +1447,23 @@ export default class LorebasePlugin extends Plugin {
                     true,
                     onSave,
                     () => modal.saveBeforeSourceRefresh()
-                )
+                ),
+                this.settings.ratingScale,
+                (onChanged) => this.manageMangaWorkTypes(onChanged),
+                this.settings.updatedEditor,
+                {
+                    items: this.app.vault.getMarkdownFiles()
+                        .filter(file => this.isFileInFolder(file.path, readingItem.type === 'book' ? this.settings.books.folderPath : this.settings.manga.folderPath))
+                        .map(file => service?.parseFromCache(file) ?? null)
+                        .filter((entry): entry is ReadingItem => entry !== null),
+                    save: async changes => {
+                        if (!service) return;
+                        for (const change of changes) await service.updateItem(change.item, change.updates);
+                    },
+                }
             );
             modal.open();
+            if (partId) modal.showPart(partId);
             return;
         }
 
@@ -1025,12 +1503,28 @@ export default class LorebasePlugin extends Plugin {
                 true,
                 onSave,
                 () => modal.saveBeforeSourceRefresh()
-            )
+            ),
+            this.settings.ratingScale,
+                (onChanged) => this.manageMediaWorkTypes('game', onChanged),
+            this.steamSyncService ? (appId) => this.steamSyncService!.getGameTracking(this.settings.steamSync, appId) : undefined,
+            this.settings.updatedEditor,
+            this.playstationSyncService ? (tracking, signal) => this.playstationSyncService!.refresh(tracking, signal) : undefined,
+            this.playstationProgressPreference,
         );
+        this.openEditorWithGallery(modal, gameItem);
+    }
+
+    private openEditorWithGallery(modal: EditModal | AnimeEditModal | VideoEditModal, item: MediaItem): void {
         modal.open();
+        const unbindGallery = bindPosterGallery(this.app, modal.contentEl, item.displayName, this.integrationService?.getGalleryLoader(item));
+        if (unbindGallery) {
+            const close = modal.onClose.bind(modal);
+            modal.onClose = () => { unbindGallery(); close(); };
+        }
     }
 
     async enrichMediaItem(item: MediaItem, relink = false, onSave?: () => void): Promise<boolean> {
+        if (item.type === 'music') return false;
         if (!this.integrationService || !this.metadataService) return false;
         const kind = mediaTypeToKind(item.type);
         if (!kind) return false;
@@ -1056,7 +1550,8 @@ export default class LorebasePlugin extends Plugin {
                     id,
                     title: searchTitle,
                     year: item.year ? String(item.year) : undefined,
-                    image: item.imageUrl || undefined,
+                    image: ((item.type === 'anime' || item.type === 'series') ? item.titleImageUrl || item.imageUrl : item.imageUrl) || undefined,
+                    workTypeMedia: item.type === 'anime' ? item.integrationSourceKind : undefined,
                 };
             } else {
                 source = await this.integrationService.selectMediaSource(
@@ -1080,7 +1575,7 @@ export default class LorebasePlugin extends Plugin {
             }
             const merged = synchronizeProviderMetadata(current, incoming, source);
             this.repairGeneratedSteamPoster(current, incoming, source, merged);
-            await this.metadataService.updateMetadata(file, merged.patch);
+            await this.metadataService.updateMetadata(file, merged.patch, item.type);
 
             const mergedSourceUrl = [merged.values.url, merged.values.source_url]
                 .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
@@ -1169,37 +1664,26 @@ export default class LorebasePlugin extends Plugin {
         return item.displayName;
     }
 
-    private async refreshCommunityRatingForItem(item: MediaItem, onSave: () => void): Promise<CommunityRating | null> {
-        if (!this.integrationService) return null;
+    private async refreshCommunityRatingForItem(item: MediaItem, onSave: () => void): Promise<boolean> {
+        const metadata = this.metadataService;
+        if (item.type === 'music' || !this.integrationService || !metadata) return false;
+
+        const file = this.app.vault.getAbstractFileByPath(item.filePath);
+        if (!(file instanceof TFile)) return false;
+
         const rating = await this.integrationService.fetchCommunityRatingForItem(item);
-        if (!rating || !Number.isFinite(rating.rating)) return null;
+        if (!rating) return false;
 
         const updates = {
             communityRating: rating.rating,
             communityVotes: rating.votes,
             communityRatingProvider: rating.provider,
         };
-
-        item.communityRating = rating.rating;
-        item.communityVotes = rating.votes;
-        item.communityRatingProvider = rating.provider;
-
-        if (item.type === 'anime') {
-            await this.animeService?.updateAnime(item, updates);
-        } else if (item.type === 'movie') {
-            await this.movieService?.updateItem(item, updates);
-        } else if (item.type === 'series') {
-            await this.seriesService?.updateItem(item, updates);
-        } else if (item.type === 'book') {
-            await this.bookService?.updateItem(item, updates);
-        } else if (item.type === 'manga') {
-            await this.mangaService?.updateItem(item, updates);
-        } else {
-            await this.gameService?.updateGame(item, updates);
-        }
-
+        await metadata.updateMetadata(file, updates, item.type);
+        Object.assign(item, updates);
+        this.invalidateAllServiceCaches();
         onSave();
-        return rating;
+        return true;
     }
 
     private async refreshGameDlcForItem(item: MediaItem, existingDlc: GameDlc[], onSave: () => void): Promise<GameDlc[] | null> {
@@ -1296,7 +1780,15 @@ export default class LorebasePlugin extends Plugin {
     private getFrontmatterValue(file: TFile, key: string): unknown {
         const frontmatter: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter;
         if (!frontmatter || typeof frontmatter !== 'object') return undefined;
-        return (frontmatter as Record<string, unknown>)[key];
+        const raw = frontmatter as Record<string, unknown>;
+        const types: MediaType[] = ['game', 'anime', 'movie', 'series', 'book', 'manga', 'music'];
+        const type = types.includes(raw.type as MediaType) ? raw.type as MediaType
+            : ([['game', this.settings.games], ['anime', this.settings.anime], ['movie', this.settings.movies],
+                ['series', this.settings.series], ['book', this.settings.books], ['manga', this.settings.manga],
+                ['music', this.settings.music]] as const)
+                .filter(([, config]) => config.folderPath && this.isFileInFolder(file.path, config.folderPath))
+                .sort((a, b) => b[1].folderPath.length - a[1].folderPath.length)[0]?.[0];
+        return type && this.metadataService ? this.metadataService.resolveFrontmatter(type, raw)[key] : raw[key];
     }
 
     private isFileInFolder(filePath: string, folderPath: string): boolean {
@@ -1309,9 +1801,19 @@ export default class LorebasePlugin extends Plugin {
     /**
      * Show statistics modal
      */
-    showStatsModal(stats: GameStats | AnimeStats, mediaType: MediaType): void {
-        const modal = new StatsModal(this.app, stats, mediaType);
+    showStatsModal(): StatsModal {
+        const modal = new StatsModal(this.app, async () => {
+            const game = this.gameService!, anime = this.animeService!, movie = this.movieService!, series = this.seriesService!, book = this.bookService!, manga = this.mangaService!, music = this.musicService!;
+            for (const service of [game, anime, movie, series, book, manga, music]) service.invalidateCache();
+            return loadStatisticsLibrary({ game: () => game.loadGames(), anime: () => anime.loadAnime(), movie: () => movie.loadItems(), series: () => series.loadItems(), book: () => book.loadItems(), manga: () => manga.loadItems(), music: () => music.loadItems() }, path => {
+                const file = this.app.vault.getAbstractFileByPath(path); return file instanceof TFile ? file.stat.ctime : undefined;
+            });
+        }, () => this.settings, item => this.showEditModal(item, () => { void modal.reload(); }), async preferences => {
+            this.settings.statisticsDashboard = preferences;
+            await this.saveSettings();
+        }, value => this.metadataService?.getImageUrl(value) ?? null);
         modal.open();
+        return modal;
     }
 
     /**
@@ -1323,6 +1825,11 @@ export default class LorebasePlugin extends Plugin {
     }
 
     addMediaItem(mediaType: MediaType): void {
+        if (mediaType === 'music' && this.musicService) {
+            const service = this.musicService;
+            new MusicSearchModal(this.app, this.settings, service, () => this.refreshViews(), () => this.showInbox('music')).open();
+            return;
+        }
         if (mediaType === 'anime') {
             void this.integrationService?.addAnime();
             return;
@@ -1353,12 +1860,36 @@ export default class LorebasePlugin extends Plugin {
         return this.gameService;
     }
 
+    getCommunityLinksService(): CommunityLinksService {
+        return this.communityLinksService ??= new CommunityLinksService(this.settings.communityLinkCache, async cache => {
+            this.settings.communityLinkCache = cache;
+            await this.saveData(this.settings);
+        });
+    }
+
     getAnimeService(): AnimeService | null {
         return this.animeService;
     }
 
     getMetadataService(): MetadataService | null {
         return this.metadataService;
+    }
+
+    showInbox(kind: TemplateKind = 'games', presentation?: InlineSyncPresentation): void {
+        if (!this.integrationService || !this.musicService) return;
+        this.inboxService ??= new InboxService(this.app, () => this.settings, () => this.saveSettings());
+        this.inboxImporter ??= new InboxImporter(this.app, () => this.settings, this.integrationService, this.musicService);
+        const refresh = (): void => {
+            this.gameService?.invalidateCache(); this.animeService?.invalidateCache(); this.movieService?.invalidateCache();
+            this.seriesService?.invalidateCache(); this.bookService?.invalidateCache(); this.mangaService?.invalidateCache(); this.musicService?.invalidateCache();
+            this.refreshViews();
+        };
+        if (presentation) mountInbox(this.app, presentation, this.inboxService, this.inboxImporter, () => this.settings, kind, refresh);
+        else new InboxModal(this.app, this.inboxService, this.inboxImporter, () => this.settings, kind, refresh).open();
+    }
+
+    getIntegrationService(): IntegrationService | null {
+        return this.integrationService;
     }
 
     getMovieService(): VideoService | null {
@@ -1373,12 +1904,145 @@ export default class LorebasePlugin extends Plugin {
         return this.bookService;
     }
 
+    getMusicService(): MusicService | null { return this.musicService; }
+
     getMangaService(): ReadingService | null {
         return this.mangaService;
     }
 
+    private async checkReleaseUpdate(): Promise<void> {
+        const action = getReleaseStartupAction(this.manifest.version, this.settings.lastSeenReleaseVersion, this.existingInstall);
+        if (action === 'none') return;
+        if (action === 'show') this.showWhatsNew();
+        const previous = this.settings.lastSeenReleaseVersion;
+        this.settings.lastSeenReleaseVersion = this.manifest.version;
+        try {
+            // Only persist the marker; do not refresh views or restart effects on startup.
+            await this.saveData(this.settings);
+        } catch (error) {
+            this.settings.lastSeenReleaseVersion = previous;
+            console.error('LOREBASE: unable to remember release version', error);
+            new Notice(getReleaseCopy(this.settings.language).saveFailed);
+        }
+    }
+
+    showWhatsNew(): void {
+        this.releaseReturnCleanup?.();
+        this.releaseReturnCleanup = undefined;
+        this.releaseDestination?.close();
+        this.releaseDestination = undefined;
+        this.releaseModal?.close();
+        this.releaseModal ??= new WhatsNewModal(this);
+        this.releaseModal.open();
+    }
+
+    offerReleaseReturn(): void {
+        this.releaseReturnCleanup?.();
+        this.releaseReturnCleanup = mountReleaseReturn(
+            this.releaseModal?.modalEl?.ownerDocument ?? document,
+            this.settings.language,
+            () => this.showWhatsNew(),
+        );
+    }
+
+    async openReleaseTarget(target: ReleaseTarget): Promise<boolean> {
+        const copy = getReleaseCopy(this.settings.language);
+        const settingsApi = (this.app as unknown as { setting?: {
+            open: () => void; close: () => void; openTabById: (id: string) => void;
+        } }).setting;
+        try {
+            if (target === 'statistics') {
+                settingsApi?.close();
+                this.releaseDestination = this.showStatsModal();
+                return true;
+            }
+            if (target === 'adding') {
+                await this.activateView();
+                const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0]?.view;
+                const button = view instanceof LibraryView ? view.contentEl.querySelector<HTMLElement>('.lorebase-add-btn') : null;
+                if (!button) { new Notice(copy.failed); return false; }
+                settingsApi?.close();
+                requestAnimationFrame(() => highlightReleaseTarget(button));
+                return true;
+            }
+            if (target === 'librarySearch') {
+                await this.activateView();
+                const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0]?.view;
+                const input = view instanceof LibraryView
+                    ? view.contentEl.querySelector<HTMLInputElement>('.lorebase-search-input') : null;
+                if (!input) { new Notice(copy.failed); return false; }
+                settingsApi?.close();
+                requestAnimationFrame(() => highlightReleaseTarget(input));
+                return true;
+            }
+            if (target === 'calendar' || target === 'groups') {
+                await this.activateView();
+                const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0]?.view;
+                if (!(view instanceof LibraryView)) { new Notice(copy.failed); return false; }
+                settingsApi?.close();
+                this.releaseDestination = target === 'calendar' ? view.showReleaseCalendar() : view.showCustomGroups();
+                if (this.releaseDestination) {
+                    const destination = this.releaseDestination as { modalEl?: HTMLElement };
+                    highlightReleaseTarget(destination.modalEl?.querySelector<HTMLElement>(target === 'calendar'
+                        ? '.lorebase-release-calendar' : '.lorebase-groups-header'));
+                }
+                return true;
+            }
+            if (target === 'music' && this.isMediaTypeEnabled('music')) {
+                await this.switchMediaType('music');
+                settingsApi?.close();
+                const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0]?.view;
+                if (view instanceof LibraryView) highlightReleaseTarget(view.contentEl.querySelector<HTMLElement>('.lorebase-media-trigger'));
+                return true;
+            }
+            if (!settingsApi || !this.lorebaseSettingTab) {
+                new Notice(copy.failed);
+                return false;
+            }
+            settingsApi.open();
+            settingsApi.openTabById(this.manifest.id);
+            if (target === 'music') {
+                this.lorebaseSettingTab.openFeatureSettings('music');
+                new Notice(copy.enableMusic);
+            } else if (target === 'statuses') {
+                this.lorebaseSettingTab.openSection('customization', '.lorebase-status-plans-group');
+            } else if (target === 'mangaTypes') {
+                this.lorebaseSettingTab.openMangaWorkTypes();
+            } else if (target === 'vndb') {
+                this.lorebaseSettingTab.openSection('integrations', '.lorebase-provider-picker');
+            } else if (target === 'animeOrigin') {
+                this.lorebaseSettingTab.openFeatureSettings('animeOrigin');
+            } else if (target === 'integrations') {
+                this.lorebaseSettingTab.openSection('integrations', '.lorebase-provider-picker');
+            } else if (target === 'templates') {
+                this.lorebaseSettingTab.openSection('templates', '.lorebase-integration-templates-group');
+            } else {
+                this.lorebaseSettingTab.openFeatureSettings(target);
+            }
+            return true;
+        } catch (error) {
+            console.error('LOREBASE: unable to open release target', error);
+            new Notice(copy.failed);
+            return false;
+        }
+    }
+
+    manageMangaWorkTypes(onChanged?: () => void): void { this.manageMediaWorkTypes('manga', onChanged); }
+
+    manageMediaWorkTypes(type: WorkTypeMedia | 'anime', onChanged?: () => void): void {
+        const settingsApi = (this.app as unknown as { setting?: { open: () => void; openTabById: (id: string) => void } }).setting;
+        if (!settingsApi || !this.lorebaseSettingTab) return;
+        settingsApi.open();
+        settingsApi.openTabById(this.manifest.id);
+        this.lorebaseSettingTab.openMangaWorkTypes(onChanged, type === 'game' ? 'games' : type === 'movie' ? 'movies' : type);
+    }
+
     getSteamSyncService(): SteamSyncService | null {
         return this.steamSyncService;
+    }
+
+    getAniListSyncService(): AniListSyncService | null {
+        return this.aniListSyncService;
     }
 
     getMediaType(): MediaType {
@@ -1401,11 +2065,11 @@ export default class LorebasePlugin extends Plugin {
         activeDocument.documentElement.style.setProperty('--lorebase-accent', this.settings.accentColor);
     }
 
-    private applyParticles(): void {
+    applyParticles(): void {
         if (!this.particleService) {
             this.particleService = new ParticleService();
         }
-        this.particleService.apply(this.settings.particleEffect, this.settings.particleIntensity);
+        this.particleService.apply(this.settings.particleEffect, this.settings.particleIntensity, this.settings.animateParticlesWithReducedMotion);
     }
 
     private getEnabledMedia(): MediaType[] {
@@ -1416,10 +2080,12 @@ export default class LorebasePlugin extends Plugin {
         if (this.settings.enabledMedia?.series) enabled.push('series');
         if (this.settings.enabledMedia?.books) enabled.push('book');
         if (this.settings.enabledMedia?.manga) enabled.push('manga');
+        if (this.settings.enabledMedia?.music) enabled.push('music');
         return enabled;
     }
 
     private isMediaTypeEnabled(mediaType: MediaType): boolean {
+        if (mediaType === 'music') return Boolean(this.settings.enabledMedia.music);
         if (mediaType === 'game') return Boolean(this.settings.enabledMedia?.games);
         if (mediaType === 'anime') return Boolean(this.settings.enabledMedia?.anime);
         if (mediaType === 'movie') return Boolean(this.settings.enabledMedia?.movies);
@@ -1431,7 +2097,7 @@ export default class LorebasePlugin extends Plugin {
     private normalizeMediaType(): void {
         const enabled = this.getEnabledMedia();
         if (enabled.length === 0) {
-            this.settings.enabledMedia = { games: true, anime: false, movies: false, series: false, books: false, manga: false };
+            this.settings.enabledMedia = { games: true, anime: false, movies: false, series: false, books: false, manga: false, music: false };
             this.mediaType = 'game';
             return;
         }
@@ -1463,9 +2129,11 @@ export default class LorebasePlugin extends Plugin {
         });
     }
 
-    async runSteamSync(): Promise<void> {
+    async runSteamSync(presentation?: InlineSyncPresentation): Promise<void> {
+        if (presentation?.signal.aborted) return;
         if (!this.steamSyncService) return;
         if (this.steamSyncRunning) {
+            if (presentation) renderInlineSteamState(presentation, this.settings.language, 'error', new Error('Steam Sync is already running.'), () => { void this.runSteamSync(presentation); });
             new Notice('Steam Sync is already running.');
             return;
         }
@@ -1473,28 +2141,38 @@ export default class LorebasePlugin extends Plugin {
 
         let progressModal: SteamSyncProgressModal | null = null;
         try {
-            new Notice('Steam Sync: loading Steam games...');
-            const candidates = await this.steamSyncService.previewImport(this.settings);
+            if (presentation) renderInlineSteamState(presentation, this.settings.language, 'loading');
+            else new Notice('Steam Sync: loading Steam games...');
+            const preview = this.steamSyncService.previewImport(this.settings);
+            const candidates = presentation ? await waitForInlinePreview(preview, presentation.signal) : await preview;
+            if (!candidates || presentation?.signal.aborted) return;
             for (const warning of this.steamSyncService.consumeWarnings()) {
                 new Notice(`Steam Sync: ${warning}`, 6000);
             }
             if (!candidates.length) {
-                new Notice('Steam Sync: no games found.');
+                if (presentation) renderInlineSteamState(presentation, this.settings.language, 'empty');
+                else new Notice('Steam Sync: no games found.');
                 return;
             }
 
-            const selectedAppIds = await new SteamSyncReviewModal(this.app, candidates, this.settings.language).openAndGetValue();
+            const review = new SteamSyncReviewModal(this.app, candidates, this.settings.language,
+                ids => this.steamSyncService!.resolvePreviewNames(ids));
+            const selectedAppIds = await (presentation ? review.mountInline(presentation) : review.openAndGetValue());
+            if (presentation?.signal.aborted) return;
             if (!selectedAppIds || selectedAppIds.size === 0) {
-                new Notice('Steam Sync: import cancelled.');
+                if (presentation) presentation.onBack();
+                else new Notice('Steam Sync: import cancelled.');
                 return;
             }
 
             const selectedCandidates = candidates.filter((candidate) => selectedAppIds.has(candidate.appId));
             progressModal = new SteamSyncProgressModal(this.app, selectedCandidates, this.settings.language);
-            progressModal.open();
+            if (presentation) progressModal.mountInline(presentation);
+            else progressModal.open();
 
             let haltReason: 'cancelled' | 'blocked' | null = null;
             const result = await this.steamSyncService.sync(this.settings, {
+                signal: presentation?.signal,
                 candidates: selectedCandidates,
                 control: progressModal.getController(),
                 onItemStart: (candidate, index, total) => progressModal?.setCurrent(candidate, index, total),
@@ -1504,11 +2182,12 @@ export default class LorebasePlugin extends Plugin {
                     progressModal?.halt(reason);
                 },
             });
+            if (!this.steamSyncService) return;
             progressModal.complete(result);
             this.gameService?.invalidateCache();
             this.refreshViews();
             const summary = `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed.`;
-            new Notice(haltReason === 'cancelled'
+            if (!presentation) new Notice(haltReason === 'cancelled'
                 ? `Steam Sync cancelled: ${summary}`
                 : haltReason === 'blocked'
                     ? `Steam Sync stopped by Steam cooldown: ${summary}`
@@ -1517,49 +2196,222 @@ export default class LorebasePlugin extends Plugin {
             console.error('[Steam Sync] Sync failed:', error);
             progressModal?.fail(error);
             const message = error instanceof Error ? `: ${error.message}` : '';
-            new Notice(`Steam Sync failed${message}`);
+            if (presentation && !progressModal) renderInlineSteamState(presentation, this.settings.language, 'error', error, () => { void this.runSteamSync(presentation); });
+            else new Notice(`Steam Sync failed${message}`);
         } finally {
             this.steamSyncRunning = false;
         }
     }
 
-    async runNoteImport(): Promise<void> {
-        if (!this.noteConversionService) return;
+    async runAniListSync(): Promise<void> {
+        if (!this.aniListSyncService) return;
+        if (this.aniListSyncRunning) {
+            new Notice('AniList Sync is already running.');
+            return;
+        }
+        this.aniListSyncRunning = true;
+        try {
+            new Notice('AniList Sync: syncing anime and manga...');
+            const username = this.settings.anilistSync.username.trim()
+                || await this.aniListSyncService.testConnection(this.settings.anilistSync);
+            if (!this.settings.anilistSync.username.trim()) {
+                this.settings.anilistSync.username = username;
+            }
+            const result = await this.aniListSyncService.sync(this.settings);
+            if (!this.aniListSyncService) return;
+            await this.saveSettings();
+            this.animeService?.invalidateCache();
+            this.mangaService?.invalidateCache();
+            this.refreshViews();
+            new Notice(`AniList Sync${result.cancelled ? ' · ' + t('commonCancel') : ''}: ${result.imported} imported, ${result.updatedLocal} updated, ${result.pushed} pushed, ${result.skipped} skipped, ${result.failed} failed.`);
+        } catch (error) {
+            if (!this.aniListSyncService) return;
+            console.error('[AniList Sync] Sync failed:', error);
+            new Notice(`AniList Sync failed${error instanceof Error ? `: ${error.message}` : ''}`);
+        } finally {
+            this.aniListSyncRunning = false;
+        }
+    }
+
+    async runAniListImport(presentation?: InlineSyncPresentation): Promise<void> {
+        const accountAtPreview = JSON.stringify([this.settings.anilistSync.accessToken, this.settings.anilistSync.username, this.settings.anilistSync.clientId]);
+        if (!this.aniListSyncService || presentation?.signal.aborted) return;
+        const showState = (state: 'loading' | 'empty' | 'error', error?: unknown): void => {
+            if (presentation) renderInlineImportState(presentation, this.settings.language, state, error,
+                state === 'error' ? () => { void this.runAniListImport(presentation); } : undefined, 'anilist');
+        };
+        if (this.aniListSyncRunning) {
+            const error = new Error(t('settingsImportBusy'));
+            if (presentation) showState('error', error); else new Notice(error.message);
+            return;
+        }
+        this.aniListSyncRunning = true;
+        let progress: SteamSyncProgressModal | undefined;
+        try {
+            if (presentation) showState('loading'); else new Notice('AniList Import: loading anime and manga...');
+            const work = this.aniListSyncService.previewImport(this.settings);
+            const candidates = presentation ? await waitForInlinePreview(work, presentation.signal) : await work;
+            if (!candidates || presentation?.signal.aborted) return;
+            if (!candidates.length) {
+                if (presentation) showState('empty'); else new Notice('AniList Import: no entries found.');
+                return;
+            }
+            const review = new AniListImportReviewModal(this.app, candidates, this.settings.language);
+            const selected = await (presentation ? review.mountInline(presentation) : review.openAndGetValue());
+            if (presentation?.signal.aborted) return;
+            if (!selected?.size) { presentation?.onBack(); return; }
+            if (accountAtPreview !== JSON.stringify([this.settings.anilistSync.accessToken, this.settings.anilistSync.username, this.settings.anilistSync.clientId])) throw new Error('AniList account changed. Open the import preview again.');
+            const items = candidates.filter(item => selected.has(item.key));
+            const display = items.map((item, index) => ({ appId: index + 1, name: item.title, poster: item.image,
+                playtimeForever: 0, source: 'owned' as const }));
+            const byKey = new Map(items.map((item, index) => [item.key, display[index]]));
+            const completed = new Set<string>();
+            progress = new SteamSyncProgressModal(this.app, display, this.settings.language, 'anilist');
+            if (presentation) progress.mountInline(presentation); else progress.open();
+            const result = await this.aniListSyncService.importSelected(this.settings, selected, {
+                signal: presentation?.signal,
+                control: progress.getController(),
+                onItemStart: key => { const item = byKey.get(key); if (item) progress!.setCurrent(item, 0, items.length); },
+                onItemResult: (key, outcome, detail) => {
+                    const item = byKey.get(key); if (!item) return;
+                    completed.add(key);
+                    progress!.addResult({ appId: item.appId, name: item.name, outcome, detail, durationMs: 0 });
+                },
+            });
+            if (!this.aniListSyncService) return;
+            if (result.cancelled) progress.halt('cancelled');
+            // Entries removed from AniList since preview have no work to apply.
+            if (!result.cancelled && !progress.getController().isCancelled()) for (const [key, item] of byKey) if (!completed.has(key)) {
+                result.skipped++;
+                progress.addResult({ appId: item.appId, name: item.name, outcome: 'skipped', durationMs: 0 });
+            }
+            progress.complete({ created: result.imported, updated: result.updatedLocal, skipped: result.skipped, failed: result.failed });
+            await this.saveSettings();
+            this.animeService?.invalidateCache();
+            this.mangaService?.invalidateCache();
+            this.refreshViews();
+        } catch (error) {
+            console.error('[AniList Import] Import failed:', error);
+            if (progress) progress.fail(error);
+            else if (presentation) showState('error', error);
+            else new Notice(`AniList Import failed${error instanceof Error ? `: ${error.message}` : ''}`);
+        } finally {
+            this.aniListSyncRunning = false;
+        }
+    }
+
+    async authorizeAniList(): Promise<void> {
+        if (!this.aniListSyncService) return;
+        const settings = this.settings.anilistSync;
+        if (!settings.clientId.trim()) {
+            new Notice('AniList Sync: enter the Client ID first.');
+            return;
+        }
+        window.open(this.aniListSyncService.getAuthorizationUrl(settings.clientId), '_blank', 'noopener');
+        new Notice('AniList: approve access, copy the displayed token, then paste it into the Access token field in LOREBASE.', 8000);
+    }
+
+    async connectPlayStation(npsso: string): Promise<void> {
+        if (!this.playstationSyncService) throw new Error('PSN_CONNECT_FIRST');
+        const controller = new AbortController(); this.playstationControllers.add(controller);
+        try { await this.playstationSyncService.api.connect(npsso, controller.signal); await this.saveSettings(); }
+        finally { this.playstationControllers.delete(controller); }
+    }
+    async disconnectPlayStation(): Promise<void> {
+        for (const controller of this.playstationControllers) controller.abort();
+        this.playstationSyncService?.api.disconnect();
+        await this.saveSettings();
+    }
+    runPlayStationImport(): void {
+        if (!this.playstationSyncService || this.playstationImportModal) return;
+        if (this.playstationSyncRunning) { new Notice(pt('busy')); return; }
+        this.playstationImportModal = new PlayStationImportModal(this.app, this.playstationSyncService,
+            () => { this.gameService?.invalidateCache(); this.refreshViews(); },
+            () => { this.playstationImportModal = undefined; });
+        this.playstationImportModal.open();
+    }
+    async runPlayStationSync(silent = false): Promise<void> {
+        if (!this.playstationSyncService || this.playstationSyncRunning || this.playstationImportModal) { if (!silent) new Notice(pt('busy')); return; }
+        this.playstationSyncRunning = true;
+        const controller = new AbortController(); this.playstationControllers.add(controller);
+        try {
+            const result = await this.playstationSyncService.syncLinked(controller.signal);
+            if (!controller.signal.aborted) {
+                this.gameService?.invalidateCache(); this.refreshViews();
+                if (!silent) new Notice(pt('updated') + ': ' + result.updated + ' · ' + pt('errors') + ': ' + result.failed + (result.partial ? '\n' + pt('partial') : ''), 7000);
+            }
+        } catch (error) { if (!silent && !controller.signal.aborted) new Notice(psnError(error)); }
+        finally { this.playstationSyncRunning = false; this.playstationControllers.delete(controller); }
+    }
+    async connectTrakt(): Promise<void> {
+        if (!this.traktSyncService || this.traktLoginModal) return;
+        const modal = new TraktLoginModal(this.app, this.traktSyncService); this.traktLoginModal = modal;
+        try { const connected = await modal.openAndGetValue(); if (connected && this.traktSyncService) { this.settings.traktSync = connected; await this.saveSettings(); } }
+        catch (error) { new Notice(traktError(error)); }
+        finally { this.traktLoginModal = undefined; }
+    }
+
+    runTraktImport(): void {
+        if (!this.traktSyncService || this.traktImportModal) return;
+        if (this.traktSyncRunning) { new Notice(tt('busy')); return; }
+        this.traktImportModal = new TraktImportModal(this.app, this.traktSyncService, () => this.saveData(this.settings), () => {
+            this.movieService?.invalidateCache(); this.seriesService?.invalidateCache(); this.refreshViews();
+        }, () => { this.traktImportModal = undefined; });
+        this.traktImportModal.open();
+    }
+
+    async runTraktSync(silent = false): Promise<void> {
+        if (!this.traktSyncService || this.traktSyncRunning || this.traktImportModal) { if (!silent) new Notice(tt('busy')); return; }
+        this.traktSyncRunning = true; const controller = new AbortController(); this.traktControllers.add(controller);
+        try {
+            const result = await this.traktSyncService.syncLinked(controller.signal);
+            if (!controller.signal.aborted) { this.movieService?.invalidateCache(); this.seriesService?.invalidateCache(); this.refreshViews(); if (!silent) new Notice(`${tt('updated')}: ${result.updated} · ${tt('errors')}: ${result.failed}${result.skipped ? ` · ${tt('needsReview')}: ${result.skipped}` : ''}`, 6000); }
+        } catch (error) { if (!controller.signal.aborted && !silent) new Notice(traktError(error)); }
+        finally { this.traktSyncRunning = false; this.traktControllers.delete(controller); try { await this.saveData(this.settings); } catch { console.error('[LOREBASE] Could not save Trakt account state'); } }
+    }
+
+    async runNoteImport(surface?: { host: HTMLElement; signal: AbortSignal }): Promise<void> {
+        if (!this.noteConversionService || surface?.signal.aborted) return;
+        if (this.noteImportRunning) {
+            new Notice(t('settingsImportBusy'));
+            return;
+        }
+        this.noteImportRunning = true;
 
         try {
-            new Notice('LOREBASE import: building preview...');
-            const preview = await this.noteConversionService.preview(this.settings);
-            for (const warning of preview.warnings) {
-                new Notice(`LOREBASE import: ${warning}`, 5000);
-            }
+            const settings = structuredClone(this.settings);
+            if (!surface) new Notice(t('settingsImportScanning'));
+            const preview = await this.noteConversionService.preview(settings);
+            if (!this.noteConversionService || surface?.signal.aborted) return;
+            surface?.host.empty();
+            for (const warning of preview.warnings) new Notice(warning, 5000);
             if (!preview.items.length) {
-                new Notice('LOREBASE import: no markdown notes found.');
+                if (surface) surface.host.createDiv({ cls: 'lorebase-nir-empty', text: t('settingsImportEmpty'), attr: { role: 'status' } });
+                else new Notice(t('settingsImportEmpty'));
                 return;
             }
 
-            const review = await new NoteImportReviewModal(
-                this.app,
-                preview.items,
-                this.settings.noteImport.writeMode,
-                this.settings.language,
-                {
-                    games: this.settings.games.folderPath,
-                    anime: this.settings.anime.folderPath,
-                    movies: this.settings.movies.folderPath,
-                    series: this.settings.series.folderPath,
-                    books: this.settings.books.folderPath,
-                    manga: this.settings.manga.folderPath,
+            const options: NoteImportReviewOptions = {
+                items: preview.items,
+                writeMode: settings.noteImport.writeMode,
+                language: settings.language,
+                targetFolders: {
+                    games: settings.games.folderPath,
+                    anime: settings.anime.folderPath,
+                    movies: settings.movies.folderPath,
+                    series: settings.series.folderPath,
+                    books: settings.books.folderPath,
+                    manga: settings.manga.folderPath,
+                    music: settings.music.folderPath,
                 },
-                this.settings.noteImport.targetMedia === 'auto',
-                async (item, kind) => {
-                    if (!this.integrationService) return null;
-                    return this.integrationService.selectMediaSource(kind, item.title);
-                }
-            ).openAndGetValue();
-            if (!review || review.selectedIds.size === 0) {
-                new Notice('LOREBASE import: cancelled.');
-                return;
-            }
+                showTypeSelector: settings.noteImport.targetMedia === 'auto',
+                onFindSource: async (item, kind) =>
+                    this.integrationService?.selectMediaSource(kind, item.title) ?? null,
+            };
+            const review = surface
+                ? await reviewNoteImportInline(surface.host, options, surface.signal)
+                : await new NoteImportReviewModal(this.app, options).openAndGetValue();
+            if (!review || !review.selectedIds.size || surface?.signal.aborted) return;
 
             const enrichments: Record<string, Record<string, unknown>> = {};
             if (this.integrationService) {
@@ -1569,9 +2421,10 @@ export default class LorebasePlugin extends Plugin {
                 ) * 1000;
                 let attemptedRequest = false;
                 for (const id of review.selectedIds) {
+                    if (!this.integrationService || !this.noteConversionService || surface?.signal.aborted) return;
                     const source = review.sourcesById[id];
                     const target = review.targetMediaById[id];
-                    if (!source || !target) continue;
+                    if (!source || !target || target === 'music') continue;
                     try {
                         if (attemptedRequest && cooldownMs > 0) {
                             await new Promise<void>((resolve) => window.setTimeout(resolve, cooldownMs));
@@ -1585,16 +2438,22 @@ export default class LorebasePlugin extends Plugin {
                 }
             }
 
-            const result = await this.noteConversionService.apply(this.settings, review, enrichments, (path) => {
+            if (!this.noteConversionService || surface?.signal.aborted) return;
+            const result = await this.noteConversionService.apply(settings, review, enrichments, (path) => {
                 new Notice(`LOREBASE import: ${path}`, 1000);
-            });
+            }, surface?.signal);
+            if (!this.noteConversionService || surface?.signal.aborted) return;
             this.invalidateAllServiceCaches();
             this.refreshViews();
-            new Notice(`LOREBASE import complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed.`);
+            new Notice(`LOREBASE import ${result.cancelled ? 'cancelled' : 'complete'}: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed.`);
         } catch (error) {
+            if (!this.noteConversionService || surface?.signal.aborted) return;
+            if (error instanceof Error && error.name === 'AbortError') { new Notice(t('commonCancel')); return; }
             console.error('[LOREBASE Note Import] Import failed:', error);
             const message = error instanceof Error ? `: ${error.message}` : '';
-            new Notice(`LOREBASE import failed${message}`);
+            new Notice(`${t('settingsImportFailed')}${message}`);
+        } finally {
+            this.noteImportRunning = false;
         }
     }
 
@@ -1605,6 +2464,20 @@ export default class LorebasePlugin extends Plugin {
         this.seriesService?.invalidateCache();
         this.bookService?.invalidateCache();
         this.mangaService?.invalidateCache();
+        this.musicService?.invalidateCache();
+    }
+
+    async runSteamTrackingSync(): Promise<void> {
+        if (!this.steamSyncService || this.steamSyncRunning) { new Notice(gt('loading')); return; }
+        this.steamSyncRunning = true;
+        const notice = new Notice(gt('loading'), 0);
+        try {
+            const result = await this.steamSyncService.syncTrackingForExisting(this.settings, (index, total) => notice.setMessage(`${gt('loading')} ${index} / ${total}`));
+            if (!this.steamSyncService) return;
+            this.gameService?.invalidateCache(); this.refreshViews();
+            new Notice(`${result.cancelled ? t('commonCancel') + ' · ' : ''}${gt('syncResult')}: ${result.updated} / ${result.partial} / ${result.failed} / ${result.skipped}`, 8000);
+        } catch { new Notice(gt('failed')); }
+        finally { notice.hide(); this.steamSyncRunning = false; }
     }
 
     private async runSteamPlaytimeSync(): Promise<void> {
@@ -1612,6 +2485,7 @@ export default class LorebasePlugin extends Plugin {
 
         try {
             const result = await this.steamSyncService.syncPlaytimeForExisting(this.settings);
+            if (!this.steamSyncService || result.cancelled) return;
             if (result.updated > 0) {
                 this.gameService?.invalidateCache();
                 this.refreshViews();
@@ -1641,12 +2515,13 @@ export default class LorebasePlugin extends Plugin {
         const menu = new Menu();
 
         const options: Array<{ type: MediaType; enabled: boolean; label: string; icon: string }> = [
-            { type: 'game', enabled: this.settings.enabledMedia.games, label: t('contextGames'), icon: 'gamepad-2' },
-            { type: 'anime', enabled: this.settings.enabledMedia.anime, label: t('contextAnime'), icon: 'clapperboard' },
-            { type: 'movie', enabled: this.settings.enabledMedia.movies, label: t('settingsMovies'), icon: 'film' },
-            { type: 'series', enabled: this.settings.enabledMedia.series, label: t('settingsSeries'), icon: 'tv' },
-            { type: 'book', enabled: this.settings.enabledMedia.books, label: t('settingsBooks'), icon: 'book-open' },
-            { type: 'manga', enabled: this.settings.enabledMedia.manga, label: t('settingsManga'), icon: 'book-open-text' },
+            { type: 'game', enabled: this.settings.enabledMedia.games, label: t('contextGames'), icon: MEDIA_ICONS.game },
+            { type: 'anime', enabled: this.settings.enabledMedia.anime, label: t('contextAnime'), icon: MEDIA_ICONS.anime },
+            { type: 'movie', enabled: this.settings.enabledMedia.movies, label: t('settingsMovies'), icon: MEDIA_ICONS.movie },
+            { type: 'series', enabled: this.settings.enabledMedia.series, label: t('settingsSeries'), icon: MEDIA_ICONS.series },
+            { type: 'book', enabled: this.settings.enabledMedia.books, label: t('settingsBooks'), icon: MEDIA_ICONS.book },
+            { type: 'manga', enabled: this.settings.enabledMedia.manga, label: t('settingsManga'), icon: MEDIA_ICONS.manga },
+            { type: 'music', enabled: this.settings.enabledMedia.music, label: mt('music'), icon: MEDIA_ICONS.music },
         ];
 
         for (const option of options) {

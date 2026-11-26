@@ -1,9 +1,14 @@
 import { MediaItem, ViewMode } from '../../types';
+import { cardGridWidthCss } from '../../services/media/cardGrid';
+import { getGroupSpacing } from './groupSpacing';
 
 interface LibraryLayout {
     columns: number;
     orientation: 'vertical' | 'horizontal';
     minCardWidth: number;
+    targetCardWidth?: number;
+    gap?: number;
+    padding?: number;
 }
 
 interface BaseRenderParams {
@@ -21,22 +26,33 @@ export interface RenderRandomCardParams {
     titleText: string;
     backText: string;
     createCard: (parent: HTMLElement, item: MediaItem) => void;
+    layout: LibraryLayout;
     onBack: () => void;
 }
 
 export function createGrid(params: RenderFlatGridParams): HTMLElement {
     const { container, layout, className = 'lorebase-grid' } = params;
     const gridEl = container.createDiv({ cls: className });
-    const ownerWindow = container.ownerDocument.defaultView;
-    const isPhoneLayout = ownerWindow?.matchMedia('(max-width: 520px)').matches ?? false;
+    applyGridLayout(gridEl, layout);
+    return gridEl;
+}
+
+export function applyGridLayout(gridEl: HTMLElement, layout: LibraryLayout): void {
+    const columns = Math.max(1, layout.columns);
+    const gap = layout.gap ?? 16;
     gridEl.setCssStyles({
         position: 'relative',
-        gridTemplateColumns: `repeat(${isPhoneLayout ? 2 : Math.max(1, layout.columns)}, minmax(0, 1fr))`,
-        gap: isPhoneLayout ? '10px' : '16px',
-        padding: isPhoneLayout ? '10px' : '16px',
+        gridTemplateColumns: `repeat(${columns}, minmax(0, ${layout.targetCardWidth ? cardGridWidthCss(columns, gap, 0, layout.targetCardWidth) : '1fr'}))`,
+        gap: `${gap}px`,
+        padding: `${layout.padding ?? 16}px`,
     });
-
-    return gridEl;
+    const section = gridEl.parentElement;
+    if (section?.classList.contains('lorebase-view-group-section')) {
+        const spacing = getGroupSpacing(gap);
+        section.style.setProperty('--lorebase-group-padding', `${layout.padding ?? 16}px`);
+        section.style.setProperty('--lorebase-group-margin', `${Math.max(0, spacing.sectionGap - (layout.padding ?? 16))}px`);
+        gridEl.style.paddingTop = `${spacing.headerGap}px`;
+    }
 }
 
 export function renderRandomCard(params: RenderRandomCardParams): void {
@@ -48,7 +64,7 @@ export function renderRandomCard(params: RenderRandomCardParams): void {
         text: `${titleText}: ${item.displayName}`
     });
 
-    const grid = container.createDiv({ cls: 'lorebase-grid lorebase-random-grid' });
+    const grid = createGrid({ container, layout: params.layout, className: 'lorebase-grid lorebase-random-grid' });
     createCard(grid, item);
 
     const backBtn = container.createEl('button', {

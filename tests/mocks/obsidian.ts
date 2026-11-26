@@ -1,5 +1,6 @@
 export class App {}
 
+
 export class TFile {
     path: string;
     basename: string;
@@ -94,4 +95,8 @@ export async function requestUrl(options: RequestUrlOptions): Promise<RequestUrl
 
 export function setIcon(): void {
     return;
+}
+
+export function setTooltip(element: HTMLElement, text: string): void {
+    element.setAttribute('data-tooltip', text);
 }

@@ -1,10 +1,16 @@
+import { CARD_MEDIA_KEYS, getCardProfile } from '../services/media/cardProfiles';
+import { withReleaseCountdown } from '../utils/releaseCountdown';
+import { MusicService } from '../services/MusicService';
+import type { MusicItem } from '../types';
+import { mt } from '../localization/music';
 /**
  * LOREBASE - Library View
  * Main view for displaying the game library with virtualized rendering
  */
 
-import { ItemView, WorkspaceLeaf, TFile, TAbstractFile } from 'obsidian';
-import { AnimeItem, FieldDefinition, GameItem, LibraryViewState, MangaItem, MediaItem, MediaStatus, MediaType, FilterState, LorebaseSettings, LorebasePluginInterface, MovieItem, ReadingItem, SeriesItem, ViewMode, SortField } from '../types';
+import { ItemView, WorkspaceLeaf, TFile, TAbstractFile, setIcon, Platform } from 'obsidian';
+import { getStatusAppearance } from '../statusPresentation';
+import { AnimeItem, CustomMediaGroup, FieldDefinition, GameItem, LibraryViewState, MangaItem, MediaItem, MediaStatus, MediaType, FilterState, LorebaseSettings, LorebasePluginInterface, MovieItem, ReadingItem, SeriesItem, ViewMode, SortField } from '../types';
 import { GameService } from '../services/GameService';
 import { AnimeService } from '../services/AnimeService';
 import { VideoService } from '../services/VideoService';
@@ -12,12 +18,23 @@ import { ReadingService } from '../services/ReadingService';
 import { MetadataService } from '../services/MetadataService';
 import { Toolbar, ToolbarCallbacks } from '../components/Toolbar';
 import { GameCard } from '../components/GameCard';
-import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, STATUS_CONFIG, RATING_EMOJI, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS } from '../constants';
+import { VIEW_TYPE_LIBRARY, VIRTUALIZATION_BUFFER, LOREBASE_ICON_ID, SERIES_COLORS, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS } from '../constants';
 import { t, i18n } from '../localization';
 import { VirtualGrid, VirtualGridController, VirtualGroupedGrid } from './library/VirtualGrid';
+import { BackToTop } from './library/BackToTop';
+import { SmoothScroll } from './library/SmoothScroll';
 import { showMediaContextMenu } from './library/contextMenu';
+import { CompletionDateModal } from '../modals/CompletionDateModal';
 import { EffectiveLayout, LayoutCalculator } from './library/LayoutCalculator';
 import { RenderScrollMode, ScrollAnchor, ScrollManager } from './library/ScrollManager';
+import { CardRect, planCardReflow } from './library/cardReflow';
+import { renderRatingBadgeContent } from '../components/RatingBadgeContent';
+import { getMediaWorkTypeColor, getMediaWorkTypeLabel } from '../utils/mediaWorkType';
+import { ReleaseCalendarModal } from '../modals/ReleaseCalendarModal';
+import { CustomGroupsModal } from '../modals/CustomGroupsModal';
+import { setGroupMembership } from '../services/media/customGroups';
+import { buildLibraryFieldCatalog, reconcileCatalogYamlField } from '../services/media/libraryFieldCatalog';
+import { getTitleSearchMatch } from '../services/media/titleSearch';
 import {
     collectToolbarTags,
     getBuiltInFieldDefinitions,
@@ -29,12 +46,12 @@ import {
 } from './library/viewOptions';
 import {
     applyViewModeClass,
+    applyGridLayout,
     createGrid,
     renderRandomCard,
 } from './library/rendering';
 import {
     cloneLibraryViewState,
-    collectYamlFieldDefinitions,
     groupMediaItems,
 } from '../services/media/libraryViewState';
 
@@ -55,8 +72,8 @@ type CardRenderTask = {
 const VISUAL_REFRESH_IDLE_TIMEOUT_MS = 50;
 const VISUAL_REFRESH_FALLBACK_MS = 120;
 const CARD_RENDER_BATCH_SIZE = 8;
-const LAYOUT_RESIZE_SETTLE_MS = 180;
 const OPTIMISTIC_METADATA_SUPPRESS_MS = 1200;
+const LAYOUT_RESIZE_SETTLE_MS = 100;
 
 // =============================================================================
 // LIBRARY VIEW
@@ -73,6 +90,7 @@ export class LibraryView extends ItemView {
     private seriesService: VideoService;
     private bookService: ReadingService;
     private mangaService: ReadingService;
+    private musicService: MusicService;
     private toolbar: Toolbar | null = null;
     private libraryContentEl: HTMLElement | null = null;
     private gridEl: HTMLElement | null = null;
@@ -82,6 +100,7 @@ export class LibraryView extends ItemView {
     private games: MediaItem[] = [];
     private gameIndex: Map<string, number> = new Map(); // filePath → index in games[]
     private filteredGames: MediaItem[] = [];
+    private hasPartSearchMatches = false;
     private viewMode: ViewMode = 'grid';
     private mediaType: MediaType = 'game';
     private filter: FilterState = {
@@ -92,6 +111,7 @@ export class LibraryView extends ItemView {
         searchTerm: '',
         tags: [],
         genres: [],
+        workTypes: [],
         rules: [],
     };
     private viewState: LibraryViewState = cloneLibraryViewState(DEFAULT_SETTINGS.games.viewState);
@@ -102,6 +122,8 @@ export class LibraryView extends ItemView {
 
     // Virtualization state
     private virtualGrid: VirtualGridController | null = null;
+    private backToTop: BackToTop | null = null;
+    private smoothScroll: SmoothScroll | null = null;
     private visualRefreshRafId: number | null = null;
     private visualRefreshIdleId: number | null = null;
     private visualRefreshScheduled = false;
@@ -111,6 +133,7 @@ export class LibraryView extends ItemView {
     private cardReflowAnimations = new Set<Animation>();
     private resizeObserver: ResizeObserver | null = null;
     private lastObservedLayoutWidth: number | null = null;
+    private lastObservedLayoutHeight: number | null = null;
     private resizeLayoutRafId: number | null = null;
     private resizeSettleTimerId: number | null = null;
     private renderVersion = 0;
@@ -132,6 +155,7 @@ export class LibraryView extends ItemView {
         const sharedMangaService = this.plugin.getMangaService();
         const sharedMetadataService = this.plugin.getMetadataService() ?? new MetadataService(this.app);
 
+        this.musicService = this.plugin.getMusicService?.() ?? new MusicService(this.app, this.plugin.settings.music.folderPath, sharedMetadataService);
         this.gameService = sharedGameService instanceof GameService
             ? sharedGameService
             : new GameService(this.app, sharedMetadataService);
@@ -152,7 +176,7 @@ export class LibraryView extends ItemView {
             : new ReadingService(this.app, 'manga', this.plugin.settings.manga.folderPath, sharedMetadataService);
         this.layoutCalculator = new LayoutCalculator(() => (
             this.libraryContentEl?.clientWidth || this.contentEl.clientWidth
-        ));
+        ), () => Platform.isMobile || Boolean(this.containerEl.ownerDocument.defaultView?.matchMedia('(max-width: 520px)').matches));
         this.scrollManager = new ScrollManager(
             () => this.contentEl,
             () => this.isDestroyed
@@ -185,12 +209,25 @@ export class LibraryView extends ItemView {
             this.seriesService.setFolderPath(settings.series.folderPath);
             this.bookService.setFolderPath(settings.books.folderPath);
             this.mangaService.setFolderPath(settings.manga.folderPath);
+        this.musicService.setFolderPath(settings.music.folderPath);
             this.viewMode = activeSettings.orientation === 'horizontal' ? 'horizontal' : 'grid';
 
             // Use contentEl provided by ItemView
             const container = this.contentEl;
             container.empty();
             container.addClass('lorebase-view');
+            container.tabIndex = -1;
+            this.containerEl.addClass('lorebase-view-shell');
+            this.backToTop?.destroy();
+            this.backToTop = new BackToTop(this.containerEl, container);
+            this.smoothScroll?.destroy();
+            this.smoothScroll = new SmoothScroll(container, {
+                onFrame: () => this.virtualGrid?.updateViewport(),
+                onIdle: () => {
+                    const hovered = container.querySelector<HTMLElement>('.lorebase-card:hover');
+                    if (hovered) GameCard.refitOverlay(hovered);
+                },
+            });
             this.applyViewMode();
 
             // Apply accent color
@@ -238,6 +275,11 @@ export class LibraryView extends ItemView {
         try {
             // Clean up virtualization first (removes scroll handlers)
             this.cleanupVirtualization();
+            this.smoothScroll?.destroy();
+            this.smoothScroll = null;
+            this.backToTop?.destroy();
+            this.backToTop = null;
+            this.containerEl.removeClass('lorebase-view-shell');
             this.cancelScheduledFilter();
             this.cancelCardBatch();
             this.cancelContentAnimations();
@@ -276,6 +318,7 @@ export class LibraryView extends ItemView {
         // Only process if it's a TFile (not a folder)
         if (!(file instanceof TFile)) return;
         this.invalidateActiveServiceCache();
+        this.updateCustomGroupPath(file.path, null);
 
         // Check if this file is in our games list (O(1) lookup)
         const index = this.gameIndex.get(file.path);
@@ -293,6 +336,7 @@ export class LibraryView extends ItemView {
         if (this.isDestroyed) return;
         if (!(file instanceof TFile)) return;
         this.invalidateActiveServiceCache();
+        this.updateCustomGroupPath(oldPath, file.path);
 
         const existingIndex = this.gameIndex.get(oldPath);
         const activeSettings = this.getActiveSettings();
@@ -368,6 +412,18 @@ export class LibraryView extends ItemView {
         }
     }
 
+    private updateCustomGroupPath(oldPath: string, newPath: string | null): void {
+        let changed = false;
+        const groups = this.plugin.settings.customGroups.map((group) => {
+            if (!group.itemPaths.includes(oldPath)) return group;
+            changed = true;
+            const paths = group.itemPaths.filter((path) => path !== oldPath);
+            if (newPath) paths.push(newPath);
+            return { ...group, itemPaths: [...new Set(paths)], updatedAt: Date.now() };
+        });
+        if (changed) this.saveCustomGroups(groups);
+    }
+
     private refreshFileFromCache(filePath: string): void {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!(file instanceof TFile)) return;
@@ -415,6 +471,7 @@ export class LibraryView extends ItemView {
     }
 
     private parseActiveItemFromCache(file: TFile): MediaItem | null {
+        if (this.mediaType === 'music') return this.musicService.parseFromCache(file);
         if (this.mediaType === 'anime') return this.animeService.parseAnimeFromCache(file);
         if (this.mediaType === 'movie') return this.movieService.parseFromCache(file);
         if (this.mediaType === 'series') return this.seriesService.parseFromCache(file);
@@ -428,6 +485,12 @@ export class LibraryView extends ItemView {
      */
     private createToolbar(container: HTMLElement): void {
         const callbacks: ToolbarCallbacks = {
+            onMusicCoverModeChange: (kind, mode) => {
+                if (kind !== 'track') this.plugin.settings.music.albumCoverMode = mode;
+                if (kind !== 'album') this.plugin.settings.music.trackCoverMode = mode;
+                void this.plugin.saveSettings();
+                this.render({ scrollMode: 'preserve' });
+            },
             onSortChange: (field, order) => {
                 const activeSettings = this.getActiveSettings();
                 activeSettings.sortField = field;
@@ -449,6 +512,9 @@ export class LibraryView extends ItemView {
             onRandom: () => this.showRandomGame(),
             onStats: () => this.showStats(),
             onSettings: () => this.showSettingsPanel(),
+            onReleaseCalendar: () => this.showReleaseCalendar(),
+            onCustomGroups: () => this.showCustomGroups(),
+            onManageWorkTypes: ['game', 'movie', 'series', 'manga', 'anime'].includes(this.mediaType) ? () => this.plugin.manageMediaWorkTypes?.(this.mediaType as 'game' | 'movie' | 'series' | 'manga' | 'anime') : undefined,
             onViewModeChange: (mode) => {
                 this.viewMode = mode;
                 const activeSettings = this.getActiveSettings();
@@ -462,6 +528,7 @@ export class LibraryView extends ItemView {
                 this.applyFiltersAndSort({ scrollMode: 'top' });
             },
             onApplySavedView: (id) => {
+                this.tagsDirty = true;
                 const settings = this.getActiveSettings();
                 const saved = id ? settings.savedViews.find((view) => view.id === id) : null;
                 settings.activeSavedViewId = saved?.id ?? null;
@@ -551,8 +618,77 @@ export class LibraryView extends ItemView {
             this.getFieldDefinitions(),
             this.getDefaultViewState(),
             this.mediaType,
-            this.plugin.getEnabledMediaTypes()
+            this.plugin.getEnabledMediaTypes(),
+            { album: this.plugin.settings.music.albumCoverMode, track: this.plugin.settings.music.trackCoverMode }
         );
+    }
+
+    showReleaseCalendar(): ReleaseCalendarModal {
+        const modal = new ReleaseCalendarModal(
+            this.app,
+            async () => {
+                const libraries = await Promise.all([
+                    this.gameService.loadGames(),
+                    this.animeService.loadAnime(),
+                    this.movieService.loadItems(),
+                    this.seriesService.loadItems(),
+                    this.bookService.loadItems(),
+                    this.mangaService.loadItems(),
+                ]);
+                return libraries.flat();
+            },
+            (item) => this.openGame(item),
+            this.plugin.settings.releaseCalendarMediaTypes,
+            (types) => {
+                this.plugin.settings.releaseCalendarMediaTypes = types;
+                void this.plugin.saveSettings();
+            },
+            this.plugin.settings.releaseCalendarViewMode,
+            this.plugin.settings.releaseCalendarScope,
+            (mode, scope) => {
+                this.plugin.settings.releaseCalendarViewMode = mode;
+                this.plugin.settings.releaseCalendarScope = scope;
+                void this.plugin.saveSettings();
+            }
+        );
+        modal.open();
+        return modal;
+    }
+
+    private async loadAllMediaItems(): Promise<MediaItem[]> {
+        const libraries = await Promise.all([
+            this.gameService.loadGames(),
+            this.animeService.loadAnime(),
+            this.movieService.loadItems(),
+            this.seriesService.loadItems(),
+            this.bookService.loadItems(),
+            this.mangaService.loadItems(),
+            this.musicService.loadItems(),
+        ]);
+        return libraries.flat();
+    }
+
+    showCustomGroups(): CustomGroupsModal {
+        const modal = new CustomGroupsModal(
+            this.app,
+            this.plugin.settings.customGroups,
+            () => this.loadAllMediaItems(),
+            (item) => this.openGame(item),
+            (groups) => this.saveCustomGroups(groups)
+        );
+        modal.open();
+        return modal;
+    }
+
+    private saveCustomGroups(groups: CustomMediaGroup[]): void {
+        this.plugin.settings.customGroups = groups;
+        void this.plugin.saveSettings();
+    }
+
+    private toggleCustomGroupMembership(item: MediaItem, groupId: string): void {
+        this.saveCustomGroups(this.plugin.settings.customGroups.map((group) => group.id === groupId
+            ? setGroupMembership(group, item.filePath, !group.itemPaths.includes(item.filePath))
+            : group));
     }
 
     /**
@@ -567,7 +703,9 @@ export class LibraryView extends ItemView {
 
         try {
             let games: MediaItem[];
-            if (requestedMediaType === 'anime') {
+            if (requestedMediaType === 'music') {
+                games = await this.musicService.loadItems();
+            } else if (requestedMediaType === 'anime') {
                 games = await this.animeService.loadAnime();
             } else if (requestedMediaType === 'movie') {
                 games = await this.movieService.loadItems();
@@ -626,14 +764,18 @@ export class LibraryView extends ItemView {
         if (this.isDestroyed) return;
 
         try {
+            this.updateToolbarTags();
             const settings = this.getActiveSettings();
 
-            if (this.mediaType === 'anime') {
+            if (this.mediaType === 'music') {
+                this.filteredGames = this.musicService.filterAndSort(this.games as MusicItem[], this.filter, this.viewState.sort.field, this.viewState.sort.order);
+            } else if (this.mediaType === 'anime') {
                 this.filteredGames = this.animeService.filterAndSort(
                     this.games as AnimeItem[],
                     this.filter,
                     this.viewState.sort.field,
-                    this.viewState.sort.order
+                    this.viewState.sort.order,
+                    settings.showAdultInAll
                 );
             } else if (this.mediaType === 'movie') {
                 this.filteredGames = this.movieService.filterAndSort(
@@ -674,7 +816,8 @@ export class LibraryView extends ItemView {
                 );
             }
 
-            this.updateToolbarTags();
+            this.hasPartSearchMatches = Boolean(this.filter.searchTerm.trim()
+                && this.filteredGames.some(item => getTitleSearchMatch(item, this.filter.searchTerm)?.partId));
             this.render({ scrollMode, scrollTop: scrollTop ?? undefined });
         } catch (e) {
             console.error('Error applying filters/sort:', e);
@@ -703,6 +846,7 @@ export class LibraryView extends ItemView {
      */
     private render(options: { scrollMode?: RenderScrollMode; scrollTop?: number } = {}): void {
         if (!this.libraryContentEl) return;
+        this.cachedLayout = null;
 
         const version = ++this.renderVersion;
         const scrollMode = options.scrollMode ?? 'none';
@@ -735,6 +879,27 @@ export class LibraryView extends ItemView {
 
         const shouldGroup = this.viewState.group.mode !== 'none';
 
+        if (this.mediaType === 'book' && this.plugin.settings.books.bookshelfEffect) {
+            const groups = shouldGroup
+                ? this.groupVisibleItems()
+                : [{ label: '', items: this.filteredGames }];
+            const tasks: CardRenderTask[] = [];
+            this.gridEl = null;
+            for (const group of groups) {
+                const section = this.libraryContentEl.createDiv({ cls: 'lorebase-bookshelf-section' });
+                if (shouldGroup) {
+                    const title = section.createDiv({ cls: 'lorebase-series-title lorebase-view-group-title', text: group.label });
+                    title.createSpan({ cls: 'lorebase-view-group-count', text: String(group.items.length) });
+                }
+                const shelf = section.createDiv({ cls: 'lorebase-bookshelf' });
+                for (const item of group.items) tasks.push({ parent: shelf, item });
+            }
+            this.renderCardsInBatches(tasks, version, () => {
+                this.finishContentRebuild(version, () => this.scrollManager.apply(scrollMode, anchor));
+            });
+            return;
+        }
+
         if (shouldGroup) {
             this.renderGroupedView(scrollMode, anchor, version);
         } else {
@@ -742,17 +907,20 @@ export class LibraryView extends ItemView {
         }
     }
 
+    private groupVisibleItems(): ReturnType<typeof groupMediaItems> {
+        const { mode, order } = this.viewState.group;
+        return groupMediaItems(
+            this.filteredGames, mode, order, i18n.getLocale(),
+            mode === 'status' ? this.getStatusOptions() : [],
+        );
+    }
+
     private renderGroupedView(scrollMode: RenderScrollMode, anchor: ScrollAnchor | null, version: number): void {
         if (!this.libraryContentEl) return;
         const layout = this.getEffectiveLayout();
+        this.cachedLayout = layout;
         const renderedLayout = { ...layout, columns: this.getRenderedColumns(layout) };
-        const locale = i18n.getLanguage() === 'uk' ? 'uk-UA' : i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
-        const groups = groupMediaItems(
-            this.filteredGames,
-            this.viewState.group.mode,
-            this.viewState.group.order,
-            locale
-        );
+        const groups = this.groupVisibleItems();
         if (this.filteredGames.length > 100) {
             this.gridEl = createGrid({
                 container: this.libraryContentEl,
@@ -767,9 +935,11 @@ export class LibraryView extends ItemView {
                 groups,
                 colors: SERIES_COLORS,
                 columns,
+                targetCardWidth: layout.targetCardWidth, gap: layout.gap, padding: layout.padding,
                 orientation: layout.orientation,
                 cardHeight,
                 buffer: VIRTUALIZATION_BUFFER,
+                externalViewportUpdates: true,
                 createCard: (parent, item) => this.createCard(parent, item),
             });
             this.finishContentRebuild(version, () => this.scrollManager.apply(scrollMode, anchor));
@@ -779,6 +949,7 @@ export class LibraryView extends ItemView {
 
         groups.forEach((group, index) => {
             const section = this.libraryContentEl!.createDiv({ cls: 'lorebase-series-section lorebase-view-group-section' });
+            section.toggleClass('lorebase-music-group-section', this.mediaType === 'music');
             const title = section.createDiv({ cls: 'lorebase-series-title lorebase-view-group-title' });
             title.createSpan({ text: group.label });
             title.createSpan({ cls: 'lorebase-view-group-count', text: String(group.items.length) });
@@ -796,6 +967,7 @@ export class LibraryView extends ItemView {
         if (this.mediaType === 'anime') return t('noAnimeFound');
         if (this.mediaType === 'movie') return t('noMoviesFound');
         if (this.mediaType === 'series') return t('noSeriesFound');
+        if (this.mediaType === 'music') return mt('noResults');
         if (this.mediaType === 'book') return t('noBooksFound');
         if (this.mediaType === 'manga') return t('noMangaFound');
         return t('noGamesFound');
@@ -846,10 +1018,12 @@ export class LibraryView extends ItemView {
     private finishContentRebuild(version: number, onReady: () => void): void {
         if (this.isDestroyed || version !== this.renderVersion || !this.libraryContentEl) return;
         onReady();
+        this.virtualGrid?.updateViewport();
         window.requestAnimationFrame(() => {
             if (this.isDestroyed || version !== this.renderVersion || !this.libraryContentEl) return;
             const content = this.libraryContentEl;
             content.removeClass('is-rebuilding');
+            if (content.ownerDocument.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
             const viewport = this.contentEl.getBoundingClientRect();
             const visibleCards = Array.from(content.querySelectorAll<HTMLElement>('.lorebase-card'))
@@ -888,6 +1062,9 @@ export class LibraryView extends ItemView {
         collection.add(animation);
         const remove = (): void => {
             collection.delete(animation);
+            if (collection === this.cardReflowAnimations && collection.size === 0) {
+                this.contentEl.removeClass('is-layout-resizing');
+            }
         };
         animation.onfinish = remove;
         animation.oncancel = remove;
@@ -896,6 +1073,7 @@ export class LibraryView extends ItemView {
     private cancelAnimations(collection: Set<Animation>): void {
         for (const animation of collection) animation.cancel();
         collection.clear();
+        if (collection === this.cardReflowAnimations) this.contentEl.removeClass('is-layout-resizing');
     }
 
     private cancelContentAnimations(): void {
@@ -948,6 +1126,7 @@ export class LibraryView extends ItemView {
         if (!this.gridEl) return;
 
         const layout = this.getEffectiveLayout();
+        this.cachedLayout = layout;
         const columns = this.getRenderedColumns(layout);
         const cardHeight = this.layoutCalculator.calculateActualCardHeight(layout, columns, this.gridEl);
         this.virtualGrid = new VirtualGrid<MediaItem>({
@@ -955,9 +1134,11 @@ export class LibraryView extends ItemView {
             scrollContainer: this.contentEl,
             items: this.filteredGames,
             columns,
+            targetCardWidth: layout.targetCardWidth, gap: layout.gap, padding: layout.padding,
             orientation: layout.orientation,
             cardHeight,
             buffer: VIRTUALIZATION_BUFFER,
+            externalViewportUpdates: true,
             createCard: (parent, item) => this.createCard(parent, item),
         });
     }
@@ -966,10 +1147,15 @@ export class LibraryView extends ItemView {
      * Cleanup virtualization
      */
     private cleanupVirtualization(): void {
+        this.smoothScroll?.cancel();
         if (this.virtualGrid) {
             this.virtualGrid.destroy();
             this.virtualGrid = null;
         }
+        // Small grids, bookshelves and random cards own listeners and image
+        // loads too. Removing DOM alone leaves those resources active.
+        this.libraryContentEl?.querySelectorAll<HTMLElement>('.lorebase-card')
+            .forEach(GameCard.destroyElement);
     }
 
     private observeLayoutResize(): void {
@@ -977,14 +1163,25 @@ export class LibraryView extends ItemView {
 
         this.resizeObserver?.disconnect();
         this.lastObservedLayoutWidth = null;
+        this.lastObservedLayoutHeight = null;
         this.resizeObserver = new ResizeObserver((entries) => {
             const width = Math.round(entries[0]?.contentRect.width ?? this.contentEl.clientWidth);
             if (width <= 0) return;
+            const height = Math.round(entries[0]?.contentRect.height ?? this.contentEl.clientHeight);
+            const heightChanged = height !== this.lastObservedLayoutHeight;
+            this.lastObservedLayoutHeight = height;
             if (this.lastObservedLayoutWidth === null) {
                 this.lastObservedLayoutWidth = width;
+                // Keep posters at their current size while the host animates a sidebar.
+                // The final width is committed once, when the pane settles.
+                if (this.libraryContentEl) this.libraryContentEl.style.width = `${width}px`;
+                this.scheduleVirtualLayoutRefresh();
                 return;
             }
-            if (width === this.lastObservedLayoutWidth) return;
+            if (width === this.lastObservedLayoutWidth) {
+                if (heightChanged) this.virtualGrid?.updateViewport();
+                return;
+            }
             this.lastObservedLayoutWidth = width;
             this.markLayoutResizing();
         });
@@ -997,102 +1194,122 @@ export class LibraryView extends ItemView {
         });
     }
 
-    private scheduleVirtualLayoutRefresh(onComplete?: () => void): void {
+    private scheduleVirtualLayoutRefresh(): void {
         if (this.isDestroyed || !this.libraryContentEl) return;
 
         if (this.resizeLayoutRafId !== null) return;
 
         this.resizeLayoutRafId = window.requestAnimationFrame(() => {
             this.resizeLayoutRafId = null;
-            if (this.isDestroyed || !this.libraryContentEl) return;
-
-            this.cancelAnimations(this.cardReflowAnimations);
-            const previousPositions = this.captureRenderedCardPositions();
-            const layout = this.getEffectiveLayout();
-            const columns = this.getRenderedColumns(layout);
-            this.updateRenderedGridColumns(columns);
-
-            if (this.virtualGrid && this.gridEl) {
-                const cardHeight = this.layoutCalculator.calculateActualCardHeight(layout, columns, this.gridEl);
-                this.virtualGrid.updateLayout({
-                    columns,
-                    orientation: layout.orientation,
-                    cardHeight,
-                });
-            }
-            this.animateRenderedCardReflow(previousPositions);
-            onComplete?.();
+            this.refreshGridLayout();
         });
     }
 
-    private captureRenderedCardPositions(): Map<string, DOMRect> {
-        const positions = new Map<string, DOMRect>();
-        this.libraryContentEl?.querySelectorAll<HTMLElement>('.lorebase-card[data-lorebase-file-path]')
-            .forEach((card) => {
-                const key = card.dataset.lorebaseFilePath;
-                if (key) positions.set(key, card.getBoundingClientRect());
+    private refreshGridLayout(): void {
+        if (this.isDestroyed || !this.libraryContentEl) return;
+
+        const previous = this.captureCardLayout();
+        const anchor = this.virtualGrid ? null : this.scrollManager.capture();
+        // Preserve the on-screen position before replacing an in-flight move.
+        this.smoothScroll?.cancel();
+        this.cancelAnimations(this.contentRevealAnimations);
+        this.cancelAnimations(this.cardReflowAnimations);
+        this.contentEl.addClass('is-layout-resizing');
+        // Keep the old grid geometry until this transaction. Otherwise the
+        // browser shrinks posters before we can capture their old bounds.
+        if (this.lastObservedLayoutWidth) {
+            this.libraryContentEl.style.width = `${this.lastObservedLayoutWidth}px`;
+        }
+        const layout = this.getEffectiveLayout();
+        this.cachedLayout = layout;
+        const columns = this.getRenderedColumns(layout);
+        this.updateRenderedGridColumns(columns, layout);
+
+        if (this.virtualGrid && this.gridEl) {
+            const cardHeight = this.layoutCalculator.calculateActualCardHeight(layout, columns, this.gridEl);
+            this.virtualGrid.updateLayout({
+                columns,
+                targetCardWidth: layout.targetCardWidth, gap: layout.gap, padding: layout.padding,
+                orientation: layout.orientation,
+                cardHeight,
             });
-        return positions;
+        }
+        if (anchor) this.scrollManager.apply('preserve', anchor);
+        const current = this.captureCardLayout();
+        this.libraryContentEl.querySelectorAll<HTMLElement>('.lorebase-card[data-lorebase-file-path]')
+            .forEach(card => { if (current.has(card.dataset.lorebaseFilePath!)) GameCard.refitOverlay(card); });
+        this.animateRenderedCardReflow(previous, current);
     }
 
-    private animateRenderedCardReflow(previousPositions: Map<string, DOMRect>): void {
-        if (!this.libraryContentEl || previousPositions.size === 0) return;
+    private captureCardLayout(): Map<string, CardRect> {
+        const result = new Map<string, CardRect>();
+        const viewport = this.contentEl.getBoundingClientRect();
+        this.libraryContentEl?.querySelectorAll<HTMLElement>('.lorebase-grid').forEach(grid => {
+            const cards = Array.from(grid.querySelectorAll<HTMLElement>('.lorebase-card[data-lorebase-file-path]'));
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                if (rect.bottom < viewport.top - rect.height || rect.top > viewport.bottom + rect.height) return;
+                result.set(card.dataset.lorebaseFilePath!, {
+                    left: rect.left, top: rect.top, width: rect.width, height: rect.height, row: card.offsetTop,
+                });
+            });
+        });
+        return result;
+    }
+
+    private animateRenderedCardReflow(previous: Map<string, CardRect>, current: Map<string, CardRect>): void {
+        if (!this.libraryContentEl) return;
+        const ownerWindow = this.containerEl.ownerDocument.defaultView;
+        if (ownerWindow?.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            this.contentEl.removeClass('is-layout-resizing');
+            return;
+        }
+        const plan = planCardReflow(previous, current);
 
         this.libraryContentEl.querySelectorAll<HTMLElement>('.lorebase-card[data-lorebase-file-path]')
             .forEach((card) => {
-                const key = card.dataset.lorebaseFilePath;
-                const previous = key ? previousPositions.get(key) : null;
-                if (!previous || typeof card.animate !== 'function') return;
+                if (typeof card.animate !== 'function') return;
 
-                const current = card.getBoundingClientRect();
-                const deltaX = previous.left - current.left;
-                const deltaY = previous.top - current.top;
-                if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
-
-                const hoverOffset = card.matches(':hover') ? -4 : 0;
+                const key = card.dataset.lorebaseFilePath!;
+                const next = current.get(key);
+                if (!next || next.width <= 0 || next.height <= 0) return;
+                const frames = plan.get(key);
+                if (!frames) return;
                 const animation = card.animate(
-                    [
-                        {
-                            transform: `translate3d(${deltaX}px, ${deltaY + hoverOffset}px, 0)`,
-                        },
-                        {
-                            transform: `translate3d(0, ${hoverOffset}px, 0)`,
-                        },
-                    ],
+                    frames,
                     {
-                        duration: 380,
+                        duration: 260,
                         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
                     }
                 );
                 this.trackAnimation(animation, this.cardReflowAnimations);
             });
+        if (this.cardReflowAnimations.size === 0) this.contentEl.removeClass('is-layout-resizing');
     }
 
-    private updateRenderedGridColumns(columns: number): void {
-        const ownerWindow = this.containerEl.ownerDocument.defaultView;
-        const safeColumns = ownerWindow?.matchMedia('(max-width: 520px)').matches
-            ? 2
-            : Math.max(1, columns);
-        const template = `repeat(${safeColumns}, minmax(0, 1fr))`;
+    private updateRenderedGridColumns(columns: number, layout: EffectiveLayout): void {
         this.libraryContentEl?.querySelectorAll<HTMLElement>('.lorebase-grid').forEach((grid) => {
-            grid.style.gridTemplateColumns = template;
+            applyGridLayout(grid, { ...layout, columns });
         });
     }
 
     private markLayoutResizing(): void {
+        if (this.isDestroyed || !this.libraryContentEl) return;
+        if (this.resizeLayoutRafId !== null) {
+            window.cancelAnimationFrame(this.resizeLayoutRafId);
+            this.resizeLayoutRafId = null;
+        }
         if (this.resizeSettleTimerId === null) {
-            this.virtualGrid?.setLayoutResizing(true);
-        }
-
-        if (this.resizeSettleTimerId !== null) {
-            window.clearTimeout(this.resizeSettleTimerId);
-        }
-
+            this.smoothScroll?.cancel();
+            this.cancelAnimations(this.contentRevealAnimations);
+            this.cancelAnimations(this.cardReflowAnimations);
+            this.contentEl.addClass('is-layout-resizing');
+        } else window.clearTimeout(this.resizeSettleTimerId);
+        // A sidebar transition produces several widths. Measuring and refitting
+        // every card at each step blocks the host animation, even in small grids.
         this.resizeSettleTimerId = window.setTimeout(() => {
             this.resizeSettleTimerId = null;
-            this.scheduleVirtualLayoutRefresh(() => {
-                this.virtualGrid?.setLayoutResizing(false);
-            });
+            this.scheduleVirtualLayoutRefresh();
         }, LAYOUT_RESIZE_SETTLE_MS);
     }
 
@@ -1102,25 +1319,51 @@ export class LibraryView extends ItemView {
             this.resizeObserver = null;
         }
         this.lastObservedLayoutWidth = null;
-
-        if (this.resizeLayoutRafId !== null) {
-            window.cancelAnimationFrame(this.resizeLayoutRafId);
-            this.resizeLayoutRafId = null;
-        }
-
+        this.lastObservedLayoutHeight = null;
         if (this.resizeSettleTimerId !== null) {
             window.clearTimeout(this.resizeSettleTimerId);
             this.resizeSettleTimerId = null;
         }
 
-        this.virtualGrid?.setLayoutResizing(false);
+        if (this.resizeLayoutRafId !== null) {
+            window.cancelAnimationFrame(this.resizeLayoutRafId);
+            this.resizeLayoutRafId = null;
+        }
+        this.contentEl.removeClass('is-layout-resizing');
     }
 
-    /**
-     * Create a game card (uses cached layout/profiles per render cycle)
-     */
+    getCardPreviewReference(media: MediaType, orientation: LorebaseSettings['games']['orientation']): { item?: MediaItem; width?: number; availableWidth?: number; fontSize?: string; lineHeight?: string } | null {
+        if (!this.libraryContentEl) return null;
+        const candidates = this.filteredGames.length ? this.filteredGames : this.games.filter(item => !item.isAdult);
+        let item: MediaItem | undefined;
+        let longest = -1;
+        for (const candidate of candidates) {
+            if (candidate.type !== media) continue;
+            const description = candidate.type === 'anime' ? candidate.summary || candidate.description : candidate.description;
+            const length = description?.trim().length ?? 0;
+            if (length <= longest) continue;
+            item = candidate;
+            longest = length;
+        }
+        const rendered = this.libraryContentEl.querySelectorAll<HTMLElement>('.lorebase-card[data-lorebase-file-path]');
+        const element = Array.from(rendered).find(card => card.dataset.lorebaseFilePath === item?.filePath) ?? rendered[0];
+        const cardStyle = element?.ownerDocument.defaultView?.getComputedStyle(element);
+        const grid = element?.closest<HTMLElement>('.lorebase-grid:not(.lorebase-random-grid)');
+        const layout = this.layoutCalculator.getEffectiveLayout(this.plugin.settings[CARD_MEDIA_KEYS[media]], orientation === 'horizontal' ? 'horizontal' : 'grid');
+        const width = this.layoutCalculator.getCardWidth(layout, this.getRenderedColumns(layout), grid?.clientWidth);
+        return {
+            item,
+            width,
+            availableWidth: grid?.clientWidth || this.libraryContentEl.clientWidth,
+            fontSize: cardStyle?.fontSize,
+            lineHeight: cardStyle?.lineHeight,
+        };
+    }
+
     private createCard(parent: HTMLElement, game: MediaItem): GameCard {
-        const layout = this.cachedLayout ?? this.getEffectiveLayout();
+        // The grid geometry is shared by all cards until the next render/resize.
+        // Reading its width after each DOM insertion forces a layout for every card.
+        const layout = this.cachedLayout ??= this.getEffectiveLayout();
         const activeSettings = this.getActiveSettings();
         const overlayProfile = this.getOverlayProfile(game.type);
         const card = new GameCard(
@@ -1131,12 +1374,13 @@ export class LibraryView extends ItemView {
                     void this.handleCardClick(g);
                 },
                 onContextMenu: (g, x, y) => this.showContextMenu(g, x, y),
+                onPartClick: (item, partId) => this.openEditModal(item, partId),
             },
             layout.cardSize,
             layout.orientation,
             activeSettings.cardStyle,
             this.viewState.sort.field,
-            this.getBadgeProfile(game.type),
+            overlayProfile.badges,
             overlayProfile.layout,
             overlayProfile.visibility,
             overlayProfile.descriptionLines,
@@ -1147,29 +1391,50 @@ export class LibraryView extends ItemView {
             },
             this.getStatusLabelOverrides(game.type),
             this.getCompletionDateBadgeFormat(game.type),
-            (value) => this.plugin.getMetadataService()?.getImageUrl(value) ?? null
+            this.plugin.settings.ratingScale,
+            (value) => this.plugin.getMetadataService()?.getImageUrl(value) ?? null,
+            game.type === 'book' && Boolean(this.plugin.settings.books.bookshelfEffect),
+            this.filter.searchTerm, false,
+            ['dateFinished', 'finishedMonth', 'finishedYear'].includes(this.viewState.group.mode),
+            this.plugin.settings.scrollCardDescriptions,
+            this.plugin.settings.showDiscoveryBadge,
         );
         card.getElement().dataset.lorebaseFilePath = game.filePath;
+        if (game.type === 'music') {
+            const mode = game.musicKind === 'album' ? this.plugin.settings.music.albumCoverMode : this.plugin.settings.music.trackCoverMode;
+            card.getElement().toggleClass('lorebase-music-vinyl', mode === 'vinyl');
+            card.getElement().toggleClass('lorebase-music-cd', mode === 'cd');
+        }
         card.getElement().toggleClass(
             'lorebase-book-cover-effect',
             (game.type === 'book' || game.type === 'manga') && Boolean(activeSettings.bookCoverEffect)
+                && !(game.type === 'book' && this.plugin.settings.books.bookshelfEffect)
         );
         return card;
     }
 
     private areMediaItemsEquivalent(left: MediaItem, right: MediaItem): boolean {
         if (left.type !== right.type) return false;
+        if (left.type === 'music' && right.type === 'music') return JSON.stringify(left) === JSON.stringify(right);
         if (
             left.filePath !== right.filePath
             || left.displayName !== right.displayName
             || left.year !== right.year
             || left.description !== right.description
             || left.userRating !== right.userRating
+            || left.communityRating !== right.communityRating
+            || left.communityVotes !== right.communityVotes
+            || left.communityRatingProvider !== right.communityRatingProvider
+            || JSON.stringify(left.detailedRatings) !== JSON.stringify(right.detailedRatings)
+            || left.discovery?.recommendedBy !== right.discovery?.recommendedBy
+            || left.discovery?.reason !== right.discovery?.reason
+            || JSON.stringify(left.statusReasons) !== JSON.stringify(right.statusReasons)
             || left.favorite !== right.favorite
             || left.imageUrl !== right.imageUrl
             || left.horizontalImageUrl !== right.horizontalImageUrl
             || left.hasCustomPoster !== right.hasCustomPoster
             || left.isAdult !== right.isAdult
+            || left.workType !== right.workType
             || left.status !== right.status
             || left.started !== right.started
             || left.finished !== right.finished
@@ -1181,7 +1446,12 @@ export class LibraryView extends ItemView {
         }
 
         if (left.type === 'anime' && right.type === 'anime') {
-            return left.format === right.format
+            return left.posterMode === right.posterMode
+                && left.releaseDate === right.releaseDate
+                && left.titleImageUrl === right.titleImageUrl
+                && left.activePartId === right.activePartId
+                && JSON.stringify(left.parts) === JSON.stringify(right.parts)
+                && left.format === right.format
                 && left.summary === right.summary
                 && left.seasonCurrent === right.seasonCurrent
                 && left.seasonTotal === right.seasonTotal
@@ -1221,6 +1491,8 @@ export class LibraryView extends ItemView {
             const leftParts = left.parts ?? [];
             const rightParts = right.parts ?? [];
             return left.summary === right.summary
+                && left.posterMode === right.posterMode
+                && left.titleImageUrl === right.titleImageUrl
                 && left.sourceUrl === right.sourceUrl
                 && left.rating === right.rating
                 && left.releaseDate === right.releaseDate
@@ -1250,6 +1522,7 @@ export class LibraryView extends ItemView {
 
         if (left.type === 'manga' && right.type === 'manga') {
             return left.summary === right.summary
+                && left.releaseDate === right.releaseDate
                 && left.sourceUrl === right.sourceUrl
                 && left.chapterCurrent === right.chapterCurrent
                 && left.chapterTotal === right.chapterTotal
@@ -1301,6 +1574,7 @@ export class LibraryView extends ItemView {
                 return Boolean(other)
                     && part.id === other.id
                     && part.title === other.title
+                    && this.areStringArraysEquivalent(part.alternativeTitles, other.alternativeTitles)
                     && part.seasonNumber === other.seasonNumber
                     && part.episodeCurrent === other.episodeCurrent
                     && part.episodeTotal === other.episodeTotal
@@ -1315,6 +1589,7 @@ export class LibraryView extends ItemView {
                 return Boolean(other)
                     && part.id === other.id
                     && part.title === other.title
+                    && this.areStringArraysEquivalent(part.alternativeTitles, other.alternativeTitles)
                     && part.volumeNumber === other.volumeNumber
                     && part.chapterCurrent === other.chapterCurrent
                     && part.chapterTotal === other.chapterTotal
@@ -1361,7 +1636,7 @@ export class LibraryView extends ItemView {
         await this.openGame(game);
     }
 
-    private openEditModal(item: MediaItem): void {
+    private openEditModal(item: MediaItem, partId?: string): void {
         const scrollTop = this.contentEl.scrollTop;
         this.plugin.showEditModal(
             item,
@@ -1370,7 +1645,8 @@ export class LibraryView extends ItemView {
                 window.setTimeout(() => this.refreshFileFromCache(item.filePath), 100);
                 this.finishEditScrollRestore(item.filePath);
             },
-            () => this.beginEditScrollRestore(item.filePath, scrollTop)
+            () => this.beginEditScrollRestore(item.filePath, scrollTop),
+            partId
         );
     }
 
@@ -1379,6 +1655,7 @@ export class LibraryView extends ItemView {
      */
     private showContextMenu(game: MediaItem, x: number, y: number): void {
         showMediaContextMenu(game, x, y, {
+            chooseCompletionDate: item => new CompletionDateModal(this.app, item.displayName).openAndGetValue(),
             isDestroyed: () => this.isDestroyed,
             getStatusOptions: () => this.getStatusOptions(),
             onApplyFiltersAndSort: () => this.applyFiltersAndSort({ scrollMode: 'preserve' }),
@@ -1391,10 +1668,16 @@ export class LibraryView extends ItemView {
             },
             cardClickAction: this.plugin.settings.cardClickAction ?? 'open',
             ratingMode: this.getBadgeProfile(game.type).rating.mode,
+            ratingSettings: this.plugin.settings.ratingScale,
+            customGroups: this.plugin.settings.customGroups,
+            onToggleCustomGroup: (item, groupId) => this.toggleCustomGroupMembership(item, groupId),
+            onOpenCustomGroups: () => this.showCustomGroups(),
             onDelete: (item) => {
                 this.plugin.showDeleteModal(item, async () => {
                     if (this.isDestroyed) return;
-                    if (item.type === 'anime') {
+                    if (item.type === 'music') {
+                        await this.musicService.deleteItem(item);
+                    } else if (item.type === 'anime') {
                         await this.animeService.deleteAnime(item);
                     } else if (item.type === 'movie') {
                         await this.movieService.deleteItem(item);
@@ -1417,6 +1700,7 @@ export class LibraryView extends ItemView {
                     this.refreshFileFromCache(item.filePath);
                 });
             },
+            updateMusic: (item, updates) => { void this.musicService.updateItem(item, updates).catch(() => this.refresh()); },
             updateAnime: (anime, updates) => {
                 void this.animeService.updateAnime(anime, updates);
             },
@@ -1460,6 +1744,7 @@ export class LibraryView extends ItemView {
     }
 
     private shouldFullRefreshAfterMutation(changedFields: string[]): boolean {
+        if (changedFields.includes('priority')) return true;
         if (changedFields.includes('userRating') && this.viewState.sort.field === 'rating') return true;
         if ((this.viewState.sort.field === 'dateFinished' || this.viewState.sort.field === 'dateCompleted') && changedFields.some((field) => (
             field === 'status'
@@ -1497,6 +1782,7 @@ export class LibraryView extends ItemView {
         this.updateStatusBadge(imageEl, item, badgeProfile);
         this.updateRatingBadge(imageEl, item, badgeProfile);
         this.updateFavoriteBadge(imageEl, item, badgeProfile);
+        this.updateWorkTypeBadge(imageEl, item, badgeProfile);
     }
 
     private updateStatusBadge(
@@ -1508,17 +1794,17 @@ export class LibraryView extends ItemView {
         if (!badgeProfile.status.enabled) return;
 
         const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.status.position);
-        const config = STATUS_CONFIG[item.status];
+        const appearance = getStatusAppearance(item.type, item.status);
         const statusBadge = group.createDiv({ cls: `lorebase-card-status lorebase-status-${item.status}` });
+        statusBadge.style.color = appearance.color;
+        setIcon(statusBadge.createSpan({ cls: 'lorebase-status-badge-icon' }), appearance.icon);
 
         if (badgeProfile.status.iconOnly) {
             statusBadge.addClass('is-icon-only');
-            statusBadge.appendChild(this.createBadgeSvg(config.pathD));
             return;
         }
 
-        statusBadge.appendChild(this.createBadgeSvg(config.pathD));
-        statusBadge.createSpan({ text: this.getRenderedStatusLabel(item) });
+        statusBadge.createSpan({ text: withReleaseCountdown(this.getRenderedStatusLabel(item), item, i18n.getLanguage(), new Date(), badgeProfile.status.showReleaseCountdown !== false) });
     }
 
     private updateRatingBadge(
@@ -1532,13 +1818,7 @@ export class LibraryView extends ItemView {
         const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.rating.position);
         const ratingBadge = group.createDiv({ cls: 'lorebase-card-rating' });
 
-        if (badgeProfile.rating.mode === 'emoji') {
-            ratingBadge.addClass('is-emoji');
-            ratingBadge.textContent = RATING_EMOJI[item.userRating] ?? '';
-            return;
-        }
-
-        ratingBadge.textContent = `★${item.userRating}`;
+        renderRatingBadgeContent(ratingBadge, item.userRating, this.plugin.settings.ratingScale, badgeProfile.rating.mode, item.type);
     }
 
     private updateFavoriteBadge(
@@ -1557,6 +1837,22 @@ export class LibraryView extends ItemView {
         ));
     }
 
+    private updateWorkTypeBadge(
+        imageEl: HTMLElement,
+        item: MediaItem,
+        badgeProfile: LorebaseSettings['badges']
+    ): void {
+        imageEl.querySelector('.lorebase-card-work-type')?.remove();
+        if (!item.workType || !badgeProfile.workType.enabled) return;
+
+        const group = this.getOrCreateBadgeGroup(imageEl, badgeProfile.workType.position);
+        const badge = group.createDiv({
+            cls: 'lorebase-card-work-type',
+            text: getMediaWorkTypeLabel(item.type, item.workType || '', i18n.getLanguage()),
+        });
+        badge.style.setProperty('--lorebase-type-color', getMediaWorkTypeColor(item.type, item.workType || ''));
+    }
+
     private getOrCreateBadgeGroup(
         imageEl: HTMLElement,
         position: LorebaseSettings['badges']['status']['position']
@@ -1572,9 +1868,13 @@ export class LibraryView extends ItemView {
     }
 
     private getRenderedStatusLabel(item: MediaItem): string {
+        const customLabel = getStatusAppearance(item.type, item.status).label;
+        if (customLabel) return customLabel;
+        if (item.type === 'music') return mt(item.status);
         const overrides = this.getStatusLabelOverrides(item.type);
         const isReadingMedia = item.type === 'book' || item.type === 'manga';
         const fallback: Record<string, string> = {
+            to_be_released: t('statusToBeReleased'),
             completed: item.type === 'game'
                 ? t('statusPlayed')
                 : isReadingMedia ? t('statusReadCompleted') : t('statusCompleted'),
@@ -1611,7 +1911,7 @@ export class LibraryView extends ItemView {
     private formatFinishedDate(value: string | null | undefined): string | null {
         const timestamp = this.getFinishedTimestamp(value);
         if (!timestamp) return null;
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+        const locale = i18n.getLocale();
         const options: Intl.DateTimeFormatOptions = this.getCompletionDateBadgeFormat(this.mediaType) === 'full'
             ? { month: 'short', day: 'numeric', year: 'numeric' }
             : { month: 'short', day: 'numeric' };
@@ -1664,7 +1964,9 @@ export class LibraryView extends ItemView {
      * Show random game
      */
     private showRandomGame(): void {
-        const randomGame = this.mediaType === 'anime'
+        const randomGame = this.mediaType === 'music'
+            ? this.filteredGames[Math.floor(Math.random() * this.filteredGames.length)]
+            : this.mediaType === 'anime'
             ? this.animeService.getRandomAnime(this.filteredGames as AnimeItem[])
             : this.mediaType === 'movie'
                 ? this.movieService.getRandomItem(this.filteredGames as MovieItem[])
@@ -1677,8 +1979,14 @@ export class LibraryView extends ItemView {
                             : this.gameService.getRandomGame(this.filteredGames as GameItem[]);
         if (randomGame) {
             if (!this.libraryContentEl) return;
+            this.renderVersion++;
+            this.cancelCardBatch();
+            this.cancelContentAnimations();
+            this.cleanupVirtualization();
+            this.gridEl = null;
             renderRandomCard({
                 container: this.libraryContentEl,
+                layout: { ...this.getEffectiveLayout(), columns: 1, targetCardWidth: this.layoutCalculator.getCardWidth(this.getEffectiveLayout()) },
                 item: randomGame,
                 titleText: this.getRandomTitleLabel(),
                 backText: t('commonBack'),
@@ -1694,33 +2002,7 @@ export class LibraryView extends ItemView {
      * Show statistics modal
      */
     private showStats(): void {
-        if (this.mediaType === 'anime') {
-            const stats = this.animeService.calculateStats(this.games as AnimeItem[]);
-            this.plugin.showStatsModal(stats, 'anime');
-            return;
-        }
-        if (this.mediaType === 'movie') {
-            const stats = this.movieService.calculateStats(this.games as MovieItem[]);
-            this.plugin.showStatsModal(stats, 'movie');
-            return;
-        }
-        if (this.mediaType === 'series') {
-            const stats = this.seriesService.calculateStats(this.games as SeriesItem[]);
-            this.plugin.showStatsModal(stats, 'series');
-            return;
-        }
-        if (this.mediaType === 'book') {
-            const stats = this.bookService.calculateStats(this.games as ReadingItem[]);
-            this.plugin.showStatsModal(stats, 'book');
-            return;
-        }
-        if (this.mediaType === 'manga') {
-            const stats = this.mangaService.calculateStats(this.games as ReadingItem[]);
-            this.plugin.showStatsModal(stats, 'manga');
-            return;
-        }
-        const stats = this.gameService.calculateStats(this.games as GameItem[]);
-        this.plugin.showStatsModal(stats, 'game');
+        this.plugin.showStatsModal();
     }
 
     /**
@@ -1739,6 +2021,10 @@ export class LibraryView extends ItemView {
      */
     private showLoading(): void {
         if (!this.libraryContentEl) return;
+        this.renderVersion++;
+        this.cancelCardBatch();
+        this.cleanupVirtualization();
+        this.gridEl = null;
         this.cancelContentAnimations();
         this.libraryContentEl.removeClass('is-rebuilding');
         this.libraryContentEl.empty();
@@ -1750,6 +2036,10 @@ export class LibraryView extends ItemView {
      */
     private showError(message: string): void {
         if (!this.libraryContentEl) return;
+        this.renderVersion++;
+        this.cancelCardBatch();
+        this.cleanupVirtualization();
+        this.gridEl = null;
         this.cancelContentAnimations();
         this.libraryContentEl.removeClass('is-rebuilding');
         this.libraryContentEl.empty();
@@ -1772,6 +2062,7 @@ export class LibraryView extends ItemView {
         this.seriesService.setFolderPath(settings.series.folderPath);
         this.bookService.setFolderPath(settings.books.folderPath);
         this.mangaService.setFolderPath(settings.manga.folderPath);
+        this.musicService.setFolderPath(settings.music.folderPath);
         this.invalidateActiveServiceCache();
         this.cachedLayout = null;
 
@@ -1781,6 +2072,7 @@ export class LibraryView extends ItemView {
         }
 
         if (this.toolbar) {
+            this.toolbar.updateMusicCovers(this.plugin.settings.music.albumCoverMode, this.plugin.settings.music.trackCoverMode);
             this.toolbar.beginUpdate();
             this.toolbar.updateMediaContext(this.mediaType, this.plugin.getEnabledMediaTypes());
             this.toolbar.updateSortOptions(this.getSortOptions());
@@ -1797,6 +2089,7 @@ export class LibraryView extends ItemView {
      */
     refreshCardVisuals(): void {
         if (this.isDestroyed || !this.libraryContentEl) return;
+        this.cachedLayout = null;
         this.scheduleVisualRefresh();
     }
 
@@ -1848,7 +2141,7 @@ export class LibraryView extends ItemView {
     }
 
     private getEffectiveLayout(): EffectiveLayout {
-        return this.layoutCalculator.getEffectiveLayout(this.getActiveSettings(), this.viewMode);
+        return { ...this.layoutCalculator.getEffectiveLayout(this.getActiveSettings(), this.viewMode), partSearchCaption: this.hasPartSearchMatches };
     }
 
     private getRenderedColumns(layout: EffectiveLayout): number {
@@ -1872,6 +2165,7 @@ export class LibraryView extends ItemView {
         this.cachedLayout = null;
 
         if (this.toolbar) {
+            this.toolbar.updateMusicCovers(this.plugin.settings.music.albumCoverMode, this.plugin.settings.music.trackCoverMode);
             this.toolbar.beginUpdate();
             this.toolbar.updateMediaContext(this.mediaType, this.plugin.getEnabledMediaTypes());
             this.toolbar.updateSortOptions(this.getSortOptions());
@@ -1884,6 +2178,7 @@ export class LibraryView extends ItemView {
                 statuses: [],
                 tags: this.viewState.tags,
                 genres: this.viewState.genres,
+                workTypes: [...(this.viewState.workTypes ?? [])],
                 adultOnly: false,
                 customOnly: false,
                 rules: this.viewState.rules,
@@ -1900,6 +2195,7 @@ export class LibraryView extends ItemView {
     }
 
     private getActiveSettings(): LorebaseSettings['games'] {
+        if (this.mediaType === 'music') return this.plugin.settings.music;
         if (this.mediaType === 'anime') return this.plugin.settings.anime;
         if (this.mediaType === 'movie') return this.plugin.settings.movies;
         if (this.mediaType === 'series') return this.plugin.settings.series;
@@ -1913,6 +2209,7 @@ export class LibraryView extends ItemView {
         this.filter.rules = this.viewState.rules;
         this.filter.tags = [...this.viewState.tags];
         this.filter.genres = [...this.viewState.genres];
+        this.filter.workTypes = [...(this.viewState.workTypes ?? [])];
         this.filter.adultOnly = this.viewState.rules.some((rule) => rule.field === 'adult' && rule.operator === 'isTrue');
         this.filter.customOnly = this.viewState.rules.some((rule) => rule.field === 'custom' && rule.operator === 'isTrue');
         const settings = this.getActiveSettings();
@@ -1934,14 +2231,20 @@ export class LibraryView extends ItemView {
     }
 
     private getFieldDefinitions(): FieldDefinition[] {
-        return [
-            ...getBuiltInFieldDefinitions(this.mediaType, this.getStatusOptions(), this.getFilterFlags()),
-            ...collectYamlFieldDefinitions(this.games),
+        const definitions: FieldDefinition[] = [
+            ...getBuiltInFieldDefinitions(
+                this.mediaType,
+                this.getStatusOptions(),
+                this.getFilterFlags(),
+                this.games.map(item => item.workType || '').filter(Boolean)
+            ),
         ];
+        return buildLibraryFieldCatalog(definitions, this.games, this.viewState.rules,
+            this.plugin.getMetadataService()?.getFrontmatterFieldAliases(this.mediaType) ?? {});
     }
 
     private uniqueSavedViewName(name: string, existing: string[]): string {
-        const base = name.trim() || (i18n.getLanguage() === 'ru' ? 'Новый вид' : 'New view');
+        const base = name.trim() || t('viewNew');
         const used = new Set(existing.map((entry) => entry.toLocaleLowerCase()));
         if (!used.has(base.toLocaleLowerCase())) return base;
         let index = 2;
@@ -1949,118 +2252,12 @@ export class LibraryView extends ItemView {
         return `${base} ${index}`;
     }
 
-    private getOverlayProfile(mediaType: MediaType): {
-        layout: LorebaseSettings['overlayTextLayout'];
-        visibility: LorebaseSettings['overlayTextVisibility'];
-        descriptionLines: number;
-    } {
-        if (mediaType === 'anime') {
-            return {
-                layout: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.animeHorizontalOverlayTextLayout
-                    : this.plugin.settings.animeOverlayTextLayout,
-                visibility: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.animeHorizontalOverlayTextVisibility
-                    : this.plugin.settings.animeOverlayTextVisibility,
-                descriptionLines: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.animeHorizontalDescriptionLines
-                    : this.plugin.settings.animeDescriptionLines,
-            };
-        }
-        if (mediaType === 'movie') {
-            return {
-                layout: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.movieHorizontalOverlayTextLayout
-                    : this.plugin.settings.movieOverlayTextLayout,
-                visibility: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.movieHorizontalOverlayTextVisibility
-                    : this.plugin.settings.movieOverlayTextVisibility,
-                descriptionLines: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.movieHorizontalDescriptionLines
-                    : this.plugin.settings.movieDescriptionLines,
-            };
-        }
-        if (mediaType === 'series') {
-            return {
-                layout: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.seriesHorizontalOverlayTextLayout
-                    : this.plugin.settings.seriesOverlayTextLayout,
-                visibility: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.seriesHorizontalOverlayTextVisibility
-                    : this.plugin.settings.seriesOverlayTextVisibility,
-                descriptionLines: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.seriesHorizontalDescriptionLines
-                    : this.plugin.settings.seriesDescriptionLines,
-            };
-        }
-        if (mediaType === 'book') {
-            return {
-                layout: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.bookHorizontalOverlayTextLayout
-                    : this.plugin.settings.bookOverlayTextLayout,
-                visibility: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.bookHorizontalOverlayTextVisibility
-                    : this.plugin.settings.bookOverlayTextVisibility,
-                descriptionLines: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.bookHorizontalDescriptionLines
-                    : this.plugin.settings.bookDescriptionLines,
-            };
-        }
-        if (mediaType === 'manga') {
-            return {
-                layout: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.mangaHorizontalOverlayTextLayout
-                    : this.plugin.settings.mangaOverlayTextLayout,
-                visibility: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.mangaHorizontalOverlayTextVisibility
-                    : this.plugin.settings.mangaOverlayTextVisibility,
-                descriptionLines: this.viewMode === 'horizontal'
-                    ? this.plugin.settings.mangaHorizontalDescriptionLines
-                    : this.plugin.settings.mangaDescriptionLines,
-            };
-        }
-        return {
-            layout: this.viewMode === 'horizontal'
-                ? this.plugin.settings.horizontalOverlayTextLayout
-                : this.plugin.settings.overlayTextLayout,
-            visibility: this.viewMode === 'horizontal'
-                ? this.plugin.settings.horizontalOverlayTextVisibility
-                : this.plugin.settings.overlayTextVisibility,
-            descriptionLines: this.viewMode === 'horizontal'
-                ? this.plugin.settings.horizontalDescriptionLines
-                : this.plugin.settings.descriptionLines,
-        };
+    private getOverlayProfile(mediaType: MediaType) {
+        return getCardProfile(this.plugin.settings, mediaType, this.viewMode === 'horizontal' ? 'horizontal' : 'vertical');
     }
 
     private getBadgeProfile(mediaType: MediaType): LorebaseSettings['badges'] {
-        if (mediaType === 'anime') {
-            return this.viewMode === 'horizontal'
-                ? this.plugin.settings.animeHorizontalBadges
-                : this.plugin.settings.animeBadges;
-        }
-        if (mediaType === 'movie') {
-            return this.viewMode === 'horizontal'
-                ? this.plugin.settings.movieHorizontalBadges
-                : this.plugin.settings.movieBadges;
-        }
-        if (mediaType === 'series') {
-            return this.viewMode === 'horizontal'
-                ? this.plugin.settings.seriesHorizontalBadges
-                : this.plugin.settings.seriesBadges;
-        }
-        if (mediaType === 'book') {
-            return this.viewMode === 'horizontal'
-                ? this.plugin.settings.bookHorizontalBadges
-                : this.plugin.settings.bookBadges;
-        }
-        if (mediaType === 'manga') {
-            return this.viewMode === 'horizontal'
-                ? this.plugin.settings.mangaHorizontalBadges
-                : this.plugin.settings.mangaBadges;
-        }
-        return this.viewMode === 'horizontal'
-            ? this.plugin.settings.horizontalBadges
-            : this.plugin.settings.badges;
+        return this.getOverlayProfile(mediaType).badges;
     }
 
     private getStatusOptions(): Array<{ status: MediaStatus; label: string }> {
@@ -2099,8 +2296,23 @@ export class LibraryView extends ItemView {
             }));
             groups.tags = groups.tags.filter((tag) => !presetByTag.has(tag.id));
         }
+        this.toolbar.beginUpdate();
+        const definitions = this.getFieldDefinitions();
+        const sortField = reconcileCatalogYamlField(this.viewState.sort.field, definitions);
+        const groupMode = reconcileCatalogYamlField(this.viewState.group.mode, definitions);
+        if (sortField !== this.viewState.sort.field || groupMode !== this.viewState.group.mode) {
+            this.setViewState({
+                ...this.viewState,
+                sort: { ...this.viewState.sort, field: sortField },
+                group: { ...this.viewState.group, mode: groupMode },
+            }, true);
+            const settings = this.getActiveSettings();
+            this.toolbar.updateViewState(this.viewState, settings.savedViews, settings.activeSavedViewId, this.getDefaultViewState());
+        }
+        this.toolbar.updateSearchItems(this.games);
         this.toolbar.updateTags(groups);
-        this.toolbar.updateFieldDefinitions(this.getFieldDefinitions());
+        this.toolbar.updateFieldDefinitions(definitions);
+        this.toolbar.endUpdate();
         this.tagsDirty = false;
     }
 

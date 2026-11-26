@@ -1,5 +1,6 @@
 import { AnimeItem, MangaItem } from '../../types';
 import { stepProgress } from '../../utils/progress';
+import { resizeEpisodeSelection } from '../../services/media/episodeTracking';
 
 export interface ProgressMutation<T> {
     updates: Partial<T>;
@@ -18,6 +19,7 @@ export function incrementAnimeEpisode(item: AnimeItem): ProgressMutation<AnimeIt
     item.episodeCurrent = nextEpisode;
     if (activePart) {
         activePart.episodeCurrent = nextEpisode;
+        resizeEpisodeSelection(activePart, nextEpisode);
         if (total && nextEpisode >= total) {
             activePart.status = 'completed';
         } else if (activePart.status === 'planned') {
@@ -58,9 +60,9 @@ export function incrementAnimeEpisode(item: AnimeItem): ProgressMutation<AnimeIt
 export function incrementMangaChapter(item: MangaItem): ProgressMutation<MangaItem> {
     const parts = item.parts?.length ? item.parts.map((part) => ({ ...part })) : [];
     const activePart = parts.find((part) => part.id === item.activePartId) ?? parts[0] ?? null;
-    const current = normalizeCount(activePart?.chapterCurrent ?? item.chapterCurrent) ?? 0;
+    const current = normalizeChapterPosition(activePart?.chapterCurrent ?? item.chapterCurrent) ?? 0;
     const total = normalizeCount(activePart?.chapterTotal ?? item.chapterTotal);
-    const nextChapter = stepProgress(current, 1, total) ?? 0;
+    const nextChapter = stepChapterPosition(current,1,total);
     const updates: Partial<MangaItem> = { chapterCurrent: nextChapter };
     const changedFields = new Set<string>(['chapterCurrent']);
 
@@ -105,3 +107,4 @@ export function incrementMangaChapter(item: MangaItem): ProgressMutation<MangaIt
 function normalizeCount(value: number | null | undefined): number | null {
     return Number.isFinite(value) ? Math.max(0, Math.trunc(value as number)) : null;
 }
+import { normalizeChapterPosition, stepChapterPosition } from '../../utils/mangaChapters';
