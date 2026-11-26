@@ -1,0 +1,51 @@
+.lorebase-part-episodes { margin-top:18px; padding-top:16px; border-top:1px solid var(--background-modifier-border); }
+.lorebase-part-episodes:empty { display:none; }
+.lorebase-episodes-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.lorebase-episodes-mode,.lorebase-episodes-views { display:inline-flex; align-items:center; gap:3px; padding:3px; border-radius:9px; background:var(--background-secondary); }
+.lorebase-editmode-root .lorebase-part-episodes button { display:inline-flex; align-items:center; justify-content:center; gap:7px; height:auto; min-height:30px; padding:5px 10px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text-muted); box-shadow:none; font-size:12px; cursor:pointer; }
+.lorebase-editmode-root .lorebase-episodes-mode button[aria-pressed="true"],.lorebase-editmode-root .lorebase-episodes-views button[aria-pressed="true"] { background:var(--background-modifier-hover); color:var(--text-normal); box-shadow:0 1px 4px #0002; }
+.lorebase-editmode-root .lorebase-part-episodes button:hover:not(:disabled) { background:var(--background-modifier-hover); color:var(--text-normal); }
+.lorebase-editmode-root .lorebase-part-episodes button:focus-visible { outline:2px solid var(--lorebase-accent); outline-offset:3px; }
+.lorebase-editmode-root .lorebase-part-episodes button:disabled { opacity:.4; cursor:default; }
+.lorebase-episodes-toolbar { display:flex; align-items:center; gap:8px; margin-left:auto; }
+.lorebase-editmode-root .lorebase-episodes-views button { width:30px; min-height:28px; padding:5px; }
+.lorebase-editmode-root button.lorebase-episodes-load { padding:5px 8px; font-size:11px; }
+.lorebase-editmode-root button.lorebase-episodes-load .lorebase-episodes-icon { color:var(--lorebase-accent); }
+.lorebase-episodes-load.is-loading .lorebase-episodes-icon,
+.lorebase-editmode-series-parts [data-action="refresh-parts"][aria-busy="true"] svg { animation:lorebase-episode-spin 1.2s linear infinite; }
+@keyframes lorebase-episode-spin { to { transform:rotate(360deg); } }
+.lorebase-episodes-meta { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:14px 0 12px; font-size:11px; color:var(--text-muted); }
+.lorebase-episodes-count { color:var(--text-normal); font-variant-numeric:tabular-nums; }
+.lorebase-episodes-help { color:var(--text-faint); }
+.lorebase-episodes-hint { margin:10px 0; color:var(--text-muted); font-size:11px; line-height:1.5; }
+.lorebase-episodes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(44px,1fr)); gap:8px; margin:12px 0 4px; }
+.lorebase-editmode-root .lorebase-episodes-grid .lorebase-episode-entry { position:relative; width:100%; min-width:0; height:44px; padding:0; border:1px solid color-mix(in srgb,var(--background-modifier-border) 70%,transparent); border-radius:10px; background:color-mix(in srgb,var(--background-secondary) 45%,transparent); color:var(--text-muted); font-variant-numeric:tabular-nums; transition:background .15s,border-color .15s,color .15s; }
+.lorebase-editmode-root .lorebase-episodes-grid .lorebase-episode-entry.is-next { border-color:color-mix(in srgb,var(--lorebase-accent) 40%,var(--background-modifier-border)); color:var(--text-normal); }
+.lorebase-editmode-root .lorebase-episodes-grid .lorebase-episode-entry[aria-pressed="true"] { background:color-mix(in srgb,var(--lorebase-accent) 16%,var(--background-secondary)); color:var(--lorebase-accent); border-color:color-mix(in srgb,var(--lorebase-accent) 35%,transparent); font-weight:600; }
+.lorebase-episode-tile-number { font-size:12px; }
+.lorebase-episodes-icon { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; flex-shrink:0; }
+.lorebase-episodes-icon svg { display:block; width:100%; height:100%; }
+.lorebase-episodes-grid .lorebase-episodes-icon { position:absolute; right:3px; bottom:3px; width:9px; height:9px; }
+.lorebase-episodes-list { display:flex; flex-direction:column; margin:8px 0 0; }
+.lorebase-editmode-root .lorebase-episodes-list .lorebase-episode-entry { display:flex; justify-content:flex-start; gap:10px; width:100%; min-height:40px; padding:8px 10px; border-radius:6px; text-align:left; border-bottom:1px solid color-mix(in srgb,var(--background-modifier-border) 50%,transparent); }
+.lorebase-editmode-root .lorebase-episodes-list .lorebase-episode-entry[aria-pressed="true"] { background:color-mix(in srgb,var(--lorebase-accent) 5%,transparent); }
+.lorebase-episodes-list .lorebase-episodes-icon { color:var(--text-faint); }
+.lorebase-episodes-list [aria-pressed="true"] .lorebase-episodes-icon { color:var(--lorebase-accent); }
+.lorebase-episode-number { color:var(--text-faint); min-width:24px; font-size:11px; font-variant-numeric:tabular-nums; }
+.lorebase-episode-title { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-normal); font-size:12px; }
+.lorebase-episode-date { flex-shrink:0; color:var(--text-muted); font-size:10px; }
+.lorebase-episodes-menu { position:relative; }
+.lorebase-editmode-root button.lorebase-episodes-menu-trigger { width:30px; padding:5px; }
+.lorebase-episodes-actions { position:absolute; z-index:20; right:0; top:calc(100% + 6px); min-width:200px; padding:5px; background:var(--background-primary); border:1px solid var(--background-modifier-border); border-radius:10px; box-shadow:0 8px 24px #0004; }
+.lorebase-episodes-actions[hidden] { display:none; }
+.lorebase-editmode-root .lorebase-episodes-actions button { display:flex; width:100%; justify-content:flex-start; padding:8px 10px; text-align:left; }
+.lorebase-episodes-paging { display:flex; align-items:center; justify-content:center; gap:12px; margin:12px 0 0; font-size:11px; color:var(--text-muted); }
+.lorebase-episodes-message { font-size:11px; line-height:1.5; color:var(--text-muted); margin:12px 0 0; }
+.lorebase-episode-row { min-width:0; }
+.lorebase-episodes-list .lorebase-episode-row { display:flex; align-items:center; gap:8px; }
+.lorebase-episodes-list .lorebase-episode-entry { flex:1; min-width:0; }
+@media(max-width:600px) { .lorebase-episode-date { display:none; } .lorebase-episodes-header { gap:8px; } .lorebase-episodes-toolbar { gap:4px; } .lorebase-episodes-help { display:none; } }
+@media(prefers-reduced-motion:reduce) {
+    .lorebase-episodes-load.is-loading .lorebase-episodes-icon,
+    .lorebase-editmode-series-parts [data-action="refresh-parts"][aria-busy="true"] svg { animation:none; }
+}
