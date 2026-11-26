@@ -236,6 +236,19 @@ describe('media enrichment merge', () => {
         expect(second.values.year).toBe(2022);
     });
 
+    it('replaces the previous generated IGDB website URL with the game page', () => {
+        const source = { provider: 'igdb' as const, id: '1877' };
+        const oldUrl = 'https://discord.gg/cyberpunkgame';
+        const url = 'https://www.igdb.com/games/cyberpunk-2077';
+        const original = synchronizeProviderMetadata({}, { url: oldUrl }, source);
+
+        expect(synchronizeProviderMetadata({ url: oldUrl }, { url }, source).patch.url).toBe(url);
+        expect(synchronizeProviderMetadata(original.values, { url }, source).patch.url).toBe(url);
+        const customUrl = 'https://example.org/my-cyberpunk-link';
+        const edited = synchronizeProviderMetadata({ ...original.values, url: customUrl }, { url }, source);
+        expect(edited.values.url).toBe(customUrl);
+    });
+
     it('uses the previous provider snapshot when changing sources so custom values survive relinking', () => {
         const oldSource = { provider: 'tmdb' as const, id: '100' };
         const first = synchronizeProviderMetadata({}, {
@@ -307,6 +320,7 @@ describe('media enrichment merge', () => {
     it('normalizes provider rating scales consistently', () => {
         expect(normalizeCommunityRating('rawg', 4.42)).toBe(88.4);
         expect(normalizeCommunityRating('anilist', 84)).toBe(84);
+        expect(normalizeCommunityRating('igdb', 9)).toBe(9);
         expect(normalizeCommunityRating('shikimori', 6.52)).toBe(65.2);
     });
 });

@@ -1,7 +1,13 @@
-import { App, TFolder, requestUrl } from 'obsidian';
+import { requestUrl } from 'obsidian';
+import { requestWithDeadline, RequestTimeoutError } from './requestDeadline';
+import { App, TFolder } from 'obsidian';
+import type { EpisodeTrackingState, UserRating } from '../../types';
+import { episodeFields } from '../media/episodeTracking';
 import type { IntegrationTemplateSettings } from '../../types';
 import { getHowLongToBeatTimes } from './providers/howlongtobeat';
 import type { JsonFetcher } from './providers/common';
+import { withAniListHeaders } from './anilistRequest';
+import { withMangaDexHeaders } from './mangadexRequest';
 import {
     clearIntegrationDiagnostics,
     recordIntegrationDiagnostic,
@@ -9,20 +15,27 @@ import {
 } from './diagnostics';
 
 type RequestMethod = 'GET' | 'POST';
-type PartLike = {
+type PartLike = EpisodeTrackingState & {
     id: string;
     kind: string;
     title: string;
+    alternativeTitles?: string[];
     seasonNumber: number | null;
     episodeCurrent: number | null;
     episodeTotal: number | null;
     status: string;
+    userRating?: UserRating;
+    poster?: string | null;
+    year?: number | null;
+    episodeDuration?: number | null;
+    releaseDate?: string | null;
 };
 
 type MangaPartLike = {
     id: string;
     kind: string;
     title: string;
+    alternativeTitles?: string[];
     volumeNumber: number | null;
     chapterCurrent: number | null;
     chapterTotal: number | null;
@@ -79,7 +92,7 @@ export async function fetchJson(
         const requestOptions: { url: string; method: RequestMethod; headers: Record<string, string>; body?: string } = {
             url,
             method,
-            headers,
+            headers: withAniListHeaders(url, headers),
         };
         if (body !== undefined) {
             requestOptions.body = body;
@@ -119,7 +132,11 @@ export async function fetchBinary(url: string): Promise<{
     headers: Record<string, string>;
     status: number;
 }> {
-    const response = await requestUrlSafely({ url, method: 'GET' });
+    const response = await requestUrlSafely({ url, method: 'GET', headers: withMangaDexHeaders(url) });
+    const contentType = Object.entries(response.headers ?? {}).find(([key]) => key.toLowerCase() === 'content-type')?.[1];
+    if (new URL(url).hostname === 'uploads.mangadex.org' && contentType && !/^image\//i.test(contentType)) {
+        throw new Error('MangaDex did not return an image.');
+    }
     return {
         arrayBuffer: response.arrayBuffer,
         headers: response.headers,
@@ -162,7 +179,7 @@ export async function fetchHowLongToBeatValues(
     perfectionist: number | '';
 } | null> {
     try {
-        return await getHowLongToBeatTimes(fetcher, name, year);
+        return await getHowLongToBeatTimes(fetcher, name, year, fetchText);
     } catch (error) {
         console.warn(`${logPrefix} howlongtobeat failed`, error);
         return null;
@@ -173,12 +190,19 @@ export function renderPartsYaml(parts: PartLike[]): string {
     if (!parts.length) return '  []';
     return parts.map((part) => [
         `  - id: "${escapeYaml(part.id)}"`,
-        `    kind: "${part.kind}"`,
+        `    kind: "${escapeYaml(part.kind)}"`,
         `    title: "${escapeYaml(part.title)}"`,
+        ...(part.alternativeTitles?.length ? [`    alt_titles: ${JSON.stringify(part.alternativeTitles)}`] : []),
         `    season: ${part.seasonNumber ?? 'null'}`,
         `    episode_current: ${part.episodeCurrent ?? 0}`,
         `    episode_total: ${part.episodeTotal ?? 'null'}`,
-        `    status: "${part.status}"`,
+        `    status: "${escapeYaml(part.status)}"`,
+        ...(part.userRating != null ? [`    user_rating: ${part.userRating}`] : []),
+        ...(part.poster !== undefined ? [`    poster: "${escapeYaml(part.poster)}"`] : []),
+        ...(part.year !== undefined ? [`    year: ${part.year ?? 'null'}`] : []),
+        ...(part.releaseDate ? [`    released: ${JSON.stringify(part.releaseDate)}`] : []),
+        ...(part.episodeDuration !== undefined ? [`    episode_duration: ${part.episodeDuration ?? 'null'}`] : []),
+        ...Object.entries(episodeFields(part)).map(([key, value]) => `    ${key}: ${JSON.stringify(value)}`),
     ].join('\n')).join('\n');
 }
 
@@ -186,12 +210,13 @@ export function renderMangaPartsYaml(parts: MangaPartLike[]): string {
     if (!parts.length) return '  []';
     return parts.map((part) => [
         `  - id: "${escapeYaml(part.id)}"`,
-        `    kind: "${part.kind}"`,
+        `    kind: "${escapeYaml(part.kind)}"`,
         `    title: "${escapeYaml(part.title)}"`,
+        ...(part.alternativeTitles?.length ? [`    alt_titles: ${JSON.stringify(part.alternativeTitles)}`] : []),
         `    volume: ${part.volumeNumber ?? 'null'}`,
         `    chapter_current: ${part.chapterCurrent ?? 0}`,
         `    chapter_total: ${part.chapterTotal ?? 'null'}`,
-        `    status: "${part.status}"`,
+        `    status: "${escapeYaml(part.status)}"`,
     ].join('\n')).join('\n');
 }
 
@@ -208,7 +233,7 @@ export async function imageUrlExists(url: string): Promise<boolean> {
 
 function escapeYaml(value: unknown): string {
     if (value === null || value === undefined) return '';
-    return String(value).replace(/"/g, '\\"');
+    return JSON.stringify(String(value)).slice(1, -1);
 }
 
 export function isRateLimitError(error: unknown): boolean {
@@ -275,7 +300,7 @@ async function requestUrlSafely(options: RequestUrlOptions): Promise<RequestUrlR
         while (true) {
             const attemptStartedAt = Date.now();
             try {
-                const response = await requestUrl(options);
+                const response = await requestWithDeadline(() => requestUrl(options));
                 state.nextAllowedAt = Date.now() + getRequestIntervalMs(origin);
                 if (response.status >= 400) {
                     throw createHttpError(response.status, origin, readRetryAfterMs(response.headers));
@@ -296,7 +321,9 @@ async function requestUrlSafely(options: RequestUrlOptions): Promise<RequestUrlR
                 state.nextAllowedAt = Date.now() + getRequestIntervalMs(origin);
                 const normalized = normalizeRequestError(error, origin);
                 registerProviderBlock(state, normalized);
-                const willRetry = shouldRetryTransient(normalized.status, retryCount, origin);
+                const cancelled = error instanceof Error && error.name === 'AbortError';
+                const willRetry = !(error instanceof RequestTimeoutError) && !cancelled
+                    && shouldRetryTransient(normalized.status, retryCount, origin);
                 const isExpectedProbeMiss = method === 'HEAD' && normalized.status === 404;
                 if (!isExpectedProbeMiss) {
                     recordIntegrationDiagnostic({
@@ -361,6 +388,7 @@ function throwIfCircuitOpen(origin: string, state: RequestState): void {
 
 function registerProviderBlock(state: RequestState, error: IntegrationRequestError): void {
     if (error.status !== 403 && error.status !== 429) return;
+    if (error.status === 403 && safeHostname(error.origin) === 'api.hardcover.app') return;
     const fallback = error.status === 403 ? DEFAULT_FORBIDDEN_BLOCK_MS : DEFAULT_RATE_LIMIT_BLOCK_MS;
     const blockMs = Math.min(MAX_RETRY_AFTER_MS, Math.max(error.retryAfterMs, fallback));
     state.blockedUntil = Math.max(state.blockedUntil, Date.now() + blockMs);
@@ -384,6 +412,14 @@ function createHttpError(status: number, origin: string, retryAfterMs = 0): Inte
     const provider = getProviderLabel(origin);
     const waitText = retryAfterMs > 0 ? ` Try again in ${formatWaitTime(retryAfterMs)}.` : '';
     if (status === 403) {
+        if (safeHostname(origin) === 'api.hardcover.app') {
+            return new IntegrationRequestError(
+                'Hardcover rejected the API token (HTTP 403). Create or update the token with read:catalog or read:catalog:search permission in Hardcover settings.',
+                status,
+                origin,
+                retryAfterMs
+            );
+        }
         return new IntegrationRequestError(
             `${provider} temporarily denied requests (HTTP 403). Automatic requests were paused to prevent a longer block.${waitText || ' Try again in about 15 minutes.'}`,
             status,
@@ -435,10 +471,13 @@ function getRequestIntervalMs(origin: string): number {
     if (hostname === 'store.steampowered.com') return 750;
     if (hostname.endsWith('steamcommunity.com')) return 750;
     if (hostname.endsWith('steampowered.com')) return 350;
+    if (hostname === 'api.vndb.org') return 1_600;
     if (hostname === 'api.mangaupdates.com') return 1_000;
+    if (hostname === 'comicvine.gamespot.com') return 1_000;
     if (hostname === 'graphql.anilist.co') return 350;
-    if (hostname === 'api.jikan.moe') return 350;
+    if (hostname === 'kitsu.io' || hostname === 'kitsu.app') return 250;
     if (hostname.endsWith('mangadex.org')) return 250;
+    if (hostname === 'openlibrary.org') return 1100;
     if (hostname.endsWith('googleapis.com')) return 250;
     return DEFAULT_REQUEST_INTERVAL_MS;
 }
@@ -465,15 +504,17 @@ function getProviderLabel(origin: string): string {
     if (hostname.includes('rawg')) return 'RAWG';
     if (hostname.includes('igdb') || hostname.includes('twitch')) return 'IGDB';
     if (hostname.includes('anilist')) return 'AniList';
-    if (hostname.includes('jikan')) return 'Jikan';
+    if (hostname.includes('kitsu')) return 'Kitsu';
     if (hostname.includes('shikimori')) return 'Shikimori';
     if (hostname.includes('themoviedb')) return 'TMDB';
     if (hostname.includes('tvmaze')) return 'TVmaze';
     if (hostname.includes('omdbapi')) return 'OMDb';
     if (hostname.includes('hardcover')) return 'Hardcover';
+    if (hostname === 'openlibrary.org') return 'Open Library';
     if (hostname.includes('googleapis')) return 'Google Books';
     if (hostname.includes('mangaupdates')) return 'MangaUpdates';
     if (hostname.includes('mangadex')) return 'MangaDex';
+    if (hostname === 'comicvine.gamespot.com') return 'Comic Vine';
     return 'Provider';
 }
 

@@ -1,15 +1,42 @@
+import type { AlternativeTitle } from './alternativeTitles';
+import type { EpisodeTrackingState } from '../../types';
 import type { SearchItem } from '../../modals/IntegrationModals';
-import type { AnimeFormat, AnimeStatus, ReadingStatus, VideoStatus } from '../../types';
+import type { AnimeFormat, AnimeStatus, IntegrationTemplateSettings, ReadingStatus, UserRating, VideoStatus } from '../../types';
 
-export type ProviderId = 'rawg' | 'steam' | 'igdb' | 'anilist' | 'jikan' | 'shikimori' | 'tmdb' | 'tvmaze' | 'omdb' | 'hardcover' | 'googlebooks' | 'mangaupdates' | 'mangadex';
+export type ProviderId = IntegrationTemplateSettings['provider'];
 export type MediaKind = 'games' | 'anime' | 'movies' | 'series' | 'books' | 'manga';
+export type TemplateKind = MediaKind | 'music';
 
 export interface SearchResult extends SearchItem {
+    malId?: string;
+    tmdbLanguage?: string;
     id: string;
     provider: ProviderId;
     image?: string;
     year?: string;
     format?: string;
+}
+
+export type GalleryImageKind = 'images' | 'backdrops' | 'posters';
+
+export interface SourceImage {
+    url: string;
+    thumbnail: string;
+    kind?: GalleryImageKind;
+}
+
+export interface SourceTrailer {
+    title: string;
+    url: string;
+    thumbnail?: string;
+    playback: { kind: 'embed' | 'file' | 'hls'; url: string };
+}
+
+export interface SourceGallery {
+    source: string;
+    imageTabs: readonly GalleryImageKind[];
+    loadImages: (onProgress?: (images: SourceImage[]) => void) => Promise<SourceImage[]>;
+    loadTrailers?: () => Promise<SourceTrailer[]>;
 }
 
 export interface MediaSourceSelection extends SearchResult {
@@ -25,6 +52,8 @@ export interface MediaEnrichmentPatch {
 }
 
 export interface GameDetails {
+    countries?: string[];
+    workType?: string;
     kind: 'game';
     name: string;
     description: string;
@@ -44,7 +73,12 @@ export interface GameDetails {
 }
 
 export interface AnimeDetails {
+    countries?: string[];
+    genres?: string[];
+    countryOfOrigin?: string;
+    isAdult?: boolean;
     kind: 'anime';
+    alternativeTitles?: AlternativeTitle[];
     name: string;
     description: string;
     image: string;
@@ -52,6 +86,7 @@ export interface AnimeDetails {
     tags: string[];
     studios: string[];
     year: string;
+    released?: string;
     imdbRating: string;
     url: string;
     format?: string;
@@ -61,6 +96,8 @@ export interface AnimeDetails {
 }
 
 export interface VideoDetails {
+    countries?: string[];
+    workType?: string;
     kind: 'video';
     name: string;
     description: string;
@@ -84,7 +121,16 @@ export interface VideoDetails {
     communityVotes?: string;
 }
 
+export interface PreparedVideoImport {
+    source: SearchResult;
+    details: VideoDetails;
+    title: string;
+    content: string;
+    metadata: Record<string, unknown>;
+}
+
 export interface BookDetails {
+    countries?: string[];
     kind: 'book';
     name: string;
     description: string;
@@ -103,7 +149,11 @@ export interface BookDetails {
 }
 
 export interface MangaDetails {
+    countries?: string[];
     kind: 'manga';
+    publicationStatus?: string;
+    alternativeTitles?: AlternativeTitle[];
+    workType?: string;
     name: string;
     description: string;
     poster: string;
@@ -113,6 +163,7 @@ export interface MangaDetails {
     genres: string[];
     isAdult?: boolean;
     year: string;
+    released?: string;
     chapters?: string;
     volumes?: string;
     rating?: string;
@@ -122,30 +173,43 @@ export interface MangaDetails {
     communityVotes?: string;
 }
 
-export interface IntegrationAnimePart {
+export interface IntegrationAnimePart extends EpisodeTrackingState {
     id: string;
     kind: AnimeFormat;
     title: string;
+    alternativeTitles?: string[];
     seasonNumber: number | null;
     episodeCurrent: number | null;
     episodeTotal: number | null;
     status: AnimeStatus;
+    userRating?: UserRating;
+    poster?: string | null;
+    year?: number | null;
+    episodeDuration?: number | null;
+    releaseDate?: string | null;
 }
 
-export interface IntegrationVideoPart {
+export interface IntegrationVideoPart extends EpisodeTrackingState {
     id: string;
     kind: 'movie' | 'season';
     title: string;
+    alternativeTitles?: string[];
     seasonNumber: number | null;
     episodeCurrent: number | null;
     episodeTotal: number | null;
     status: VideoStatus;
+    userRating?: UserRating;
+    poster?: string | null;
+    year?: number | null;
+    episodeDuration?: number | null;
+    releaseDate?: string | null;
 }
 
 export interface IntegrationMangaPart {
     id: string;
     kind: 'volume';
     title: string;
+    alternativeTitles?: string[];
     volumeNumber: number | null;
     chapterCurrent: number | null;
     chapterTotal: number | null;

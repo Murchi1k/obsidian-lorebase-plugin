@@ -1,8 +1,12 @@
+import { normalizeCountryMetadata } from '../../media/statisticsCountries';
+import { normalizeEpisodeDetails } from '../../media/episodeTracking';
+import type { EpisodeInfo } from '../../../types';
+import { inferVideoWorkType } from '../workTypeInference';
 import { SearchResult, VideoDetails, IntegrationVideoPart } from '../types';
 import type { JsonFetcher } from './common';
 
 interface OmdbOptions {
-    kind: 'movies' | 'series';
+    kind: 'movies' | 'series' | 'mixed';
     page?: number;
     pageSize?: number;
 }
@@ -29,25 +33,29 @@ export async function searchOmdb(
 ): Promise<SearchResult[]> {
     if (!query.trim() || !apiKey.trim()) return [];
     const page = Math.max(1, options.page ?? 1);
-    const type = options.kind === 'series' ? 'series' : 'movie';
-    const payload = await fetchJson(`https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey)}&s=${encodeURIComponent(query)}&type=${type}&page=${page}`);
+    const type = options.kind === 'mixed' ? '' : options.kind === 'series' ? '&type=series' : '&type=movie';
+    const payload = await fetchJson(`https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey)}&s=${encodeURIComponent(query)}${type}&page=${page}`);
     if (!payload || typeof payload !== 'object') return [];
     const search = (payload as Record<string, unknown>).Search;
     if (!Array.isArray(search)) return [];
-    return search
-        .slice(0, options.pageSize ?? 10)
-        .map((entry) => {
+    const items = search
+        .flatMap((entry): SearchResult[] => {
             const item = entry as Record<string, unknown>;
-            return {
+            if (options.kind === 'mixed' && item.Type !== 'series' && item.Type !== 'movie') return [];
+            const isSeries = options.kind === 'series' || options.kind === 'mixed' && item.Type === 'series';
+            return [{
                 id: String(item.imdbID ?? ''),
                 title: String(item.Title ?? ''),
                 provider: 'omdb' as const,
                 image: cleanPoster(item.Poster),
                 year: clean(item.Year),
-                format: clean(item.Type),
-            };
+                workType: inferVideoWorkType(isSeries ? 'series' : 'movies', item),
+                workTypeMedia: isSeries ? 'series' as const : 'movie' as const,
+            }];
         })
         .filter((item) => item.id && item.title);
+    if (options.kind === 'mixed') return Object.assign(items, { hasNext: page < Math.min(100, Math.ceil(Number((payload as Record<string, unknown>).totalResults) / 10)) });
+    return items.slice(0, options.pageSize ?? 10);
 }
 
 export async function getOmdbDetails(
@@ -68,6 +76,8 @@ export async function getOmdbDetails(
 
     return {
         kind: 'video',
+        countries: normalizeCountryMetadata(item.Country),
+        workType: inferVideoWorkType(kind, item),
         name: clean(item.Title) || 'Untitled',
         description: clean(item.Plot),
         poster: cleanPoster(item.Poster),
@@ -89,6 +99,18 @@ export async function getOmdbDetails(
     };
 }
 
+/** Exact IMDb lookup without loading seasons or treating a series as a movie. */
+export async function lookupOmdbRecord(fetchJson: JsonFetcher, id: string, apiKey: string): Promise<SearchResult | null> {
+    if (!/^tt\d{5,12}$/i.test(id) || !apiKey.trim()) return null;
+    const payload = await fetchJson(`https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey)}&i=${encodeURIComponent(id)}&plot=short`);
+    if (!payload || typeof payload !== 'object') return null;
+    const item = payload as Record<string, unknown>;
+    if (item.Response === 'False' || clean(item.imdbID).toLowerCase() !== id.toLowerCase() || !clean(item.Title) || !['movie', 'series'].includes(clean(item.Type))) return null;
+    const kind = item.Type === 'series' ? 'series' : 'movies';
+    return { id: clean(item.imdbID), provider: 'omdb', title: clean(item.Title), image: cleanPoster(item.Poster), year: clean(item.Year).slice(0, 4),
+        workType: inferVideoWorkType(kind, item), workTypeMedia: kind === 'series' ? 'series' : 'movie' };
+}
+
 async function getOmdbSeasons(
     fetchJson: JsonFetcher,
     id: string,
@@ -102,10 +124,7 @@ async function getOmdbSeasons(
     for (let index = 0; index < seasons.length; index += concurrency) {
         const batch = seasons.slice(index, index + concurrency);
         parts.push(...await Promise.all(batch.map(async (season): Promise<IntegrationVideoPart> => {
-            const payload = await fetchJson(`https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey)}&i=${encodeURIComponent(id)}&Season=${season}`);
-            const episodes = payload && typeof payload === 'object' && Array.isArray((payload as Record<string, unknown>).Episodes)
-                ? (payload as Record<string, unknown>).Episodes as unknown[]
-                : [];
+            const episodes = await requestOmdbSeason(fetchJson, id, apiKey, season);
             return {
                 id: `season-${season}`,
                 kind: 'season',
@@ -119,4 +138,19 @@ async function getOmdbSeasons(
     }
 
     return parts;
+}
+
+async function requestOmdbSeason(fetchJson: JsonFetcher, id: string, apiKey: string, season: number): Promise<unknown[]> {
+    const payload = await fetchJson(`https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey)}&i=${encodeURIComponent(id)}&Season=${season}`);
+    const episodes = payload && typeof payload === 'object' ? (payload as Record<string, unknown>).Episodes : null;
+    return Array.isArray(episodes) ? episodes : [];
+}
+
+export async function getOmdbSeasonEpisodes(fetchJson: JsonFetcher, id: string, apiKey: string, season: number): Promise<EpisodeInfo[]> {
+    const episodes = await requestOmdbSeason(fetchJson, id, apiKey, season);
+    return normalizeEpisodeDetails(episodes.flatMap(value => {
+        if (!value || typeof value !== 'object') return [];
+        const row = value as Record<string, unknown>;
+        return [{ number: row.Episode, title: clean(row.Title), airDate: clean(row.Released) }];
+    }));
 }

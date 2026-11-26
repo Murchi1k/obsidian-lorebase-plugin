@@ -28,7 +28,7 @@ describe('OMDb provider', () => {
             provider: 'omdb',
             image: '',
             year: '2011–2019',
-            format: 'series',
+            workType: undefined, workTypeMedia: 'series',
         }]);
     });
 
@@ -49,6 +49,7 @@ describe('OMDb provider', () => {
                 Runtime: '57 min',
                 Director: 'N/A',
                 Actors: 'Emilia Clarke, Peter Dinklage',
+                Country: 'United States, United Kingdom',
                 imdbRating: '9.2',
                 imdbVotes: '2,345,678',
                 totalSeasons: '2',
@@ -63,6 +64,7 @@ describe('OMDb provider', () => {
             genres: ['Action', 'Adventure', 'Drama'],
             director: '',
             actors: 'Emilia Clarke, Peter Dinklage',
+            countries: ['US', 'GB'],
             communityRating: '9.2',
             communityVotes: '2345678',
             seasons: '2',

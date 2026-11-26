@@ -3,6 +3,17 @@ import { getIgdbDetails, getIgdbDlcForGame, searchIgdb } from '../src/services/i
 import type { JsonFetcher } from '../src/services/integrations/providers/common';
 
 describe('IGDB provider', () => {
+    it('includes editions for PSN matching while normal searches keep the main-game filter', async () => {
+        const queries: string[] = [];
+        const fetchJson: JsonFetcher = async (url, _headers, _method, body) => {
+            if (url.includes('oauth2/token')) return { access_token: 'token' };
+            queries.push(body || ''); return [];
+        };
+        await searchIgdb(fetchJson, 'Far Cry 3 Classic Edition', 'client', 'secret', { includeVersions: true });
+        await searchIgdb(fetchJson, 'Far Cry 3 Classic Edition', 'client', 'secret');
+        expect(queries[0]).not.toContain('version_parent = null');
+        expect(queries[1]).toContain('version_parent = null');
+    });
     it('authenticates with Twitch and maps paged search results', async () => {
         const calls: Array<{ url: string; headers?: Record<string, string>; method?: string; body?: string }> = [];
         const fetchJson: JsonFetcher = async (url, headers, method, body) => {
@@ -40,11 +51,13 @@ describe('IGDB provider', () => {
     });
 
     it('maps details, companies, ratings, and image variants', async () => {
-        const fetchJson: JsonFetcher = async (url) => {
+        const fetchJson: JsonFetcher = async (url, _headers, _method, body) => {
             if (url.includes('oauth2/token')) return { access_token: 'token' };
+            expect(body).toContain('company.name,url,slug;');
             return [{
                 id: 1,
                 name: 'Portal',
+                url: 'https://www.igdb.com/games/portal',
                 summary: '<b>Puzzle</b> game.',
                 first_release_date: 1193356800,
                 total_rating: 90.5,
@@ -58,7 +71,7 @@ describe('IGDB provider', () => {
                     { developer: true, company: { name: 'Valve' } },
                     { publisher: true, company: { name: 'Electronic Arts' } },
                 ],
-                websites: [{ url: 'https://example.com/portal' }],
+                websites: [{ url: 'https://discord.gg/portal' }],
             }];
         };
 
@@ -78,7 +91,7 @@ describe('IGDB provider', () => {
             communityVotes: '12345',
             metacritic: '88',
             released: '2007-10-26',
-            url: 'https://example.com/portal',
+            url: 'https://www.igdb.com/games/portal',
         });
     });
 
@@ -87,7 +100,7 @@ describe('IGDB provider', () => {
             if (url.includes('oauth2/token')) return { access_token: 'token' };
             return [{
                 dlcs: [
-                    { id: 10, name: 'Episode One', cover: { image_id: 'ep1' } },
+                    { id: 10, name: 'Episode One', slug: 'episode-one', cover: { image_id: 'ep1' } },
                 ],
                 expansions: [
                     { id: 10, name: 'Duplicate Episode One' },
@@ -99,7 +112,7 @@ describe('IGDB provider', () => {
         const dlc = await getIgdbDlcForGame(fetchJson, '1', 'client', 'secret');
 
         expect(dlc).toHaveLength(2);
-        expect(dlc[0]).toMatchObject({ id: '10', provider: 'igdb', title: 'Episode One' });
-        expect(dlc[1]).toMatchObject({ id: '11', url: 'https://example.com/ep2' });
+        expect(dlc[0]).toMatchObject({ id: '10', provider: 'igdb', title: 'Episode One', url: 'https://www.igdb.com/games/episode-one' });
+        expect(dlc[1]).toMatchObject({ id: '11', url: null });
     });
 });

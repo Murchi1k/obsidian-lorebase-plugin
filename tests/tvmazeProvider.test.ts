@@ -3,6 +3,20 @@ import { getTvmazeDetails, searchTvmaze } from '../src/services/integrations/pro
 import type { JsonFetcher } from '../src/services/integrations/providers/common';
 
 describe('TVmaze provider', () => {
+    it('imports directors from crew rather than leaving the field empty', async () => {
+        const details = await getTvmazeDetails(async url => {
+            expect(url).toContain('embed[]=crew');
+            return { name: 'Show', type: 'Scripted', _embedded: { crew: [
+                { type: 'Director', person: { name: 'A' } }, { type: 'Director', person: { name: 'A' } }, { type: 'Writer', person: { name: 'B' } },
+            ] } };
+        }, '1', '', 'series');
+        expect(details?.director).toBe('A');
+    });
+    it('imports the original network country and leaves absent country metadata unknown', async () => {
+        const details = { id: 1, name: 'Example', type: 'Scripted', genres: [], _embedded: { seasons: [], cast: [] } };
+        expect(await getTvmazeDetails(async () => ({ ...details, network: { country: { code: 'GB', name: 'United Kingdom' } } }), '1', '', 'series')).toMatchObject({ countries: ['GB'] });
+        expect(await getTvmazeDetails(async () => details, '1', '', 'series')).toMatchObject({ countries: [] });
+    });
     it('does not return scripted shows when searching movies', async () => {
         const fetchJson: JsonFetcher = async () => [
             {
@@ -31,7 +45,7 @@ describe('TVmaze provider', () => {
         expect(results[0]).toMatchObject({
             id: '2',
             title: 'Movie Result',
-            format: 'Movie / TVmaze',
+            workType: 'Movie', workTypeMedia: 'movie',
         });
     });
 
@@ -54,7 +68,7 @@ describe('TVmaze provider', () => {
         expect(results[0]).toMatchObject({
             id: '1',
             title: 'The Boys',
-            format: 'Scripted',
+            workType: 'Series', workTypeMedia: 'series',
         });
     });
 

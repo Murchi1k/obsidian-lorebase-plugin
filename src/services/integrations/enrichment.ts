@@ -1,3 +1,5 @@
+import { normalizePartCatalog } from '../media/partCatalog';
+import { episodeFields } from '../media/episodeTracking';
 import type {
     IntegrationAnimePart,
     IntegrationMangaPart,
@@ -41,6 +43,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
     platforms: ['platforms', 'platform', 'Platform'],
     studios: ['studios', 'studio'],
     networks: ['networks', 'network'],
+    countries: ['countries', 'production_countries', 'origin_country', 'country'],
     year: ['year', 'Year'],
     released: ['released', 'releaseDate', 'release_date', 'date'],
     url: ['url', 'source_url', 'source', 'link'],
@@ -49,6 +52,9 @@ const FIELD_ALIASES: Record<string, string[]> = {
     publisher: ['publisher', 'publishers'],
     authors: ['authors', 'author'],
     artists: ['artists', 'artist'],
+    work_type: ['work_type', 'workType', 'manga_type'],
+    country_of_origin: ['country_of_origin', 'countryOfOrigin'],
+    Sex18: ['Sex18', 'isAdult'],
     director: ['director', 'directors'],
     actors: ['actors', 'cast'],
     episode_total: ['episode_total', 'episodeTotal'],
@@ -71,15 +77,15 @@ const ZERO_IS_EMPTY = new Set([
     'runtime',
 ]);
 
-const IDENTITY_FIELDS = new Set(['integration_provider', 'integration_id']);
+const IDENTITY_FIELDS = new Set(['integration_provider', 'integration_id', 'integration_source_kind']);
 
 export function normalizeCommunityRating(provider: ProviderId, value: unknown): number | null {
     const raw = toFiniteNumber(value);
     if (raw === null) return null;
     let percent = raw;
-    if (provider === 'rawg' || provider === 'googlebooks' || provider === 'hardcover') {
+    if (provider === 'rawg' || provider === 'googlebooks' || provider === 'hardcover' || provider === 'openlibrary') {
         percent = raw <= 5 ? raw * 20 : raw;
-    } else if (provider !== 'steam') {
+    } else if (provider !== 'steam' && provider !== 'igdb') {
         percent = raw <= 10 ? raw * 10 : raw;
     }
     return Math.max(0, Math.min(100, Math.round(percent * 10) / 10));
@@ -97,12 +103,14 @@ export function mergeProviderMetadata(
     const filledFields: string[] = [];
     const skippedFields: string[] = [];
 
-    for (const [key, value] of Object.entries(incoming)) {
+    for (const [key, originalValue] of Object.entries(incoming)) {
+        let value = originalValue;
+        if (key === 'discovery_context' || key === 'part_catalog' || key === 'status_reasons' || key === 'extra_chapters') continue;
         if (!IDENTITY_FIELDS.has(key) && denied.has(key)) {
             skippedFields.push(key);
             continue;
         }
-        if (isEmptyIncoming(value)) continue;
+        if (isEmptyIncoming(value) || isMissingCredit(key, value)) continue;
 
         if (IDENTITY_FIELDS.has(key)) {
             values[key] = value;
@@ -114,9 +122,32 @@ export function mergeProviderMetadata(
         const existingKey = findExistingAlias(current, key);
         const existing = existingKey ? current[existingKey] : undefined;
         if (isPartField(key) && Array.isArray(value)) {
+            let providerParts = value;
+            const catalog = normalizePartCatalog(current.part_catalog);
+            const source = catalog?.source.split(':');
+            const sameSource = source && (!incoming.integration_provider || incoming.integration_provider === source[0]) && (!incoming.integration_id || String(incoming.integration_id) === source[1]) && (!incoming.integration_source_kind || incoming.integration_source_kind === source[2]);
+            if (sameSource && (key === 'anime_parts' || key === 'series_parts')) {
+                const saved = Array.isArray(existing) ? existing.filter(row => row && typeof row === 'object') as Record<string, unknown>[] : [];
+                providerParts = providerParts.filter(row => {
+                    const part = row && typeof row === 'object' ? row as Record<string, unknown> : {};
+                    const included = saved.some(local => local.id === part.id || key === 'series_parts' && (local.season ?? local.seasonNumber) != null && (local.season ?? local.seasonNumber) === (part.season ?? part.seasonNumber));
+                    return included || current.status !== 'completed' && !Object.prototype.hasOwnProperty.call(catalog!.parts, String(part.id));
+                });
+                if (current.status === 'completed') providerParts = providerParts.map(row => {
+                    if (!row || typeof row !== 'object') return row;
+                    const part = row as Record<string, unknown>;
+                    const local = saved.find(local => local.id === part.id || key === 'series_parts' && (local.season ?? local.seasonNumber) != null && (local.season ?? local.seasonNumber) === (part.season ?? part.seasonNumber));
+                    const previousTotal = Number(local?.episode_total ?? local?.episodeTotal);
+                    const nextTotal = Number(part.episode_total ?? part.episodeTotal);
+                    if (!(previousTotal > 0 && nextTotal > previousTotal)) return row;
+                    return { ...part, ...('episode_total' in part ? { episode_total: previousTotal } : {}), ...('episodeTotal' in part ? { episodeTotal: previousTotal } : {}) };
+                });
+
+            }
+
             const merged = mergeStructuredList(
                 existing,
-                value,
+                providerParts,
                 key,
                 options.overwriteProviderFields === true,
                 options.previousSourceSnapshot?.lists[key],
@@ -204,10 +235,17 @@ export function toVideoPartsFrontmatter(parts: IntegrationVideoPart[] | undefine
         id: part.id,
         kind: part.kind,
         title: part.title,
+        ...(part.alternativeTitles?.length ? { alt_titles: part.alternativeTitles } : {}),
         season: part.seasonNumber,
         episode_current: part.episodeCurrent,
         episode_total: part.episodeTotal,
         status: part.status,
+        poster: part.poster ?? null,
+        year: part.year ?? null,
+        episode_duration: part.episodeDuration ?? null,
+        ...(part.releaseDate ? { released: part.releaseDate } : {}),
+        ...(part.userRating != null ? { user_rating: part.userRating } : {}),
+        ...episodeFields(part),
     }));
 }
 
@@ -216,10 +254,16 @@ export function toAnimePartsFrontmatter(parts: IntegrationAnimePart[] | undefine
         id: part.id,
         kind: part.kind,
         title: part.title,
+        ...(part.alternativeTitles?.length ? { alt_titles: part.alternativeTitles } : {}),
         season: part.seasonNumber,
         episode_current: part.episodeCurrent,
         episode_total: part.episodeTotal,
         status: part.status,
+        ...(part.userRating != null ? { user_rating: part.userRating } : {}),
+        poster: part.poster ?? null,
+        year: part.year ?? null,
+        episode_duration: part.episodeDuration ?? null,
+        ...episodeFields(part),
     }));
 }
 
@@ -228,6 +272,7 @@ export function toMangaPartsFrontmatter(parts: IntegrationMangaPart[] | undefine
         id: part.id,
         kind: part.kind,
         title: part.title,
+        ...(part.alternativeTitles?.length ? { alt_titles: part.alternativeTitles } : {}),
         volume: part.volumeNumber,
         chapter_current: part.chapterCurrent,
         chapter_total: part.chapterTotal,
@@ -271,8 +316,14 @@ function isEmptyIncoming(value: unknown): boolean {
 }
 
 function isEmptyExisting(value: unknown, key: string): boolean {
-    if (isEmptyIncoming(value)) return true;
+    if (isEmptyIncoming(value) || isMissingCredit(key, value)) return true;
     return ZERO_IS_EMPTY.has(key) && typeof value === 'number' && value === 0;
+}
+
+function isMissingCredit(key: string, value: unknown): boolean {
+    if (!['director', 'directors', 'publisher', 'publishers', 'countries'].includes(key)) return false;
+    if (Array.isArray(value)) return value.length > 0 && value.every(entry => isMissingCredit(key, entry));
+    return typeof value === 'string' && /^(?:n\/?a|—|-)$/i.test(value.trim());
 }
 
 function isPartField(key: string): boolean {
@@ -407,10 +458,13 @@ function structuredFallbackKey(value: Record<string, unknown>, field: string): s
 
 function isPersonalStructuredField(key: string): boolean {
     return key === 'status'
+        || key === 'extra_chapters' || key === 'extraChapters'
+        || ['episode_ratings', 'episodeRatings', 'watched_episodes', 'watchedEpisodes', 'episode_tracking', 'episodeTracking', 'episodes', 'episodeDetails'].includes(key)
         || key.endsWith('_current')
         || key === 'episodeCurrent'
         || key === 'chapterCurrent'
         || key === 'userRating'
+        || key === 'user_rating'
         || key === 'owned';
 }
 

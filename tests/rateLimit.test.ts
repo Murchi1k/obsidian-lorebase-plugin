@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { __setRequestUrlMock } from './mocks/obsidian';
+import { searchAniList, searchAniListManga } from '../src/services/integrations/providers/anilist';
+import { ANILIST_USER_AGENT } from '../src/services/integrations/anilistRequest';
 import {
     fetchJson,
     isProviderBlockedError,
@@ -38,6 +40,36 @@ describe('integration rate-limit detection', () => {
         await expect(fetchJson('https://example.com/items')).rejects.toMatchObject({ status: 429 });
     });
 
+    it.each([searchAniList, searchAniListManga])('identifies AniList searches as API requests', async (search) => {
+        __setRequestUrlMock((options) => {
+            expect(options).toMatchObject({
+                url: 'https://graphql.anilist.co', method: 'POST',
+                headers: { 'User-Agent': ANILIST_USER_AGENT, 'Content-Type': 'application/json' },
+            });
+            return { json: { data: { Page: { media: [] } } } };
+        });
+        await expect(search(fetchJson, 'Cowboy Bebop')).resolves.toEqual([]);
+    });
+
+    it('reports HTML 403 responses without parsing them or repeating AniList requests', async () => {
+        let calls = 0;
+        __setRequestUrlMock(() => {
+            calls++;
+            return { status: 403, text: '<html>Forbidden</html>', get json(): never { throw new SyntaxError('HTML is not JSON'); } };
+        });
+        await expect(searchAniList(fetchJson, 'Cowboy Bebop')).rejects.toMatchObject({ status: 403 });
+        await expect(searchAniListManga(fetchJson, 'Berserk')).rejects.toMatchObject({ status: 403 });
+        expect(calls).toBe(1);
+    });
+
+    it('preserves headers for other providers', async () => {
+        __setRequestUrlMock((options) => {
+            expect(options).toMatchObject({ headers: { 'User-Agent': 'OtherClient', Authorization: 'Bearer test' } });
+            return { json: { ok: true } };
+        });
+        await fetchJson('https://example.com', { 'User-Agent': 'OtherClient', Authorization: 'Bearer test' });
+    });
+
     it('opens a per-provider circuit after 403 instead of repeating blocked requests', async () => {
         let calls = 0;
         __setRequestUrlMock(() => {
@@ -51,6 +83,20 @@ describe('integration rate-limit detection', () => {
         await expect(fetchJson('https://store.steampowered.com/search/results/?term=portal'))
             .rejects.toMatchObject({ status: 403 });
         expect(calls).toBe(1);
+    });
+
+    it('explains Hardcover token permissions without treating a 403 as a timed block', async () => {
+        let calls = 0;
+        __setRequestUrlMock(() => {
+            calls++;
+            return { status: 403, json: { error: 'insufficient_scope' } };
+        });
+
+        await expect(fetchJson('https://api.hardcover.app/v1/graphql'))
+            .rejects.toThrow(/read:catalog/);
+        await expect(fetchJson('https://api.hardcover.app/v1/graphql'))
+            .rejects.toThrow(/read:catalog/);
+        expect(calls).toBe(2);
     });
 
     it('classifies both 403 and 429 as provider blocks', () => {

@@ -13,14 +13,84 @@ import { getMangaDexDetails, searchMangaDex } from '../src/services/integrations
 import { getShikimoriMangaDetails, searchShikimoriManga } from '../src/services/integrations/providers/shikimori';
 
 describe('reading providers', () => {
+    it('finds Shikimori light novels beside manga with the same title and imports the correct type', async () => {
+        const novel = { id: '70261', name: 'Mushoku Tensei: Isekai Ittara Honki Dasu', russian: 'Реинкарнация безработного', kind: 'light_novel',
+            status: 'released', airedOn: { year: 2014, date: '2014-01-23' }, poster: { originalUrl: 'https://example.com/novel.jpg' } };
+        const calls: string[] = [];
+        const fetch: JsonFetcher = async (url, _headers, method, body) => {
+            calls.push(url);
+            if (url.endsWith('/api/graphql')) {
+                expect(method).toBe('POST');
+                const request = JSON.parse(body!);
+                expect(request.query).toContain('mangas(search:');
+                expect(request.variables).toEqual({ search: novel.name, limit: 2, page: 2, censored: true });
+                return { data: { mangas: [{ ...novel, id: '70259', kind: 'manga' }, novel] } };
+            }
+            if (url.endsWith('/roles')) return [];
+            return { ...novel, aired_on: novel.airedOn.date, volumes: 26 };
+        };
+        const results = await searchShikimoriManga(fetch, novel.name, { page: 2, pageSize: 2 });
+        expect(results).toHaveLength(2);
+        expect(results.map(item => item.workType)).toEqual(['Manga', 'Light novel']);
+        expect(results[1]).toMatchObject({ id: '70261', released: '2014-01-23', publicationStatus: 'released' });
+        expect((results as typeof results & { hasNext?: boolean }).hasNext).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(await getShikimoriMangaDetails(fetch, results[1].id)).toMatchObject({ workType: 'Light novel', name: novel.russian, volumes: '26' });
+    });
+    it('respects an empty combined Shikimori catalogue response without repeating the legacy search', async () => {
+        let calls = 0;
+        const results = await searchShikimoriManga(async () => { calls++; return { data: { mangas: [] } }; }, 'no match');
+        expect(results).toEqual([]);
+        expect((results as typeof results & { hasNext?: boolean }).hasNext).toBe(false);
+        expect(calls).toBe(1);
+    });
+    it.each([
+        ['ja', 'One-shot', 'One-shot'], ['ja', 'Doujinshi', 'Doujinshi'],
+        ['ko', '', 'Manhwa'], ['zh', '', 'Manhua'], ['zh-hk', '', 'Manhua'], ['ja', '', 'Manga'],
+    ])('uses MangaDex format tags and %s origin consistently in search and import', async (language, format, expected) => {
+        const item = { id: 'format-test', attributes: {
+            title: { en: 'Title' }, originalLanguage: language,
+            status: 'ongoing', tags: format ? [{ attributes: { group: 'format', name: { en: format } } }] : [],
+        }, relationships: [{ type: 'cover_art', attributes: { fileName: 'cover.jpg' } }] };
+        const fetch: JsonFetcher = async url => {
+            if (url.includes('/manga?')) {
+                expect(new URL(url).searchParams.get('order[relevance]')).toBe('desc');
+                return { data: [item], total: 1, offset: 0, limit: 10 };
+            }
+            if (url.includes('/aggregate')) return { volumes: {} };
+            return { data: item };
+        };
+        const [result] = await searchMangaDex(fetch, 'Title');
+        expect(result.workType).toBe(expected);
+        expect(result.publicationStatus).toBe('ongoing');
+        expect((await getMangaDexDetails(fetch, result.id))?.workType).toBe(expected);
+    });
     afterEach(() => {
         __setRequestUrlMock(null);
         resetMangaUpdatesCachesForTests();
     });
 
+    it('resolves the publisher without treating the edition country as the work origin', async () => {
+        const details = await getHardcoverBookDetails(async (_url, _headers, _method, body) => {
+            const query = JSON.parse(String(body)).query as string;
+            if (query.includes('query BookEdition(')) return { data: { editions: [{ title: 'Edition', pages: 200, release_date: '2020-01-01', publisher: { name: 'Edition Publisher' }, country: { code2: 'ua', name: 'Ukraine' } }] } };
+            expect(query).toContain('country { code2 name }');
+            return { data: { books_by_pk: { id: 42, title: 'Work', default_physical_edition: null } } };
+        }, '42', 'token');
+        expect(details).toMatchObject({ name: 'Work', publisher: 'Edition Publisher', countries: [], pages: '200', released: '2020-01-01' });
+    });
+    it('keeps a book import usable when optional edition metadata fails', async () => {
+        let calls = 0;
+        const details = await getHardcoverBookDetails(async () => {
+            if (calls++) throw new Error('Edition unavailable');
+            return { data: { books_by_pk: { id: 42, title: 'Work' } } };
+        }, '42', 'token');
+        expect(details).toMatchObject({ name: 'Work', publisher: '', countries: [] });
+    });
     it('maps Hardcover search and GraphQL book details', async () => {
         const fetchJson: JsonFetcher = async (_url, headers, _method, body) => {
             expect(headers?.Authorization).toBe('Bearer token-1');
+            expect(headers?.['User-Agent']).toContain('LOREBASE');
             const payload = JSON.parse(String(body));
             if (payload.variables.query) {
                 return {
@@ -65,8 +135,8 @@ describe('reading providers', () => {
             };
         };
 
-        const results = await searchHardcoverBooks(fetchJson, 'way of kings', 'token-1');
-        const details = await getHardcoverBookDetails(fetchJson, results[0].id, 'token-1');
+        const results = await searchHardcoverBooks(fetchJson, 'way of kings', 'Authorization: Bearer token-1');
+        const details = await getHardcoverBookDetails(fetchJson, results[0].id, 'Bearer token-1');
 
         expect(results[0]).toMatchObject({
             id: '42',
@@ -186,7 +256,13 @@ describe('reading providers', () => {
                         genres: ['Action', 'Drama'],
                         chapters: 364,
                         volumes: 41,
-                        startDate: { year: 1989 },
+                        startDate: { year: 1989, month: 8, day: 25 },
+                        staff: {
+                            edges: [
+                                { role: 'Story & Art', node: { name: { full: 'Kentaro Miura' } } },
+                                { role: 'Assistant', node: { name: { full: 'Studio Gaga' } } },
+                            ],
+                        },
                         averageScore: 91,
                         siteUrl: 'https://anilist.co/manga/30013',
                         coverImage: { extraLarge: 'https://img.example/berserk-xl.jpg' },
@@ -205,6 +281,9 @@ describe('reading providers', () => {
             chapters: '364',
             volumes: '41',
             rating: '9.1',
+            released: '1989-08-25',
+            authors: ['Kentaro Miura'],
+            artists: ['Kentaro Miura'],
         });
         expect(details?.parts).toHaveLength(41);
         expect(details?.parts?.[0]).toMatchObject({ volumeNumber: 1, chapterTotal: 9 });
@@ -212,6 +291,12 @@ describe('reading providers', () => {
 
     it('maps Shikimori manga search and details', async () => {
         const fetchJson: JsonFetcher = async (url) => {
+            if (url.endsWith('/api/mangas/1/roles')) {
+                return [
+                    { roles: ['Author'], person: { name: 'Miura Kentarou' } },
+                    { roles: ['Art'], person: { name: 'Miura Kentarou' } },
+                ];
+            }
             if (url.includes('/api/mangas?')) {
                 return [
                     {
@@ -247,9 +332,13 @@ describe('reading providers', () => {
         expect(details).toMatchObject({
             kind: 'manga',
             name: 'Berserk',
+            url: 'https://shikimori.net/mangas/z1',
             chapters: '364',
             volumes: '41',
             rating: '8.9',
+            released: '1989-08-25',
+            authors: ['Miura Kentarou'],
+            artists: ['Miura Kentarou'],
         });
         expect(details?.parts).toHaveLength(41);
     });
@@ -311,6 +400,7 @@ describe('reading providers', () => {
             artists: ['Miura Kentarou'],
             chapters: '386',
             volumes: '43',
+            publicationStatus: '43 Volumes (Ongoing)',
             rating: '8.98',
             communityVotes: '3722',
             isAdult: true,
@@ -413,7 +503,7 @@ describe('reading providers', () => {
         const results = await searchMangaDex(fetchJson, 'akame');
         const details = await getMangaDexDetails(fetchJson, results[0].id);
 
-        expect(results[0]).toMatchObject({ id: 'md-1', title: 'Akame ga Kill!', provider: 'mangadex' });
+        expect(results[0]).toMatchObject({ id: 'md-1', title: 'Akame ga Kill!', provider: 'mangadex', publicationStatus: 'completed' });
         expect(results[0].image).toBe('https://uploads.mangadex.org/covers/md-1/cover.jpg.512.jpg');
         expect(details).toMatchObject({
             kind: 'manga',

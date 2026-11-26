@@ -167,7 +167,7 @@ export function getDiagnosticProviderLabel(host: string): string {
     if (normalized.includes('rawg')) return 'RAWG';
     if (normalized.includes('igdb') || normalized.includes('twitch')) return 'IGDB';
     if (normalized.includes('anilist')) return 'AniList';
-    if (normalized.includes('jikan')) return 'Jikan';
+    if (normalized.includes('kitsu')) return 'Kitsu';
     if (normalized.includes('shikimori')) return 'Shikimori';
     if (normalized.includes('themoviedb')) return 'TMDB';
     if (normalized.includes('tvmaze')) return 'TVmaze';
@@ -176,6 +176,7 @@ export function getDiagnosticProviderLabel(host: string): string {
     if (normalized.includes('googleapis')) return 'Google Books';
     if (normalized.includes('mangaupdates')) return 'MangaUpdates';
     if (normalized.includes('mangadex')) return 'MangaDex';
+    if (normalized === 'comicvine.gamespot.com') return 'Comic Vine';
     if (normalized.includes('myanimelist')) return 'MyAnimeList';
     if (normalized.includes('howlongtobeat')) return 'HowLongToBeat';
     return normalized || 'Provider';

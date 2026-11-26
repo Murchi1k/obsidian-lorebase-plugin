@@ -1,8 +1,10 @@
+import { normalizeCountryMetadata } from '../../media/statisticsCountries';
+import { inferVideoWorkType } from '../workTypeInference';
 import { SearchResult, VideoDetails, IntegrationVideoPart } from '../types';
 import type { JsonFetcher } from './common';
 
 interface TvmazeOptions {
-    kind: 'movies' | 'series';
+    kind: 'movies' | 'series' | 'mixed';
     page?: number;
     pageSize?: number;
 }
@@ -38,6 +40,7 @@ function isMovieType(item: Record<string, unknown>): boolean {
 }
 
 function matchesRequestedKind(item: Record<string, unknown>, kind: TvmazeOptions['kind']): boolean {
+    if (kind === 'mixed') return true;
     const isMovie = isMovieType(item);
     return kind === 'movies' ? isMovie : !isMovie;
 }
@@ -73,28 +76,36 @@ export async function searchTvmaze(
 ): Promise<SearchResult[]> {
     if (!query.trim()) return [];
     const payload = await fetchJson(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
-    return normalizeSearchEntries(payload)
+    const items = normalizeSearchEntries(payload)
         .filter((item) => matchesRequestedKind(item, options.kind))
-        .slice(0, options.pageSize ?? 20)
-        .map((item) => ({
-            id: String(item.id ?? ''),
-            title: clean(item.name),
-            provider: 'tvmaze' as const,
-            image: pickImage(item.image),
-            year: toYear(item.premiered),
-            format: options.kind === 'movies' ? 'Movie / TVmaze' : (clean(item.type) || 'Series'),
-        }))
+        .map((item) => {
+            const isMovie = options.kind === 'movies' || options.kind === 'mixed' && isMovieType(item);
+            return {
+                id: String(item.id ?? ''),
+                title: clean(item.name),
+                provider: 'tvmaze' as const,
+                image: pickImage(item.image),
+                year: toYear(item.premiered),
+                released: clean(item.premiered),
+                workType: inferVideoWorkType(isMovie ? 'movies' : 'series', item),
+                workTypeMedia: isMovie ? 'movie' as const : 'series' as const,
+            };
+        })
         .filter((item) => item.id && item.title);
+    const size = options.pageSize ?? 20;
+    const offset = Math.max(0, (options.page ?? 1) - 1) * size;
+    return Object.assign(items.slice(offset, offset + size), { hasNext: offset + size < items.length });
 }
 
 export async function getTvmazeDetails(
     fetchJson: JsonFetcher,
     id: string,
     _apiKey: string,
-    kind: 'movies' | 'series'
+    kind: 'movies' | 'series',
+    options: { fillMissingEpisodeTotals?: boolean } = {}
 ): Promise<VideoDetails | null> {
     if (!id) return null;
-    const item = await fetchJson(`https://api.tvmaze.com/shows/${encodeURIComponent(id)}?embed[]=seasons&embed[]=cast`);
+    const item = await fetchJson(`https://api.tvmaze.com/shows/${encodeURIComponent(id)}?embed[]=seasons&embed[]=cast&embed[]=crew`);
     if (!item || typeof item !== 'object') return null;
     const show = item as Record<string, unknown>;
     if (!matchesRequestedKind(show, kind)) return null;
@@ -110,6 +121,10 @@ export async function getTvmazeDetails(
             episodeCurrent: 0,
             episodeTotal: Number.isFinite(Number(season.episodeOrder)) ? Number(season.episodeOrder) : null,
             status: 'planned',
+            poster: pickImage(season.image) || null,
+            year: Number(toYear(season.premiereDate)) || null,
+            releaseDate: typeof season.premiereDate === 'string' ? season.premiereDate : null,
+            episodeDuration: Number(show.averageRuntime ?? show.runtime) > 0 ? Number(show.averageRuntime ?? show.runtime) : null,
         }))
         : [({
             id: 'main',
@@ -121,12 +136,22 @@ export async function getTvmazeDetails(
             status: 'planned',
         } satisfies IntegrationVideoPart)];
     const runtime = Number(show.averageRuntime ?? show.runtime);
-    const rating = show.rating && typeof show.rating === 'object'
-        ? clean((show.rating as Record<string, unknown>).average)
-        : '';
+    if (options.fillMissingEpisodeTotals && seasons.some(part => !part.episodeTotal)) {
+        const episodes = await fetchJson(`https://api.tvmaze.com/shows/${encodeURIComponent(id)}/episodes`).catch(() => null);
+        const totals = new Map<number, number>();
+        for (const value of Array.isArray(episodes) ? episodes : []) {
+            const season = Number(value?.season), episode = Number(value?.number);
+            if (Number.isInteger(season) && Number.isInteger(episode) && episode > 0) totals.set(season, Math.max(totals.get(season) ?? 0, episode));
+        }
+        for (const part of seasons) if (!part.episodeTotal && part.seasonNumber !== null) part.episodeTotal = totals.get(part.seasonNumber) ?? null;
+    }
+    const average = show.rating && typeof show.rating === 'object' ? (show.rating as Record<string, unknown>).average : null;
+    const rating = typeof average === 'number' && Number.isFinite(average) ? String(average) : clean(average);
 
     return {
         kind: 'video',
+        countries: normalizeCountryMetadata([show.network, show.webChannel].map(channel => channel && typeof channel === 'object' ? (channel as Record<string,unknown>).country : null)),
+        workType: inferVideoWorkType('series', show),
         name: clean(show.name) || 'Untitled',
         description: stripHtml(show.summary),
         poster: pickImage(show.image),
@@ -135,7 +160,10 @@ export async function getTvmazeDetails(
         year: toYear(show.premiered),
         released: clean(show.premiered),
         runtime: Number.isFinite(runtime) ? `${runtime} min` : '',
-        director: '',
+        director: [...new Set(normalizeEmbeddedList(show, 'crew').filter(entry => clean(entry.type) === 'Director').map(entry => {
+            const person = entry.person;
+            return person && typeof person === 'object' ? clean((person as Record<string, unknown>).name) : '';
+        }).filter(Boolean))].join(', '),
         actors: getCastNames(show),
         rating,
         seasons: String(seasons.length || ''),

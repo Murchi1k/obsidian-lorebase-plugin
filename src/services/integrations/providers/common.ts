@@ -61,6 +61,15 @@ export function extractYear(value: string): string {
     return match ? match[0] : '';
 }
 
+export function formatFuzzyDate(value: JsonMap | null): string {
+    const year = Number.parseInt(getString(value, 'year'), 10);
+    const month = Number.parseInt(getString(value, 'month'), 10);
+    const day = Number.parseInt(getString(value, 'day'), 10);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return '';
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export function pickAnimeTitle(title: unknown): string {
     const entry = asObject(title);
     return (

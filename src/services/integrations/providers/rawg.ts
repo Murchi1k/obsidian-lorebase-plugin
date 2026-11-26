@@ -1,3 +1,4 @@
+import { inferGameWorkType } from '../workTypeInference';
 import { GameDetails, SearchResult } from '../types';
 import { JsonFetcher, asObject, getArray, getObject, getString, mapStringList, stripHtml, toStringSafe } from './common';
 
@@ -38,8 +39,11 @@ export async function searchRawg(
             title: getString(record, 'name') || 'Unknown',
             subtitle: released ? released.slice(0, 4) : '',
             year: released ? released.slice(0, 4) : '',
+            released,
             image: getString(record, 'background_image'),
             provider: 'rawg' as const,
+            workType: inferGameWorkType(record),
+            workTypeMedia: 'game' as const,
         };
     });
 
@@ -71,6 +75,7 @@ export async function getRawgDetails(fetchJson: JsonFetcher, id: string, apiKey:
         poster: getString(item, 'background_image'),
         posterHorizontal: getString(item, 'background_image'),
         genres,
+        workType: inferGameWorkType(item),
         platforms,
         developers,
         publishers,
@@ -82,4 +87,13 @@ export async function getRawgDetails(fetchJson: JsonFetcher, id: string, apiKey:
         year,
         url: urlLink,
     };
+}
+
+export async function resolveRawgSlug(fetchJson: JsonFetcher, slug: string, apiKey: string): Promise<string | null> {
+    if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i.test(slug)) return null;
+    const url = new URL(`https://api.rawg.io/api/games/${encodeURIComponent(slug)}`);
+    url.searchParams.set('key', apiKey);
+    const item = asObject(await fetchJson(url.toString()));
+    const id = getString(item, 'id');
+    return /^[1-9]\d*$/.test(id) ? id : null;
 }

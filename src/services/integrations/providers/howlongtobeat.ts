@@ -11,6 +11,49 @@ interface CandidateScore {
     item: Record<string, unknown>;
 }
 
+type TextFetcher = (url: string, headers?: Record<string, string>) => Promise<string>;
+const endpointCache = new WeakMap<TextFetcher, { expires: number; value: Promise<string> }>();
+const HLTB_ORIGIN = 'https://howlongtobeat.com';
+
+export function extractHltbSearchPath(script: string): string | null {
+    const matches = script.matchAll(/fetch\s*\(\s*["'](\/api\/[a-zA-Z0-9_/-]+)["']\s*,\s*\{[^}]*?method\s*:\s*["']POST["'][^}]*\}/gi);
+    for (const match of matches) {
+        if (/searchTerms|searchOptions|searchType/.test(script.slice(Math.max(0, match.index! - 2000), match.index! + 2000))) {
+            return match[1].replace(/\/+$/, '');
+        }
+    }
+    return null;
+}
+
+async function discoverEndpoint(fetchText: TextFetcher): Promise<string> {
+    const html = await fetchText(`${HLTB_ORIGIN}/`, HLTB_BASE_HEADERS);
+    const urls = new Set<string>();
+    for (const match of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)) {
+        const url = new URL(match[1].replace(/&amp;/g, '&'), HLTB_ORIGIN);
+        if (url.origin === HLTB_ORIGIN && url.pathname.startsWith('/_next/static/chunks/')) urls.add(url.href);
+    }
+    for (const url of Array.from(urls).slice(0, 40)) {
+        try {
+            const path = extractHltbSearchPath(await fetchText(url, HLTB_BASE_HEADERS));
+            if (path) return path;
+        } catch (error) {
+            if ((error as { status?: number })?.status !== 404) throw error;
+        }
+    }
+    throw new Error('HowLongToBeat search endpoint was not found in site scripts');
+}
+
+function getEndpoint(fetchText: TextFetcher): Promise<string> {
+    const cached = endpointCache.get(fetchText);
+    if (cached && cached.expires > Date.now()) return cached.value;
+    const value = discoverEndpoint(fetchText);
+    endpointCache.set(fetchText, { expires: Date.now() + 60 * 60 * 1000, value });
+    void value.catch(() => {
+        if (endpointCache.get(fetchText)?.value === value) endpointCache.delete(fetchText);
+    });
+    return value;
+}
+
 const HLTB_BASE_HEADERS: Record<string, string> = {
     Accept: 'application/json, text/plain, */*',
     Referer: 'https://howlongtobeat.com/',
@@ -21,18 +64,33 @@ const HLTB_BASE_HEADERS: Record<string, string> = {
 export async function getHowLongToBeatTimes(
     fetchJson: JsonFetcher,
     gameName: string,
-    year?: string
+    year?: string,
+    fetchText?: TextFetcher
 ): Promise<HowLongToBeatTimes | null> {
+    if (!normalizeWords(gameName).length) return null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const endpoint = fetchText ? await getEndpoint(fetchText) : '/api/s';
+        try {
+            return await searchTimes(fetchJson, gameName, year, endpoint);
+        } catch (error) {
+            if (!fetchText || attempt > 0 || (error as { status?: number })?.status !== 404) throw error;
+            endpointCache.delete(fetchText);
+        }
+    }
+    return null;
+}
+
+async function searchTimes(fetchJson: JsonFetcher, gameName: string, year: string | undefined, endpoint: string): Promise<HowLongToBeatTimes | null> {
     const terms = normalizeWords(gameName).slice(0, 12);
     if (!terms.length) return null;
 
     const init = asObject(await fetchJson(
-        `https://howlongtobeat.com/api/bleed/init?t=${Date.now()}`,
+        `${HLTB_ORIGIN}${endpoint}/init?t=${Date.now()}`,
         HLTB_BASE_HEADERS
     ));
     const token = getString(init, 'token');
-    const hpKey = getString(init, 'hpKey');
-    const hpVal = getString(init, 'hpVal');
+    const hpKey = getString(init, 'hpKey') || Object.entries(init ?? {}).find(([key]) => /key$/i.test(key))?.[1];
+    const hpVal = getString(init, 'hpVal') || Object.entries(init ?? {}).find(([key]) => /val(?:ue)?$/i.test(key))?.[1];
     if (!token) return null;
 
     const payload: Record<string, unknown> = {
@@ -59,18 +117,18 @@ export async function getHowLongToBeatTimes(
         },
         useCache: true,
     };
-    if (hpKey && hpVal) {
+    if (typeof hpKey === 'string' && typeof hpVal === 'string' && hpKey && hpVal) {
         payload[hpKey] = hpVal;
     }
 
     const search = asObject(await fetchJson(
-        'https://howlongtobeat.com/api/bleed',
+        `${HLTB_ORIGIN}${endpoint}`,
         {
             ...HLTB_BASE_HEADERS,
             'Content-Type': 'application/json',
             'x-auth-token': token,
-            ...(hpKey ? { 'x-hp-key': hpKey } : {}),
-            ...(hpVal ? { 'x-hp-val': hpVal } : {}),
+            ...(typeof hpKey === 'string' && hpKey ? { 'x-hp-key': hpKey } : {}),
+            ...(typeof hpVal === 'string' && hpVal ? { 'x-hp-val': hpVal } : {}),
         },
         'POST',
         JSON.stringify(payload)

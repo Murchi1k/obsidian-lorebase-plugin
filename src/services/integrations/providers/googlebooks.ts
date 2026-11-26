@@ -51,6 +51,7 @@ export async function searchGoogleBooks(
             provider: 'googlebooks' as const,
             image: normalizeGoogleImage(getString(images, 'thumbnail') || getString(images, 'smallThumbnail')),
             year: getString(info, 'publishedDate').slice(0, 4),
+            released: getString(info, 'publishedDate'),
             format: 'Book / Google Books',
         };
     }).filter((item) => item.id && item.title);

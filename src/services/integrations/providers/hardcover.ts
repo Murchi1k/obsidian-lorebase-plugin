@@ -72,6 +72,7 @@ export async function getHardcoverBookDetails(
       pages
       release_date
       publisher { name }
+      country { code2 name }
       image { url }
     }
     contributions {
@@ -88,15 +89,40 @@ export async function getHardcoverBookDetails(
     ));
     const book = getObject(getObject(root, 'data'), 'books_by_pk');
     if (!book) return null;
+    // Some works have no designated physical edition. Resolve one complete edition,
+    // keeping its publisher, date and page count together.
+    if (!getObject(book, 'default_physical_edition')) {
+        try {
+            const fallback = asObject(await fetchJson(HARDCOVER_ENDPOINT, hardcoverHeaders(apiKey), 'POST', JSON.stringify({
+                query: 'query BookEdition($id: Int!) { editions(where: {book_id: {_eq: $id}}, order_by: [{users_count: desc}, {id: asc}], limit: 1) { title pages release_date publisher { name } country { code2 name } image { url } } }',
+                variables: { id: numericId },
+            })));
+            const edition = asObject(getArray(getObject(fallback, 'data'), 'editions')[0]);
+            if (edition) book.default_physical_edition = edition;
+        } catch { /* Optional edition metadata must not prevent importing the work. */ }
+    }
     return mapHardcoverBookDetails(book);
 }
 
+export async function resolveHardcoverSlug(fetchJson: JsonFetcher, slug: string, apiKey: string): Promise<string | null> {
+    if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/i.test(slug) || !apiKey.trim()) return null;
+    const root = asObject(await fetchJson(HARDCOVER_ENDPOINT, hardcoverHeaders(apiKey), 'POST', JSON.stringify({
+        query: 'query BookBySlug($slug: String!) { books(where: {slug: {_eq: $slug}}, limit: 2) { id slug } }', variables: { slug },
+    })));
+    const matches = getArray(getObject(root, 'data'), 'books').map(asObject).filter(book => getString(book, 'slug') === slug && /^[1-9]\d*$/.test(getString(book, 'id')));
+    return matches.length === 1 ? getString(matches[0], 'id') : null;
+}
+
 function hardcoverHeaders(apiKey: string): Record<string, string> {
-    const token = apiKey.trim();
+    const token = apiKey.trim()
+        .replace(/^authorization\s*:\s*/i, '')
+        .replace(/^bearer\s+/i, '')
+        .trim();
     return {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': token.toLowerCase().startsWith('bearer ') ? token : `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'LOREBASE/1.0 (Obsidian plugin; book metadata)',
     };
 }
 
@@ -125,6 +151,7 @@ function mapHardcoverSearchResult(raw: Record<string, unknown>): SearchResult | 
         provider: 'hardcover',
         image,
         year,
+        released: getString(book, 'release_date') || getString(document, 'release_date'),
         format: 'Book / Hardcover',
     };
 }
@@ -146,6 +173,8 @@ function mapHardcoverBookDetails(book: Record<string, unknown>): BookDetails {
         posterHorizontal: image,
         authors,
         publisher,
+        // Publication country describes this edition, not the work's origin.
+        countries: [],
         genres: readGenres(book).slice(0, 12),
         year: extractYear(releaseDate),
         released: releaseDate,

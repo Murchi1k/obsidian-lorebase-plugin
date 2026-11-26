@@ -1,10 +1,37 @@
+import { readAlternativeTitles, selectAlternativeTitles } from '../alternativeTitles';
+import { parseEpisodeDuration } from '../../media/watchProgress';
+import { fuzzySearchReleaseDate } from '../../../utils/searchReleaseDate';
 import type { AnimeFormat } from '../../../types';
 import { AnimeDetails, IntegrationAnimePart, IntegrationMangaPart, MangaDetails, SearchResult } from '../types';
-import { JsonFetcher, asObject, getArray, getObject, getString, mapAnimeFormat, mapStringList, pickAnimeTitle, stripHtml } from './common';
+import { inferMangaWorkType } from '../../../utils/mangaWorkType';
+import { JsonFetcher, asObject, formatFuzzyDate, getArray, getObject, getString, mapAnimeFormat, mapStringList, pickAnimeTitle, stripHtml } from './common';
 
 interface SearchPageOptions {
+    includeAdult?: boolean;
     page?: number;
     pageSize?: number;
+}
+
+/** Resolve countries by exact MAL IDs; provider names or titles never imply a country. */
+export async function enrichAnimeSearchCountries(fetchJson: JsonFetcher, items: SearchResult[]): Promise<void> {
+    const missing = items.filter(item => !item.countryOfOrigin && /^\d+$/.test(item.malId ?? '')).slice(0, 50);
+    if (!missing.length) return;
+    const ids = Array.from(new Set(missing.map(item => Number(item.malId))));
+    try {
+        // A missing Media alias makes AniList return HTTP 404 for the entire
+        // aliased request. The list query safely omits unmatched MAL IDs.
+        const root = asObject(await fetchJson('https://graphql.anilist.co', { 'Content-Type': 'application/json', Accept: 'application/json' }, 'POST', JSON.stringify({
+            query: 'query ($ids: [Int]) { Page(perPage: 50) { media(idMal_in: $ids, type: ANIME) { idMal countryOfOrigin } } }', variables: { ids },
+        })));
+        const countries = new Map(getArray(getObject(getObject(root, 'data'), 'Page'), 'media').map(raw => {
+            const record = asObject(raw);
+            return [getString(record, 'idMal'), getString(record, 'countryOfOrigin')];
+        }));
+        missing.forEach(item => {
+            const country = countries.get(String(Number(item.malId)));
+            if (country) item.countryOfOrigin = country;
+        });
+    } catch { /* Country is optional; a lookup failure must not hide search results. */ }
 }
 
 function withHasNext<T>(items: T[], hasNext: boolean): T[] {
@@ -28,7 +55,8 @@ export async function searchAniList(
     pageInfo {
       hasNextPage
     }
-    media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH${options.includeAdult ? '' : ', isAdult: false'}) {
+      isAdult
       id
       title {
         userPreferred
@@ -38,8 +66,11 @@ export async function searchAniList(
       }
       startDate {
         year
+        month
+        day
       }
       format
+      countryOfOrigin
       coverImage {
         large
         medium
@@ -77,9 +108,12 @@ export async function searchAniList(
             title: pickAnimeTitle(record?.title),
             subtitle: year,
             year,
+            released: fuzzySearchReleaseDate(startDate),
             format: mapAnimeFormat(getString(record, 'format')),
+            countryOfOrigin: getString(record, 'countryOfOrigin') || undefined,
             image: getString(coverImage, 'large') || getString(coverImage, 'medium'),
             provider: 'anilist' as const,
+            isAdult: record?.isAdult === true,
         };
     });
 
@@ -103,9 +137,13 @@ export async function getAniListDetails(
       english
       native
     }
+    synonyms
     description(asHtml: false)
     genres
+    countryOfOrigin
+    isAdult
     episodes
+    duration
     studios(isMain: true) {
       nodes {
         name
@@ -113,6 +151,8 @@ export async function getAniListDetails(
     }
     startDate {
       year
+      month
+      day
     }
     averageScore
     stats {
@@ -140,6 +180,7 @@ export async function getAniListDetails(
           }
           format
           episodes
+          duration
           startDate {
             year
           }
@@ -184,13 +225,18 @@ export async function getAniListDetails(
 
     return {
         kind: 'anime',
+        countryOfOrigin: getString(item, 'countryOfOrigin'),
+        isAdult: item.isAdult === true,
+        alternativeTitles: readAlternativeTitles('anilist', item),
         name: pickAnimeTitle(item.title),
         description: stripHtml(getString(item, 'description')),
         image,
         imageHorizontal: image,
-        tags,
+        genres: tags,
+        tags: [],
         studios,
         year: getString(startDate, 'year'),
+        released: formatFuzzyDate(startDate),
         imdbRating: score,
         communityRating: score,
         communityVotes: String(sumScoreDistribution(getObject(item, 'stats')) || ''),
@@ -212,7 +258,8 @@ export async function searchAniListManga(
     pageInfo {
       hasNextPage
     }
-    media(search: $search, type: MANGA, sort: SEARCH_MATCH) {
+    media(search: $search, type: MANGA, sort: SEARCH_MATCH${options.includeAdult ? '' : ', isAdult: false'}) {
+      isAdult
       id
       title {
         userPreferred
@@ -222,8 +269,12 @@ export async function searchAniListManga(
       }
       startDate {
         year
+        month
+        day
       }
       format
+      status
+      countryOfOrigin
       coverImage {
         large
         medium
@@ -261,9 +312,13 @@ export async function searchAniListManga(
             title: pickAnimeTitle(record?.title),
             subtitle: year,
             year,
-            format: getString(record, 'format') || 'Manga',
+            released: fuzzySearchReleaseDate(startDate),
+            publicationStatus: getString(record, 'status'),
+            workType: inferMangaWorkType(getString(record, 'format'), getString(record, 'countryOfOrigin')),
+            workTypeMedia: 'manga' as const,
             image: getString(coverImage, 'large') || getString(coverImage, 'medium'),
             provider: 'anilist' as const,
+            isAdult: record?.isAdult === true,
         };
     });
 
@@ -277,18 +332,31 @@ export async function getAniListMangaDetails(fetchJson: JsonFetcher, id: string)
     const gql = `query ($id: Int) {
   Media(id: $id, type: MANGA) {
     id
+    format
+    countryOfOrigin
     title {
       userPreferred
       romaji
       english
       native
     }
+    synonyms
     description(asHtml: false)
     genres
+    countryOfOrigin
+    isAdult
     chapters
     volumes
     startDate {
       year
+      month
+      day
+    }
+    staff(perPage: 25, sort: RELEVANCE) {
+      edges {
+        role
+        node { name { full } }
+      }
     }
     averageScore
     stats {
@@ -332,17 +400,22 @@ export async function getAniListMangaDetails(fetchJson: JsonFetcher, id: string)
     const image = getString(coverImage, 'extraLarge') || getString(coverImage, 'large');
     const chapters = getNumber(item, 'chapters');
     const volumes = getNumber(item, 'volumes');
+    const contributors = getAniListMangaContributors(item);
 
     return {
         kind: 'manga',
+        countries: getString(item, 'countryOfOrigin') ? [getString(item, 'countryOfOrigin')] : [],
+        alternativeTitles: readAlternativeTitles('anilist', item),
+        workType: inferMangaWorkType(getString(item, 'format'), getString(item, 'countryOfOrigin')),
         name: pickAnimeTitle(item.title),
         description: stripHtml(getString(item, 'description')),
         poster: image,
         posterHorizontal: image,
-        authors: [],
-        artists: [],
+        authors: contributors.authors,
+        artists: contributors.artists,
         genres: tags,
         year: getString(startDate, 'year'),
+        released: formatFuzzyDate(startDate),
         chapters: chapters ? String(chapters) : '',
         volumes: volumes ? String(volumes) : '',
         rating: score,
@@ -351,6 +424,20 @@ export async function getAniListMangaDetails(fetchJson: JsonFetcher, id: string)
         url: getString(item, 'siteUrl'),
         parts: buildMangaParts(volumes, chapters),
     };
+}
+
+function getAniListMangaContributors(item: Record<string, unknown>): { authors: string[]; artists: string[] } {
+    const authors = new Set<string>();
+    const artists = new Set<string>();
+    for (const rawEdge of getArray(getObject(item, 'staff'), 'edges')) {
+        const edge = asObject(rawEdge);
+        const role = getString(edge, 'role').toLowerCase();
+        const name = getString(getObject(getObject(edge, 'node'), 'name'), 'full');
+        if (!name) continue;
+        if (/story|script|writer|original creator|composition/.test(role)) authors.add(name);
+        if (/art|illustrat|character design|inking/.test(role)) artists.add(name);
+    }
+    return { authors: Array.from(authors), artists: Array.from(artists) };
 }
 
 function sumScoreDistribution(stats: Record<string, unknown> | null): number {
@@ -390,9 +477,14 @@ async function getAniListRelatedParts(_fetchJson: JsonFetcher, root: Record<stri
             id: `anilist-${getString(item, 'id') || index + 1}`,
             kind,
             title: pickAnimeTitle(item.title),
+            alternativeTitles: selectAlternativeTitles(readAlternativeTitles('anilist', item), 'all', pickAnimeTitle(item.title)),
             seasonNumber,
             episodeCurrent: 0,
             episodeTotal: getNumber(item, 'episodes'),
+            poster: getString(getObject(item, 'coverImage'), 'extraLarge') || getString(getObject(item, 'coverImage'), 'large') || null,
+            year: getNumber(getObject(item, 'startDate') ?? {}, 'year'),
+            episodeDuration: parseEpisodeDuration(item.duration),
+            releaseDate: formatFuzzyDate(getObject(item, 'startDate') ?? {}),
             status: 'planned',
         };
     });
