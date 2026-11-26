@@ -110,9 +110,10 @@ export function renderReleaseHistory(container: HTMLElement, language: Language,
             if (hasDetails) setIcon(summary.createSpan({ cls: 'lorebase-release-note-chevron', attr: { 'aria-hidden': 'true' } }), 'chevron-down');
             if (hasDetails) {
                 const content = disclosure.createDiv({ cls: 'lorebase-release-item-content' });
-                const sentences = description.split(/(?<=[.!?。！？])\s+(?=[A-ZА-ЯЁІЇЄҐ])/u);
+                const sentences = description.split(/([.!?。！？])\s+(?=[A-ZА-ЯЁІЇЄҐ])/u);
                 let paragraph = '';
-                for (const sentence of sentences) {
+                for (let index = 0; index < sentences.length; index += 2) {
+                    const sentence = sentences[index] + (sentences[index + 1] ?? '');
                     paragraph += (paragraph ? ' ' : '') + sentence;
                     if (paragraph.length >= 160) { renderReleaseText(content.createEl('p'), paragraph); paragraph = ''; }
                 }
