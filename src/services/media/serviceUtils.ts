@@ -1,5 +1,6 @@
 import { TFile, TFolder } from 'obsidian';
 import { normalizeObsidianTag } from '../../settings/settingsNormalization';
+import { wikilinkLabel } from '../integrations/templateValues';
 
 export function getAllMarkdownFiles(folder: TFolder): TFile[] {
     const files: TFile[] = [];
@@ -10,20 +11,21 @@ export function getAllMarkdownFiles(folder: TFolder): TFile[] {
 export async function mapInFrameBatches<TInput, TOutput>(
     items: readonly TInput[],
     mapper: (item: TInput) => TOutput | null,
-    batchSize = 12
+    batchSize?: number
 ): Promise<TOutput[]> {
     const output: TOutput[] = [];
-    const safeBatchSize = Math.max(1, Math.trunc(batchSize));
-
-    for (let index = 0; index < items.length; index += safeBatchSize) {
-        const end = Math.min(index + safeBatchSize, items.length);
-        for (let itemIndex = index; itemIndex < end; itemIndex++) {
-            const mapped = mapper(items[itemIndex]);
-            if (mapped !== null) output.push(mapped);
-        }
-
-        if (end < items.length) {
+    const maximumBatch = batchSize !== undefined && Number.isFinite(batchSize)
+        ? Math.max(1, Math.trunc(batchSize)) : 512;
+    let started = performance.now(), processed = 0;
+    for (let index = 0; index < items.length; index++) {
+        const mapped = mapper(items[index]);
+        if (mapped !== null) output.push(mapped);
+        processed++;
+        // Spend at most a small part of a frame parsing, rather than pausing after every 12 notes.
+        if (index + 1 < items.length && (processed >= maximumBatch || performance.now() - started >= 4)) {
             await yieldToNextFrame();
+            started = performance.now();
+            processed = 0;
         }
     }
 
@@ -33,10 +35,18 @@ export async function mapInFrameBatches<TInput, TOutput>(
 function yieldToNextFrame(): Promise<void> {
     return new Promise((resolve) => {
         if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-            window.requestAnimationFrame(() => resolve());
+            let frame: number | undefined;
+            const finish = (): void => {
+                clearTimeout(timer);
+                if (frame !== undefined) window.cancelAnimationFrame(frame);
+                resolve();
+            };
+            // Chromium suspends animation frames in hidden windows; loading must still finish there.
+            const timer = setTimeout(finish, 32);
+            frame = window.requestAnimationFrame(finish);
             return;
         }
-        window.setTimeout(resolve, 0);
+        setTimeout(resolve, 0);
     });
 }
 
@@ -64,11 +74,11 @@ function normalizeTag(tag: string): string {
     return normalizeObsidianTag(tag);
 }
 
-function addTagsFromValue(tagSet: Set<string>, value: unknown): void {
+function addTagsFromValue(tagSet: Set<string>, value: unknown, readLabel?: (value: string) => string): void {
     if (!value) return;
 
     const addTag = (raw: string): void => {
-        const normalized = normalizeTag(raw);
+        const normalized = normalizeTag(readLabel ? readLabel(raw) : raw);
         if (normalized) tagSet.add(normalized);
     };
 
@@ -120,7 +130,9 @@ export function collectTags(metadata: Record<string, unknown>, cacheTags?: Array
 export function collectFieldTags(metadata: Record<string, unknown>, keys: string[]): string[] {
     const tagSet = new Set<string>();
     for (const key of keys) {
-        addTagsFromValue(tagSet, metadata[key]);
+        const value = metadata[key];
+        const entries = typeof value === 'string' && wikilinkLabel(value) !== value ? [value] : value;
+        addTagsFromValue(tagSet, entries, wikilinkLabel);
     }
     return Array.from(tagSet.values());
 }

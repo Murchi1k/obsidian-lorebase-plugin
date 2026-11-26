@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { buildSimpleTemplate, ensureIntegrationSourceFrontmatter, getEffectiveSimpleTemplateFields, renderTemplate, sanitizeFileName } from '../src/services/integrations/templateUtils';
+import { buildSimpleTemplate, ensureIntegrationSourceFrontmatter, getDefaultTemplateFields, getEffectiveSimpleTemplateFields, migrateAlternativeTitleTemplate, renderTemplate, sanitizeFileName } from '../src/services/integrations/templateUtils';
 import { renderMangaPartsYaml } from '../src/services/integrations/shared';
 
 describe('templateUtils', () => {
+    it('migrates the old alternative-title template key without rewriting custom fields or body text', () => {
+        const template = '---\r\ntitle: "{{VALUE:name}}"\r\ntitles: {{VALUE:alternativeTitles}}\r\n---\r\ntitles: {{VALUE:alternativeTitles}}';
+        const migrated = migrateAlternativeTitleTemplate(template);
+        expect(migrated).toBe('---\r\ntitle: "{{VALUE:name}}"\r\nalt_titles: {{VALUE:alternativeTitles}}\r\n---\r\ntitles: {{VALUE:alternativeTitles}}');
+        expect(migrateAlternativeTitleTemplate(migrated)).toBe(migrated);
+        for (const yaml of ['titles: ["Manual"]', 'Custom: {{VALUE:alternativeTitles}}', 'alt_titles: []\ntitles: {{VALUE:alternativeTitles}}']) {
+            const custom = `---\n${yaml}\n---`;
+            expect(migrateAlternativeTitleTemplate(custom)).toBe(custom);
+        }
+    });
     it('builds simple game template with selected fields only', () => {
         const template = buildSimpleTemplate('games', ['type', 'name', 'poster', 'plot', 'rating', 'userRating', 'status']);
         expect(template).toContain('type: "game"');
@@ -38,6 +48,13 @@ describe('templateUtils', () => {
         expect(template).toContain('integration_id: "{{VALUE:integrationId}}"');
     });
 
+    it('stores release dates in anime, series, and manga templates', () => {
+        for (const kind of ['anime', 'series', 'manga'] as const) {
+            expect(getDefaultTemplateFields(kind)).toContain('released');
+            expect(buildSimpleTemplate(kind, ['released'])).toContain('released: {{VALUE:released}}');
+        }
+    });
+
     it('keeps the field order selected in the simple template editor', () => {
         const template = buildSimpleTemplate('anime', [
             'studios',
@@ -62,7 +79,7 @@ describe('templateUtils', () => {
 
         expect(bookTemplate).toContain('type: "book"');
         expect(bookTemplate).toContain('title: "{{VALUE:name}}"');
-        expect(bookTemplate).toContain('authors: "{{VALUE:authors}}"');
+        expect(bookTemplate).toContain('authors: "{{VALUE:authors|wikilink}}"');
         expect(bookTemplate).toContain('page_total: {{VALUE:pageTotal}}');
         expect(bookTemplate).toContain('chapter_total: {{VALUE:chapterTotal}}');
         expect(mangaTemplate).toContain('type: "manga"');
@@ -103,7 +120,7 @@ describe('templateUtils', () => {
             'rating',
             'main',
             'completionist',
-        ])).toEqual(['name']);
+        ])).toEqual(['name', 'main', 'perfectionist']);
 
         expect(getEffectiveSimpleTemplateFields('games', ['name', 'main', 'completionist'], {
             howLongToBeatEnabled: true,
@@ -120,7 +137,7 @@ describe('templateUtils', () => {
     });
 
     it('renders movie release dates as unquoted yaml dates and credits as block arrays', () => {
-        const template = buildSimpleTemplate('movies', ['released', 'director', 'actors']);
+        const template = buildSimpleTemplate('movies', ['released', 'director', 'actors'], {}, []);
         const result = renderTemplate(template, {
             released: '2013-12-25',
             directors: ['Martin Scorsese'],
@@ -137,7 +154,7 @@ describe('templateUtils', () => {
     });
 
     it('renders book release dates and credits as yaml-native values', () => {
-        const template = buildSimpleTemplate('books', ['released', 'authors', 'publisher']);
+        const template = buildSimpleTemplate('books', ['released', 'authors', 'publisher'], {}, []);
         const result = renderTemplate(template, {
             released: '2001-10-01',
             authors: ['Christie Golden', 'Second Author'],
@@ -148,6 +165,58 @@ describe('templateUtils', () => {
         expect(result).toContain('released: 2001-10-01');
         expect(result).toContain('authors:\n  - "Christie Golden"\n  - "Second Author"');
         expect(result).toContain('publisher:\n  - "Blizzard Legends"\n  - "Orbit"');
+    });
+
+
+
+    it.each([
+        ['games', [['developers', 'developers'], ['publishers', 'publishers']]],
+        ['anime', [['studios', 'studios']]],
+        ['movies', [['actors', 'actors'], ['director', 'directors']]],
+        ['series', [['actors', 'actors'], ['director', 'directors']]],
+        ['music', [['artist', 'artist']]],
+    ] as const)('formats selected %s credit fields as links', (kind, credits) => {
+        const fields = credits.map(([field]) => field);
+        const template = buildSimpleTemplate(kind, fields, {}, fields);
+        const values = Object.fromEntries(credits.map(([, token]) => [token, kind === 'music' ? 'Artist' : ['First', 'Second']]));
+        const content = renderTemplate(template, values, kind === 'music');
+        for (const [, token] of credits) {
+            expect(template).toContain('{{VALUE:' + token + '|wikilink}}');
+            expect(content).toContain(token + ': ' + (kind === 'music' ? '"[[Artist]]"' : '["[[First]]","[[Second]]"]'));
+        }
+    });
+
+    it('renders opt-in links in YAML and Markdown without changing ordinary tokens', () => {
+        const template = [
+            '---',
+            '"Book authors": {{VALUE:Authors|wikilink}} # keep',
+            "genre: '{{VALUE:genre|wikilink}}'",
+            'plain: "{{VALUE:genre}}"',
+            'empty: {{VALUE:missing|wikilink}}',
+            '---',
+            'Author: {{VALUE:authors|wikilink}}',
+        ].join('\n');
+        const values = { authors: ['Frank Herbert', '[[Authors/Other|Other]]'], genre: 'Science Fiction' };
+        const expected = [
+            '---',
+            '"Book authors": ["[[Frank Herbert]]","[[Authors/Other|Other]]"] # keep',
+            'genre: "[[Science Fiction]]"',
+            'plain: "Science Fiction"',
+            'empty: null',
+            '---',
+            'Author: [[Frank Herbert]], [[Authors/Other|Other]]',
+        ].join('\n');
+        expect(renderTemplate(template, values)).toBe(expected);
+        expect(renderTemplate(template, values, true)).toBe(expected);
+    });
+
+    it('formats each list entry as a link and keeps an empty list empty', () => {
+        const template = '---\ngenres:\n  - {{VALUE:genres|wikilink}}\n---';
+        expect(renderTemplate(template, { genres: ['Horror', 'Fantasy'] }))
+            .toBe('---\ngenres:\n  - "[[Horror]]"\n  - "[[Fantasy]]"\n---');
+        expect(renderTemplate(template, { genres: [] })).toBe('---\ngenres:\n  []\n---');
+        const withFixedGenre = template.replace('\n---', '\n  - "[[Fantasy]]"\n---');
+        expect(renderTemplate(withFixedGenre, { genres: [] })).toBe('---\ngenres:\n  - "[[Fantasy]]"\n---');
     });
 
     it('renders empty array values as empty yaml lists', () => {

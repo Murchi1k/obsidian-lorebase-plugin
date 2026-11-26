@@ -1,4 +1,5 @@
 import type { RelatedMediaLink, UserRating } from '../../types';
+import { parseStoredUserRating } from '../../utils/rating';
 
 export function parseNumber(value: unknown): number | null {
     if (value === null || value === undefined || value === '') return null;
@@ -19,10 +20,7 @@ export function parseYear(value: unknown): number | null {
 }
 
 export function parseUserRating(value: unknown): UserRating {
-    const parsed = parseNumber(value);
-    if (parsed === null) return null;
-    const rating = Math.trunc(parsed);
-    return rating >= 1 && rating <= 5 ? rating as UserRating : null;
+    return parseStoredUserRating(value);
 }
 
 export function parseRelatedMedia(raw: unknown): RelatedMediaLink[] {
