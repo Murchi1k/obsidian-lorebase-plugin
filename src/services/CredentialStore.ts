@@ -1,4 +1,4 @@
-import { requireApiVersion, type App } from 'obsidian';
+import { requireApiVersion } from 'obsidian';
 
 type RecordValue = Record<string, unknown>;
 type Storage = {
@@ -6,9 +6,8 @@ type Storage = {
     setSecret(id: string, secret: string): void;
 };
 
-export function getSecretStorage(app: Pick<App, 'secretStorage'>): Storage | undefined {
-    if (!requireApiVersion('1.11.4')) return;
-    return app.secretStorage;
+export function getSecretStorage(app: { secretStorage?: Storage }): Storage | undefined {
+    return requireApiVersion('1.11.4') ? app.secretStorage : undefined;
 }
 const record = (value: unknown): value is RecordValue => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const fixedPaths = ['steamSync.apiKey', 'anilistSync.accessToken', 'traktSync.accessToken', 'traktSync.refreshToken', 'music.lastfmApiKey'];
