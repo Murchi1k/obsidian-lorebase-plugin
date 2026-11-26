@@ -1,157 +1,94 @@
-import { CardDimensionOverrides } from '../../components/GameCard';
-import { CARD_SIZES, HORIZONTAL_CARD_SIZES } from '../../constants';
-import { CardSize, LorebaseSettings, ViewMode } from '../../types';
+import type { CardDimensionOverrides } from '../../components/GameCard';
+import type { CardSize, LorebaseSettings, ViewMode } from '../../types';
+import { CARD_GRID_MOBILE_BREAKPOINT, normalizeCardGrid } from '../../services/media/cardGrid';
 
 export type EffectiveLayout = {
+    partSearchCaption?: boolean;
+    music?: boolean;
+    musicArtRatio?: number;
     cardSize: CardSize;
     cardStyle: LorebaseSettings['games']['cardStyle'];
     columns: number;
     orientation: LorebaseSettings['games']['orientation'];
-    dimensions: CardDimensionOverrides | null;
+    dimensions: CardDimensionOverrides;
     minCardWidth: number;
-};
-
-const GRID_GAP_PX = 16;
-const GRID_PADDING_PX = 16;
-const PROGRESS_FOOTER_HEIGHT_PX = 48;
-const PRESET_HORIZONTAL_MIN_WIDTH = 340;
-const MOBILE_BREAKPOINT_PX = 520;
-const MOBILE_VERTICAL_MIN_WIDTH_PX = 136;
-const PRESET_VERTICAL_MIN_WIDTH: Record<CardSize, number> = {
-    small: 180,
-    medium: 220,
-    large: 260,
+    targetCardWidth?: number;
+    gap: number;
+    padding: number;
 };
 
 export class LayoutCalculator {
-    constructor(private readonly getAvailableWidth: () => number) {}
+    constructor(private readonly getAvailableWidth: () => number, private readonly isMobile?: () => boolean) {}
 
     getEffectiveLayout(settings: LorebaseSettings['games'], viewMode: ViewMode): EffectiveLayout {
         const orientation = viewMode === 'horizontal' ? 'horizontal' : 'vertical';
-        const maxColumns = orientation === 'horizontal' ? 4 : settings.columns;
-        const cardSize = settings.cardSize;
-        const dimensions = settings.customCardSize
-            ? this.resolveCustomCardDimensions(settings, cardSize)
-            : null;
-        let minCardWidth = orientation === 'vertical'
-            ? (dimensions?.verticalMinWidth ?? PRESET_VERTICAL_MIN_WIDTH[cardSize])
-            : (dimensions?.horizontalMinWidth ?? PRESET_HORIZONTAL_MIN_WIDTH);
+        const grid = normalizeCardGrid(settings.cardGrid, settings);
         const availableWidth = this.getAvailableWidth();
-        if (orientation === 'vertical' && availableWidth > 0 && availableWidth <= MOBILE_BREAKPOINT_PX) {
-            minCardWidth = Math.min(minCardWidth, MOBILE_VERTICAL_MIN_WIDTH_PX);
+        const mobile = this.isMobile?.() ?? (availableWidth > 0 && availableWidth <= CARD_GRID_MOBILE_BREAKPOINT);
+        const device = mobile ? grid.mobile : grid.desktop;
+        const horizontal = orientation === 'horizontal';
+        const targetWidth = horizontal ? device.horizontalWidth : device.width;
+        const columns = horizontal ? device.horizontalColumns : device.columns;
+        const music = 'albumCoverMode' in settings;
+        let musicArtRatio = 1;
+        if (music) {
+            const musicSettings = settings as LorebaseSettings['music'];
+            const kindRule = musicSettings.viewState.rules.find(rule => rule.field === 'musicKind' && rule.operator === 'containsAny');
+            const kinds = Array.isArray(kindRule?.value) ? kindRule.value : ['album', 'track'];
+            musicArtRatio = kinds.every(kind => (kind === 'track' ? musicSettings.trackCoverMode : musicSettings.albumCoverMode) === 'vinyl') ? .78 : 1;
         }
-
         return {
-            cardSize,
+            music, musicArtRatio,
+            cardSize: settings.cardSize,
             cardStyle: settings.cardStyle,
-            columns: maxColumns,
-            orientation,
-            dimensions,
-            minCardWidth,
+            columns, orientation,
+            minCardWidth: device.mode === 'size' ? targetWidth : horizontal ? music ? 300 : 180 : 100,
+            targetCardWidth: device.mode === 'size' ? targetWidth : undefined,
+            gap: device.gap,
+            padding: device.gap,
+            dimensions: {
+                verticalMinWidth: 10000,
+                verticalMinHeight: 0,
+                verticalImageRatio: grid.posterRatio,
+                horizontalMinWidth: 0,
+                horizontalHeight: targetWidth / grid.horizontalRatio,
+                horizontalImageRatio: grid.horizontalRatio,
+            },
         };
     }
 
     getRenderedColumns(layout: EffectiveLayout): number {
-        return this.resolveAdaptiveColumns(layout.columns, layout.minCardWidth);
+        const width = this.getAvailableWidth();
+        if (!Number.isFinite(width) || width <= 0) return layout.targetCardWidth ? 1 : layout.columns;
+        const innerWidth = Math.max(0, width - layout.padding * 2);
+        const fitting = Math.max(1, Math.floor((innerWidth + layout.gap) / (layout.minCardWidth + layout.gap)));
+        return layout.targetCardWidth ? fitting : Math.min(layout.columns, fitting);
+    }
+
+    getCardWidth(layout: EffectiveLayout, columns = this.getRenderedColumns(layout), gridWidth = this.getAvailableWidth()): number {
+        if (!Number.isFinite(gridWidth) || gridWidth <= 0) return layout.targetCardWidth ?? layout.minCardWidth;
+        const available = Math.max(1, gridWidth - layout.padding * 2 - layout.gap * (Math.max(1, columns) - 1));
+        return Math.min(layout.targetCardWidth ?? Infinity, available / Math.max(1, columns));
     }
 
     getCardHeight(layout: EffectiveLayout): number {
-        if (layout.orientation === 'horizontal') {
-            if (layout.dimensions) return layout.dimensions.horizontalHeight;
-            return parseInt(HORIZONTAL_CARD_SIZES[layout.cardSize].height) || 220;
-        }
-        if (layout.dimensions) return layout.dimensions.verticalMinHeight;
-        return parseInt(CARD_SIZES[layout.cardSize].minHeight) || 400;
+        if (layout.music && layout.orientation === 'horizontal') return 180;
+        const width = this.getCardWidth(layout);
+        return this.cardHeight(layout, width);
     }
 
-    calculateActualCardHeight(
-        layout: EffectiveLayout,
-        renderedColumns: number,
-        gridEl: HTMLElement | null
-    ): number {
-        const staticHeight = this.getCardHeight(layout);
-        if (layout.orientation === 'horizontal' || !gridEl) return staticHeight;
-
-        const gridWidth = gridEl.clientWidth;
-        if (gridWidth <= 0) return staticHeight;
-
-        const cols = Math.max(1, renderedColumns);
-        const totalGap = GRID_GAP_PX * (cols - 1);
-        const totalPadding = GRID_PADDING_PX * 2;
-        const cardWidth = (gridWidth - totalGap - totalPadding) / cols;
-        const imageRatio = layout.dimensions?.verticalImageRatio;
-        const ratio = (imageRatio && Number.isFinite(imageRatio) && imageRatio > 0)
-            ? imageRatio
-            : 2 / 3;
-
-        // Phone grids use the poster ratio as the source of truth. Keeping the
-        // desktop preset as a minimum here made every phone card ~400px tall
-        // and forced the library into a single oversized column.
-        const imageHeight = gridWidth <= MOBILE_BREAKPOINT_PX
-            ? Math.ceil(cardWidth / ratio)
-            : Math.max(staticHeight, Math.ceil(cardWidth / ratio));
-        return layout.cardStyle === 'progress'
-            ? imageHeight + PROGRESS_FOOTER_HEIGHT_PX
-            : imageHeight;
+    calculateActualCardHeight(layout: EffectiveLayout, columns: number, gridEl: HTMLElement | null): number {
+        const width = this.getCardWidth(layout, columns, gridEl?.clientWidth);
+        return this.cardHeight(layout, width);
     }
 
-    private resolveCustomCardDimensions(
-        settings: LorebaseSettings['games'],
-        cardSize: CardSize
-    ): CardDimensionOverrides {
-        const verticalPreset = CARD_SIZES[cardSize];
-        const horizontalPreset = HORIZONTAL_CARD_SIZES[cardSize];
-        const presetVerticalMinWidth = this.parseCssPixels(verticalPreset.maxWidth, 280);
-        const presetVerticalMinHeight = this.parseCssPixels(verticalPreset.minHeight, 380);
-        const presetImageHeight = this.parseCssPixels(verticalPreset.imageHeight, 320);
-        const presetImageRatio = this.clampImageRatio(
-            presetVerticalMinWidth / Math.max(1, presetImageHeight),
-            0.72
-        );
-
-        return {
-            verticalMinWidth: this.clampDimension(settings.customCardMinWidth, 140, 480, presetVerticalMinWidth),
-            verticalMinHeight: this.clampDimension(settings.customCardMinHeight, 180, 900, presetVerticalMinHeight),
-            verticalImageRatio: this.clampImageRatio(settings.customCardImageRatio, presetImageRatio),
-            horizontalMinWidth: this.clampDimension(settings.customHorizontalCardMinWidth, 240, 700, 340),
-            horizontalHeight: this.clampDimension(
-                settings.customHorizontalCardHeight,
-                120,
-                520,
-                this.parseCssPixels(horizontalPreset.height, 220)
-            ),
-        };
-    }
-
-    private resolveAdaptiveColumns(maxColumns: number, minCardWidth: number): number {
-        const safeMaxColumns = this.clampDimension(maxColumns, 1, 12, 5);
-        const safeMinWidth = this.clampDimension(minCardWidth, 120, 700, 220);
-        const widthSource = this.getAvailableWidth();
-        if (!Number.isFinite(widthSource) || widthSource <= 0) return safeMaxColumns;
-
-        const innerWidth = Math.max(0, widthSource - (GRID_PADDING_PX * 2));
-        const byWidth = Math.max(1, Math.floor((innerWidth + GRID_GAP_PX) / (safeMinWidth + GRID_GAP_PX)));
-        return Math.max(1, Math.min(safeMaxColumns, byWidth));
-    }
-
-    private parseCssPixels(value: string, fallback: number): number {
-        const parsed = Number.parseInt(value, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-        return parsed;
-    }
-
-    private clampDimension(value: number, min: number, max: number, fallback: number): number {
-        if (!Number.isFinite(value)) return fallback;
-        const rounded = Math.round(value);
-        if (rounded < min) return min;
-        if (rounded > max) return max;
-        return rounded;
-    }
-
-    private clampImageRatio(value: number, fallback: number): number {
-        if (!Number.isFinite(value)) return fallback;
-        if (value < 0.4) return 0.4;
-        if (value > 2.2) return 2.2;
-        return Math.round(value * 100) / 100;
+    private cardHeight(layout: EffectiveLayout, width: number): number {
+        if (layout.music) return layout.orientation === 'horizontal' ? 180 : Math.ceil(width * (layout.musicArtRatio ?? 1)) + 48;
+        const horizontal = layout.orientation === 'horizontal';
+        const ratio = horizontal ? layout.dimensions.horizontalImageRatio! : layout.dimensions.verticalImageRatio;
+        const imageHeight = Math.ceil(width / ratio);
+        const footer = !horizontal && layout.cardStyle === 'progress' ? 48 : 0;
+        const searchCaption = !horizontal && layout.partSearchCaption ? 22 : 0;
+        return imageHeight + footer + searchCaption;
     }
 }
