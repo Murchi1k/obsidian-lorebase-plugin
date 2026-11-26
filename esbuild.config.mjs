@@ -25,6 +25,8 @@ const scriptContext = await esbuild.context({
     ],
     format: "cjs",
     target: "es2018",
+    // Obsidian’s CommonJS loader has no native dynamic-import callback.
+    supported: { "dynamic-import": false },
     logLevel: "info",
     sourcemap: prod ? false : "inline",
     treeShaking: true,

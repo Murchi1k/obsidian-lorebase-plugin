@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../../utils/timers';
 import { Platform, requestUrl, type App } from 'obsidian';
 import { getSecretStorage } from '../CredentialStore';
 import { checkPsnAbort, durationMinutes, normalizeTrophySet, object, rows, text, type PlayStationEntry, type PlayStationSyncSettings, type PlayStationTracking } from './types';
@@ -15,9 +16,9 @@ export const psnRequest: PsnRequest = async (url, signal, options = {}) => {
     checkPsnAbort(signal);
     // requestUrl follows redirects. The authorization endpoint redirects to a custom app
     // scheme; HTTPS is needed here to read its Location header without following it.
-    if (options.redirect === false) {
-        if (!Platform.isDesktop) throw new Error('PSN_DESKTOP_AUTH');
-        const https = require('https') as typeof import('https');
+    if (Platform.isDesktop && options.redirect === false) {
+        const https = await import('https');
+        checkPsnAbort(signal);
         return await new Promise<PsnResponse>((resolve, reject) => {
             const req = https.request(url, { method: options.method ?? 'GET', headers: options.headers }, response => {
                 response.resume();
@@ -31,12 +32,13 @@ export const psnRequest: PsnRequest = async (url, signal, options = {}) => {
             if (signal.aborted) cancel(); else req.end(options.body);
         });
     }
-    let timer: ReturnType<typeof setTimeout> | undefined, cancel: (() => void) | undefined;
+    if (options.redirect === false) throw new Error('PSN_DESKTOP_AUTH');
+    let timer: (() => void) | undefined, cancel: (() => void) | undefined;
     try {
         const response = await Promise.race([
             requestUrl({ url, method: options.method ?? 'GET', headers: options.headers, body: options.body, throw: false }),
             new Promise<never>((_, reject) => {
-                timer = setTimeout(() => reject(new Error('PSN_NETWORK')), 30_000);
+                timer = scheduleTimeout(() => reject(new Error('PSN_NETWORK')), 30_000);
                 cancel = () => reject(new DOMException('Cancelled', 'AbortError'));
                 signal.addEventListener('abort', cancel, { once: true }); if (signal.aborted) cancel();
             }),
@@ -54,7 +56,7 @@ export const psnRequest: PsnRequest = async (url, signal, options = {}) => {
         if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
         if (error instanceof Error && error.message.startsWith('PSN_')) throw error;
         throw new Error('PSN_NETWORK');
-    } finally { if (timer) clearTimeout(timer); if (cancel) signal.removeEventListener('abort', cancel); }
+    } finally { timer?.(); if (cancel) signal.removeEventListener('abort', cancel); }
 };
 export class PlayStationApi {
     private token?: { secretId: string; access: string; expires: number };

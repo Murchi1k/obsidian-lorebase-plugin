@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../utils/timers';
 import { requestUrl } from 'obsidian';
 import type { CommunityLink, CommunityLinkCache, CommunityLinks } from '../types';
 
@@ -114,9 +115,9 @@ export class CommunityLinksService {
     }
 
     private async load(now: number): Promise<CommunityLink[]> {
-        let timer: ReturnType<typeof setTimeout> | undefined;
+        let timer: (() => void) | undefined;
         try {
-            const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Community links timeout')), TIMEOUT_MS); });
+            const timeout = new Promise<never>((_, reject) => { timer = scheduleTimeout(() => reject(new Error('Community links timeout')), TIMEOUT_MS); });
             const payload = record(await Promise.race([this.fetchLinks(), timeout]));
             if (payload?.version !== 1 && payload?.version !== 2) return this.current;
             if (payload.version === 2 && !Array.isArray(payload.links)) return this.current;
@@ -126,7 +127,7 @@ export class CommunityLinksService {
             this.updatedAt = now;
             try { await this.persist({ updatedAt: now, links: this.current }); } catch { /* Keep valid in-memory links if caching fails. */ }
         } catch { /* Network errors and unpublished files use cached or bundled links. */ }
-        finally { if (timer !== undefined) clearTimeout(timer); }
+        finally { timer?.(); }
         return this.current;
     }
 }

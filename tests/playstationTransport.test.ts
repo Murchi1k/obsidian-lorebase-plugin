@@ -6,9 +6,9 @@ import { EventEmitter } from 'node:events';
 // Obsidian evaluates CommonJS plugins without a dynamic-import callback.
 // Test the bundled transport there, rather than injecting the entire PSN request.
 describe('PlayStation transport in the Obsidian plugin loader', () => {
-    it('reads the Sony redirect through a CommonJS HTTPS module without dynamic import or a real credential', async () => {
+    it('reads the Sony redirect through the bundled desktop import without a native import callback', async () => {
         const compiled = buildSync({ entryPoints: ['src/services/playstation/api.ts'], bundle: true, write: false,
-            platform: 'node', format: 'cjs', target: 'es2018', external: ['https', 'obsidian'] }).outputFiles[0].text;
+            platform: 'node', format: 'cjs', target: 'es2018', supported: { 'dynamic-import': false }, external: ['https', 'obsidian'] }).outputFiles[0].text;
         const resume = vi.fn(), sent = vi.fn();
         const request = vi.fn((_url: string, _options: unknown, respond: (value: unknown) => void) => {
             const req = new EventEmitter() as EventEmitter & { end: () => void; setTimeout: () => void; destroy: (error: Error) => void };

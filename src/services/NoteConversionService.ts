@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../utils/timers';
 import { App, TFile, TFolder } from 'obsidian';
 import type { LorebaseSettings, NoteImportFieldMapping, NoteImportSettings, NoteImportTargetMedia } from '../types';
 import { sanitizeFileName } from './integrations/templateUtils';
@@ -206,7 +207,7 @@ export class NoteConversionService {
         let processed = 0;
 
         for (const file of sourceFiles) {
-            if (++processed % 100 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0));
+            if (++processed % 100 === 0) await new Promise<void>(resolve => { scheduleTimeout(resolve, 0); });
             operation?.check();
             const frontmatter = this.readFrontmatter(file);
             const conversion = this.buildFrontmatter(frontmatter, { ...settings, targetMedia: targetOverrides[file.path] ?? settings.targetMedia });

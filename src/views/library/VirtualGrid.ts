@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../../utils/timers';
 import { GameCard } from '../../components/GameCard';
 import { cardGridWidthCss } from '../../services/media/cardGrid';
 import { getGroupSpacing } from './groupSpacing';
@@ -23,7 +24,7 @@ function attachCardBatch(grid: HTMLElement, batch: HTMLElement): void {
 /** Keep scrollbar jumps cheap; restore the normal preload window once settled. */
 class ScrollOverscan {
     private previousTop: number | undefined;
-    private timer: ReturnType<typeof setTimeout> | null = null;
+    private timer: (() => void) | null = null;
 
     constructor(private readonly settled: () => void) {}
 
@@ -33,13 +34,13 @@ class ScrollOverscan {
         if (reposition) this.cancel();
         else if (jump) {
             this.cancel();
-            this.timer = setTimeout(() => { this.timer = null; this.settled(); }, 180);
+            this.timer = scheduleTimeout(() => { this.timer = null; this.settled(); }, 180);
         }
         return this.timer === null ? normal : 0;
     }
 
     cancel(): void {
-        if (this.timer !== null) clearTimeout(this.timer);
+        this.timer?.();
         this.timer = null;
     }
 }

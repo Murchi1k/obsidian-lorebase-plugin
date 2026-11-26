@@ -3,7 +3,7 @@ import { onlineExtrasText } from '../localization/onlineExtras';
 let enabled = true;
 let generation = 0;
 const listeners = new Set<(enabled: boolean) => void>();
-const pending = new Set<(error: unknown) => void>();
+const pending = new Set<(error: OnlineExtrasDisabledError) => void>();
 
 export class OnlineExtrasDisabledError extends Error {
     constructor() { super(onlineExtrasText('disabled')); this.name = 'OnlineExtrasDisabledError'; }
@@ -25,22 +25,22 @@ export function configureOnlineExtras(value: boolean): void {
 }
 
 /** Only optional discovery/media calls use this boundary. Catalogs and sync do not. */
-export function runOnlineExtra<T>(operation: () => PromiseLike<T>): Promise<T> {
+export async function runOnlineExtra<T>(operation: () => PromiseLike<T>): Promise<T> {
+    assertOnlineExtras();
     const session = generation;
-    return new Promise<T>((resolve, reject) => {
-        const fail = (error: unknown): void => { pending.delete(fail); reject(error); };
-        try { assertOnlineExtras(); } catch (error) { fail(error); return; }
-        pending.add(fail);
-        try {
-            assertOnlineExtras();
-            if (session !== generation) throw new OnlineExtrasDisabledError();
-            Promise.resolve(operation()).then(value => {
-                pending.delete(fail);
-                if (!enabled || session !== generation) reject(new OnlineExtrasDisabledError());
-                else resolve(value);
-            }, fail);
-        } catch (error) { fail(error); }
+    let disable: ((error: OnlineExtrasDisabledError) => void) | undefined;
+    const disabled = new Promise<never>((_, reject) => {
+        disable = (error) => reject(error);
+        pending.add(disable);
     });
+    const run = async (): Promise<T> => operation();
+    try {
+        const value = await Promise.race([run(), disabled]);
+        if (!enabled || session !== generation) throw new OnlineExtrasDisabledError();
+        return value;
+    } finally {
+        if (disable) pending.delete(disable);
+    }
 }
 
 export function readOnlineExtrasPreference(value: Record<string, unknown>): boolean {

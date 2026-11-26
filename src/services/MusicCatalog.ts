@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../utils/timers';
 import { areOnlineExtrasEnabled, assertOnlineExtras, runOnlineExtra } from './onlineExtras';
 import { requestUrl } from 'obsidian';
 import { PLUGIN_VERSION } from '../version';
@@ -22,7 +23,7 @@ async function fetchMusic(url: string, fresh = false, extra = false): Promise<un
     const request = async (): Promise<unknown> => {
         const mb = new URL(url).hostname === 'musicbrainz.org';
         if (mb) {
-            await new Promise(resolve => setTimeout(resolve, Math.max(0, 1100 - (Date.now() - lastRequest))));
+            await new Promise<void>(resolve => { scheduleTimeout(resolve, Math.max(0, 1100 - (Date.now() - lastRequest))); });
             lastRequest = Date.now();
         }
         const options = { url, throw: false, headers: {

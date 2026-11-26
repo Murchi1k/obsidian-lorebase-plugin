@@ -1,3 +1,5 @@
+import { asError } from '../../utils/errors';
+import { scheduleTimeout } from '../../utils/timers';
 import { requestWithDeadline } from './requestDeadline';
 
 export const MAX_COVER_PIXELS = 16_000_000;
@@ -151,10 +153,10 @@ export async function validateCoverImage(buffer: ArrayBuffer, extension: string,
                 await new Promise<void>((resolve, reject) => {
                     if (typeof Image !== 'function') { reject(new Error('Image decoding is unavailable.')); return; }
                     const img = new Image(), url = URL.createObjectURL(blob);
-                    const cleanup = (): void => { img.onload = img.onerror = null; img.src = ''; URL.revokeObjectURL(url); decodeSignal.removeEventListener('abort', abort); clearTimeout(timer); };
-                    const fail = (error: unknown): void => { cleanup(); reject(error); };
+                    const cleanup = (): void => { img.onload = img.onerror = null; img.src = ''; URL.revokeObjectURL(url); decodeSignal.removeEventListener('abort', abort); timer(); };
+                    const fail = (error: unknown): void => { cleanup(); reject(asError(error)); };
                     const abort = (): void => { const error = new Error('Image validation cancelled.'); error.name = 'AbortError'; fail(error); };
-                    const timer = setTimeout(() => fail(new Error('Image decoding timed out.')), 10_000);
+                    const timer = scheduleTimeout(() => fail(new Error('Image decoding timed out.')), 10_000);
                     decodeSignal.addEventListener('abort', abort, { once: true });
                     img.onload = () => { try { dimensions(img.naturalWidth, img.naturalHeight);
                         if (img.naturalWidth * img.naturalHeight !== expected.width * expected.height) invalid(); cleanup(); resolve();

@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../../../utils/timers';
 import type { AnimeDetails, IntegrationAnimePart, MangaDetails, SearchResult } from '../types';
 import { readAlternativeTitles, selectAlternativeTitles } from '../alternativeTitles';
 import { asObject, getArray, getObject, getString, mapAnimeFormat, stripHtml, type JsonFetcher } from './common';
@@ -12,13 +13,13 @@ const positive = (value: unknown): number | null => value !== null && value !== 
 
 /** Bound public catalog requests, including requests queued by the shared transport. */
 export async function fetchKitsu(fetch: JsonFetcher, path: string): Promise<unknown> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: (() => void) | undefined;
     try {
         return await Promise.race([
             Promise.resolve().then(() => fetch(`${KITSU_BASE}/${path}`, KITSU_HEADERS)),
-            new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Kitsu request timed out')), 8_000); }),
+            new Promise<never>((_, reject) => { timer = scheduleTimeout(() => reject(new Error('Kitsu request timed out')), 8_000); }),
         ]);
-    } finally { clearTimeout(timer); }
+    } finally { timer?.(); }
 }
 export function kitsuTitle(row: RecordValue | null): string {
     const data = attributes(row), titles = getObject(data, 'titles');

@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../../utils/timers';
 import { TFile, TFolder } from 'obsidian';
 import { normalizeObsidianTag } from '../../settings/settingsNormalization';
 import { wikilinkLabel } from '../integrations/templateValues';
@@ -37,16 +38,16 @@ function yieldToNextFrame(): Promise<void> {
         if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
             let frame: number | undefined;
             const finish = (): void => {
-                clearTimeout(timer);
+                timer();
                 if (frame !== undefined) window.cancelAnimationFrame(frame);
                 resolve();
             };
             // Chromium suspends animation frames in hidden windows; loading must still finish there.
-            const timer = setTimeout(finish, 32);
+            const timer = scheduleTimeout(finish, 32);
             frame = window.requestAnimationFrame(finish);
             return;
         }
-        setTimeout(resolve, 0);
+        scheduleTimeout(resolve, 0);
     });
 }
 

@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../utils/timers';
 import type { AnimeItem, SeriesItem, AnimePart, VideoPart, EpisodeInfo, LorebaseSettings } from '../types';
 import { fetchJson } from './integrations/shared';
 import type { JsonFetcher } from './integrations/providers/common';
@@ -169,10 +170,12 @@ export class EpisodeMetadataService {
     }
     /** Obsidian's requestUrl cannot be aborted. Detach a stalled transport, clear
      * our timers; late responses cannot update the draft. */
-    private withTimeout<T>(request: Promise<T>, timeout: number): Promise<T> {
-        return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => reject(new Error('Episode metadata timed out')), timeout);
-            request.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+    private async withTimeout<T>(request: Promise<T>, timeout: number): Promise<T> {
+        let cancelTimer: (() => void) | undefined;
+        const deadline = new Promise<never>((_, reject) => {
+            cancelTimer = scheduleTimeout(() => reject(new Error('Episode metadata timed out')), timeout);
         });
+        try { return await Promise.race([request, deadline]); }
+        finally { cancelTimer?.(); }
     }
 }

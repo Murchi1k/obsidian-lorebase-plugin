@@ -1,3 +1,4 @@
+import { scheduleTimeout } from '../../utils/timers';
 import { requestUrl } from 'obsidian';
 import type { TraktEntry, TraktState, TraktSyncSettings } from './types';
 
@@ -7,23 +8,23 @@ export const rows = (value: unknown): Data[] => Array.isArray(value) ? value.map
 export const text = (value: unknown): string => typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 export function checkTraktAbort(signal: AbortSignal): void { if (signal.aborted) throw new DOMException('Cancelled', 'AbortError'); }
 export async function waitTraktWork<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined, abort: (() => void) | undefined;
+    let timer: (() => void) | undefined, abort: (() => void) | undefined;
     try {
         return await Promise.race([work, new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error('TRAKT_NETWORK')), 30_000);
+            timer = scheduleTimeout(() => reject(new Error('TRAKT_NETWORK')), 30_000);
             abort = () => reject(new DOMException('Cancelled', 'AbortError')); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
         })]);
-    } finally { if (timer) clearTimeout(timer); if (abort) signal.removeEventListener('abort', abort); }
+    } finally { timer?.(); if (abort) signal.removeEventListener('abort', abort); }
 }
 export class TraktHttpError extends Error { constructor(readonly status: number, readonly retryAfter = 0) { super(`Trakt HTTP ${status}`); } }
 export async function traktRequest(url: string, signal: AbortSignal, options: { method?: string; headers?: Record<string, string>; body?: unknown } = {}): Promise<{ data: unknown; headers: Record<string, string> }> {
     checkTraktAbort(signal);
-    let timer: ReturnType<typeof setTimeout> | undefined, abort: (() => void) | undefined;
+    let timer: (() => void) | undefined, abort: (() => void) | undefined;
     try {
         const response = await Promise.race([
             requestUrl({ url, method: options.method ?? (options.body === undefined ? 'GET' : 'POST'), headers: { Accept: 'application/json', 'User-Agent': 'Lorebase/4.0.0 (Obsidian plugin)', ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...options.headers }, body: options.body === undefined ? undefined : JSON.stringify(options.body), throw: false }),
             new Promise<never>((_, reject) => {
-                timer = setTimeout(() => reject(new Error('Request timed out')), 30_000);
+                timer = scheduleTimeout(() => reject(new Error('Request timed out')), 30_000);
                 abort = () => reject(new DOMException('Cancelled', 'AbortError')); signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
             }),
         ]);
@@ -33,7 +34,7 @@ export async function traktRequest(url: string, signal: AbortSignal, options: { 
     } catch (error) {
         if (error instanceof TraktHttpError || error instanceof DOMException && error.name === 'AbortError') throw error;
         throw new Error('TRAKT_NETWORK');
-    } finally { if (timer) clearTimeout(timer); if (abort) signal.removeEventListener('abort', abort); }
+    } finally { timer?.(); if (abort) signal.removeEventListener('abort', abort); }
 }
 export type TraktRequest = typeof traktRequest;
 export interface TraktDeviceCode { code: string; url: string; expiresAt: number; interval: number; poll(signal: AbortSignal): Promise<TraktSyncSettings | null>; }

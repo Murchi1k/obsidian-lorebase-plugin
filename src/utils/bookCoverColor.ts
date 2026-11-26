@@ -1,3 +1,4 @@
+import { scheduleTimeout } from './timers';
 import { requestUrl } from 'obsidian';
 import { requestWithDeadline } from '../services/integrations/requestDeadline';
 import { coverImageExtension } from '../services/integrations/imageBinary';
@@ -68,9 +69,9 @@ export function getBookCoverColor(url: string, document: Document): Promise<Book
             }
             const img = document.createElement('img');
             await new Promise<void>((resolve, reject) => {
-                const timer = setTimeout(() => { img.src = ''; reject(new Error('Cover timeout')); }, 15000);
-                img.onload = () => { clearTimeout(timer); resolve(); };
-                img.onerror = () => { clearTimeout(timer); reject(new Error('Cover unavailable')); };
+                const timer = scheduleTimeout(() => { img.src = ''; reject(new Error('Cover timeout')); }, 15000);
+                img.onload = () => { timer(); resolve(); };
+                img.onerror = () => { timer(); reject(new Error('Cover unavailable')); };
                 img.src = source;
             });
             const canvas = document.createElement('canvas');

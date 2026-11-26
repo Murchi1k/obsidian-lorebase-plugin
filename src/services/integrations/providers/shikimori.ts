@@ -1,3 +1,4 @@
+import { asError } from '../../../utils/errors';
 import { readAlternativeTitles, selectAlternativeTitles } from '../alternativeTitles';
 import { parseEpisodeDuration } from '../../media/watchProgress';
 import type { AnimeFormat } from '../../../types';
@@ -583,7 +584,7 @@ async function getShikimoriMediaList(fetchJson: JsonFetcher, id: string, kind: '
             failure = error;
         }
     }
-    if (failure) throw failure;
+    if (failure) throw asError(failure);
     return empty;
 }
 

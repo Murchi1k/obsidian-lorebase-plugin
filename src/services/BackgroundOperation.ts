@@ -1,3 +1,4 @@
+import { scheduleInterval } from '../utils/timers';
 import { requestWithDeadline } from './integrations/requestDeadline';
 
 export function isOperationCancelled(error: unknown): boolean {
@@ -38,9 +39,9 @@ export class BackgroundOperation {
     async wait<T>(work: () => PromiseLike<T>): Promise<T> {
         this.check();
         // Detect in-place account edits while a transport is still pending, without logging identity values.
-        const timer = setInterval(() => { try { this.check(); } catch { /* check aborts the waiting promise */ } }, 100);
+        const stop = scheduleInterval(() => { try { this.check(); } catch { /* check aborts the waiting promise */ } }, 100);
         try { const value = await requestWithDeadline(work, undefined, this.signal); this.check(); return value; }
-        finally { clearInterval(timer); }
+        finally { stop(); }
     }
     close(): void { this.detach.splice(0).forEach(remove => remove()); this.controller.abort(); }
 }

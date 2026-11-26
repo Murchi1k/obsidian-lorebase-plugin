@@ -1,3 +1,5 @@
+import { asError } from '../utils/errors';
+import { scheduleTimeout } from '../utils/timers';
 import { assertOnlineExtras, runOnlineExtra } from './onlineExtras';
 import type { AnimeItem, LorebaseSettings, MovieItem, SeriesItem } from '../types';
 import { i18n } from '../localization';
@@ -59,12 +61,12 @@ export class RecommendationsService {
             const language = item.type === 'anime' ? i18n.getLanguage() : normalizeTmdbLanguage(config.media[item.type === 'movie' ? 'movies' : 'series'].tmdbLanguage);
             const key = `${item.type}:${source.provider}:${source.id}:${language}:${item.type === 'anime' && item.isAdult}:${config.providers.tmdb.apiKey || ''}`;
             const hit = this.cache.get(key); if (hit && hit.expires > Date.now()) return hit.value;
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            const value = Promise.race([this.read(item, source, language), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Recommendations timed out')), 15_000); })])
-                .finally(() => { if (timer) clearTimeout(timer); }).catch(error => { if (this.cache.get(key)?.value === value) this.cache.delete(key); throw error; });
+            let timer: (() => void) | undefined;
+            const value = Promise.race([this.read(item, source, language), new Promise<never>((_, reject) => { timer = scheduleTimeout(() => reject(new Error('Recommendations timed out')), 15_000); })])
+                .finally(() => { timer?.(); }).catch(error => { if (this.cache.get(key)?.value === value) this.cache.delete(key); throw error; });
             if (this.cache.size >= 80) this.cache.delete(this.cache.keys().next().value!);
             this.cache.set(key, { expires: Date.now() + 15 * 60_000, value }); return value;
-        } catch (error) { return Promise.reject(error); }
+        } catch (error) { return Promise.reject(asError(error)); }
     }
     private async read(item: RecommendationTitle, source: Source, language: string): Promise<Recommendations> {
         if (item.type === 'anime') {
