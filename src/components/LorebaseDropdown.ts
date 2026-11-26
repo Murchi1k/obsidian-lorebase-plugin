@@ -1,4 +1,7 @@
 import { setIcon } from 'obsidian';
+import { createDropdownLifecycle } from './dropdownLifecycle';
+
+const closeByContainer = new WeakMap<HTMLElement, () => void>();
 
 export type LorebaseDropdownOption<T extends string> = {
     value: T;
@@ -12,9 +15,14 @@ export type LorebaseDropdownHandle<T extends string> = {
 };
 
 export type LorebaseDropdownConfig = {
+    action?: { label: string; icon?: string; onClick: () => void };
     showMoreLabel?: string;
     showLessLabel?: string;
     floating?: boolean;
+    minPanelWidth?: number;
+    maxPanelHeight?: number;
+    panelClass?: string;
+    buttonLabel?: (value: string) => string;
 };
 
 export function createLorebaseDropdown<T extends string>(
@@ -23,7 +31,9 @@ export function createLorebaseDropdown<T extends string>(
     value: T,
     onChange: (value: T) => void | Promise<void>,
     config: LorebaseDropdownConfig = {}
-): LorebaseDropdownHandle<T> {
+): LorebaseDropdownHandle<T> & { setDisabled: (disabled: boolean) => void } {
+    const ownerDocument = container.ownerDocument;
+    closeByContainer.get(container)?.();
     container.empty();
     container.addClass('lorebase-settings-dropdown');
     container.toggleClass('is-floating', Boolean(config.floating));
@@ -47,6 +57,7 @@ export function createLorebaseDropdown<T extends string>(
         attr: { role: 'listbox' },
     });
     panel.toggleClass('lorebase-floating-dropdown-panel', Boolean(config.floating));
+    if (config.panelClass) panel.addClass(config.panelClass);
     panel.addEventListener('click', (event) => {
         if (config.floating) event.stopPropagation();
     });
@@ -64,7 +75,7 @@ export function createLorebaseDropdown<T extends string>(
             return;
         }
         const width = Math.min(
-            Math.max(buttonRect.width, 160),
+            Math.max(buttonRect.width, config.minPanelWidth ?? 160),
             300,
             Math.max(160, viewportWidth - edge * 2)
         );
@@ -86,7 +97,7 @@ export function createLorebaseDropdown<T extends string>(
         const spaceAbove = Math.max(0, buttonRect.top - gap - edge);
         const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
         const availableHeight = Math.max(96, openAbove ? spaceAbove : spaceBelow);
-        panel.setCssStyles({ maxHeight: `${Math.min(320, availableHeight)}px` });
+        panel.setCssStyles({ maxHeight: `${Math.min(config.maxPanelHeight ?? 320, availableHeight)}px` });
 
         const panelHeight = panel.getBoundingClientRect().height;
         const top = openAbove
@@ -96,15 +107,19 @@ export function createLorebaseDropdown<T extends string>(
     };
 
     const close = (): void => {
+        lifecycle.stop();
         panel.removeClass('is-open');
         button.removeClass('is-open');
         container.removeClass('is-open');
         updateAncestorOpenState(false);
         button.setAttribute('aria-expanded', 'false');
         if (config.floating && panel.parentElement !== container) {
-            container.appendChild(panel);
+            if (button.parentElement === container) container.appendChild(panel);
+            else panel.remove();
         }
     };
+    const lifecycle = createDropdownLifecycle(button, panel, close, positionFloatingPanel);
+    closeByContainer.set(container, close);
     panel.addEventListener('lorebase-dropdown-close', () => close());
     const updateAncestorOpenState = (isOpen: boolean): void => {
         container
@@ -113,7 +128,9 @@ export function createLorebaseDropdown<T extends string>(
     };
 
     const renderLabel = (): void => {
-        labelEl.textContent = options.find((option) => option.value === currentValue)?.label ?? currentValue;
+        const label = options.find((option) => option.value === currentValue)?.label ?? currentValue;
+        labelEl.textContent = config.buttonLabel?.(currentValue) ?? label;
+        if (config.buttonLabel) button.setAttribute('title', label);
     };
 
     const renderOptions = (): void => {
@@ -186,6 +203,12 @@ export function createLorebaseDropdown<T extends string>(
                 renderOptions();
             });
         }
+        if (config.action) {
+            const action = panel.createEl('button', { cls: 'lorebase-settings-dropdown-more lorebase-dropdown-manage-action', attr: { type: 'button' } });
+            if (config.action.icon) setIcon(action.createSpan(), config.action.icon);
+            action.createSpan({ text: config.action.label });
+            action.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); close(); config.action?.onClick(); });
+        }
         positionFloatingPanel();
     };
 
@@ -193,19 +216,23 @@ export function createLorebaseDropdown<T extends string>(
         event.preventDefault();
         event.stopPropagation();
         const isOpen = panel.hasClass('is-open');
-        activeDocument.querySelectorAll('.is-dropdown-open').forEach((node) => {
+        if (isOpen) {
+            close();
+            return;
+        }
+        ownerDocument.querySelectorAll('.is-dropdown-open').forEach((node) => {
             if (!container.contains(node)) node.removeClass('is-dropdown-open');
         });
-        activeDocument.querySelectorAll('.lorebase-settings-dropdown-panel.is-open').forEach((node) => {
+        ownerDocument.querySelectorAll('.lorebase-settings-dropdown-panel.is-open').forEach((node) => {
             if (node !== panel) node.dispatchEvent(new Event('lorebase-dropdown-close'));
         });
-        activeDocument.querySelectorAll('.lorebase-settings-dropdown-btn.is-open').forEach((node) => {
+        ownerDocument.querySelectorAll('.lorebase-settings-dropdown-btn.is-open').forEach((node) => {
             if (node !== button) {
                 node.removeClass('is-open');
                 node.setAttribute('aria-expanded', 'false');
             }
         });
-        activeDocument.querySelectorAll('.lorebase-settings-dropdown.is-open').forEach((node) => {
+        ownerDocument.querySelectorAll('.lorebase-settings-dropdown.is-open').forEach((node) => {
             if (node !== container) node.removeClass('is-open');
         });
         if (!isOpen && config.floating) {
@@ -217,50 +244,17 @@ export function createLorebaseDropdown<T extends string>(
         updateAncestorOpenState(!isOpen);
         button.setAttribute('aria-expanded', String(!isOpen));
         if (!isOpen) positionFloatingPanel();
+        lifecycle.start();
     });
-
-    const removeGlobalListeners = (): void => {
-        activeDocument.removeEventListener('click', onDocumentClick);
-        activeDocument.removeEventListener('keydown', onKeydown);
-        activeDocument.removeEventListener('scroll', onDocumentScroll, true);
-    };
-    const onDocumentClick = (event: MouseEvent): void => {
-        if (!container.isConnected) {
-            removeGlobalListeners();
-            return;
-        }
-        const target = event.target;
-        const clickedInside = event.composedPath().includes(container)
-            || (target instanceof Node && container.contains(target));
-        if (!clickedInside) close();
-    };
-    const onKeydown = (event: KeyboardEvent): void => {
-        if (!container.isConnected) {
-            removeGlobalListeners();
-            return;
-        }
-        if (event.key === 'Escape') close();
-    };
-    const onDocumentScroll = (event: Event): void => {
-        if (!container.isConnected) {
-            removeGlobalListeners();
-            return;
-        }
-        if (!panel.hasClass('is-open')) return;
-
-        const path = event.composedPath();
-        if (path.includes(panel)) return;
-        positionFloatingPanel();
-    };
-
-    activeDocument.addEventListener('click', onDocumentClick);
-    activeDocument.addEventListener('keydown', onKeydown);
-    activeDocument.addEventListener('scroll', onDocumentScroll, true);
 
     renderLabel();
     renderOptions();
 
     return {
+        setDisabled: (disabled: boolean): void => {
+            if (disabled && panel.hasClass('is-open')) close();
+            button.disabled = disabled;
+        },
         setValue: (nextValue: T): void => {
             currentValue = nextValue;
             renderLabel();

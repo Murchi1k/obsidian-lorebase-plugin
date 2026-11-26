@@ -20,15 +20,17 @@ export class ScrollManager {
             scrollContainer.querySelectorAll<HTMLElement>('.lorebase-card[data-lorebase-file-path]')
         );
 
+        let visible: { card: HTMLElement; top: number } | null = null;
         for (const card of cards) {
             const rect = card.getBoundingClientRect();
-            if (rect.bottom < containerRect.top) continue;
-            if (rect.top > containerRect.bottom) break;
-
+            if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
+            if (!visible || rect.top < visible.top) visible = { card, top: rect.top };
+        }
+        if (visible) {
             return {
                 scrollTop,
-                filePath: card.dataset.lorebaseFilePath ?? null,
-                offsetTop: rect.top - containerRect.top,
+                filePath: visible.card.dataset.lorebaseFilePath ?? null,
+                offsetTop: visible.top - containerRect.top,
             };
         }
 

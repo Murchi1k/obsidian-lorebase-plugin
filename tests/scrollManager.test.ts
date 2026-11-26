@@ -12,6 +12,15 @@ function createScrollContainer(): HTMLElement {
 }
 
 describe('ScrollManager', () => {
+    it('captures the top visible card when virtual cards are in creation order', () => {
+        const container = createScrollContainer();
+        const card = (path: string, top: number, bottom: number) => ({
+            dataset: { lorebaseFilePath: path }, getBoundingClientRect: () => ({ top, bottom }),
+        }) as unknown as HTMLElement;
+        container.querySelectorAll = () => [card('below.md', 500, 600), card('second.md', 100, 180), card('first.md', -20, 90)] as unknown as NodeListOf<HTMLElement>;
+        const manager = new ScrollManager(() => container, () => false);
+        expect(manager.capture()).toEqual({ scrollTop: 90, filePath: 'first.md', offsetTop: -20 });
+    });
     it('restores the exact scroll position without following a reordered card', () => {
         const container = createScrollContainer();
         const manager = new ScrollManager(() => container, () => false);
