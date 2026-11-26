@@ -90,7 +90,7 @@ export function renderStatusSettings(context: SettingsSectionContext, container:
                 setIcon(action, isCustomStatus(status.status) ? 'trash-2' : 'rotate-ccw');
                 action.addEventListener('click', () => {
                     delete appearanceMap()[status.status];
-                    const labels = settings.statusLabels[statusSettingsKey(option.value)] as Partial<Record<MediaStatus, string>> | undefined;
+                    const labels: Partial<Record<MediaStatus, string>> | undefined = settings.statusLabels[statusSettingsKey(option.value)];
                     if (labels) delete labels[status.status];
                     void persist(); render();
                 });

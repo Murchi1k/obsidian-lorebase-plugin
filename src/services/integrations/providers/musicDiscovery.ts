@@ -78,7 +78,7 @@ export async function getArtistReleases(fetch: MusicFetch, artist: MusicArtist, 
 }
 /** MusicBrainz album credits identify guest/co-credited releases; never infer them from title text. */
 export async function getArtistAppearances(fetch: MusicFetch, name: string, page = 0): Promise<{ items: MusicRelease[]; more: boolean }> {
-    const query = new URLSearchParams({ query: `artist:"${name.replace(/([+\-!(){}\[\]^"~*?:\\/|&])/g, '\\$1')}"`, fmt: 'json', limit: '25' });
+    const query = new URLSearchParams({ query: `artist:"${name.replace(/([+\-!(){}[\]^"~*?:\\/|&])/g, '\\$1')}"`, fmt: 'json', limit: '25' });
     const matches = obj(await fetch(`https://musicbrainz.org/ws/2/artist?${query}`));
     const exact = asArray(matches.artists).map(obj).filter(o => nameKey(getString(o, 'name')) === nameKey(name));
     const match = exact.length === 1 ? exact[0] : undefined;

@@ -103,7 +103,7 @@ export function parseInboxNote(path: string, content: string, fallback: Template
             continue;
         }
         text = text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, '').replace(/^\[[ xX]\]\s*/, '')
-            .replace(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/, (_all, target, alias) => alias || target);
+            .replace(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/, (_all: string, target: string, alias?: string) => alias || target);
         const links: string[] = [], notes: string[] = [];
         text = text.replace(/\[([^\]]*)\]\((https?:\/\/[^\s]+?)\)/gi, (_all, label: string, url: string) => {
             links.push(url); return label === url ? '' : label;
@@ -121,7 +121,7 @@ export function parseInboxNote(path: string, content: string, fallback: Template
             if (tail[1].trim()) notes.unshift(tail[1].trim());
             text = text.slice(0, tail.index).trim();
         }
-        const title = clean(text.replace(/^\*\*|\*\*$/g, '').replace(/^`|`$/g, '').replace(/\\([\\`*_{}\[\]()#+\-.!~>])/g, '$1'));
+        const title = clean(text.replace(/^\*\*|\*\*$/g, '').replace(/^`|`$/g, '').replace(/\\([\\`*_{}[\]()#+\-.!~>])/g, '$1'));
         if (!title || !/[\p{L}\p{N}]/u.test(title) || title.startsWith('#')) continue;
         const origin: InboxOrigin = { id: path + '::' + fingerprint(original), path, line: entry.line, text: original, section };
         result.push({ id: kind + ':' + inboxTitleKey(title), title, kind, notes, links: [...new Set(links)], rating10, isAdult: adult, origins: [origin] });

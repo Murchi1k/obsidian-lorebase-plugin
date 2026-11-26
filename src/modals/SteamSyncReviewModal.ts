@@ -238,7 +238,7 @@ export class SteamSyncReviewModal extends Modal {
         const ids = [...this.pendingNames];
         for (let offset = 0; offset < ids.length && !this.hasResolved && !this.inline?.signal.aborted; offset += 40) {
             const batch = ids.slice(offset, offset + 40);
-            const names = await this.nameResolver(batch).catch(() => ({} as Record<number, string>));
+            const names = await this.nameResolver(batch).catch((): Record<number, string> => ({}));
             if (this.hasResolved || this.inline?.signal.aborted) return;
             for (const candidate of this.candidates) {
                 if (!batch.includes(candidate.appId)) continue;

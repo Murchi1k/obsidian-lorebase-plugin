@@ -29,7 +29,8 @@ export function createLibraryMembership(records: LibraryRecord[], kind: MediaKin
             || text(fm.url ?? fm.source_url).match(/store\.steampowered\.com\/app\/(\d+)/i)?.[1];
         if (kind === 'games' && steamId) identities.add(`steam:${steamId}`);
         const year = text(fm.year).slice(0, 4);
-        const names = [fm.name, fm.title, ...(Array.isArray(fm.aliases) ? fm.aliases : [fm.aliases])];
+        const aliases: unknown[] = Array.isArray(fm.aliases) ? fm.aliases : [fm.aliases];
+        const names = [fm.name, fm.title, ...aliases];
         if (!text(fm.name) && !text(fm.title)) names.push(basename);
         for (const name of names) {
             const key = titleKey(name);

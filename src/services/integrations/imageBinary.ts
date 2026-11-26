@@ -24,7 +24,7 @@ export function coverImageExtension(buffer: ArrayBuffer, contentType = ''): stri
 export async function createCoverImage(app: App, folder: string, title: string, label: string, buffer: ArrayBuffer, contentType = '', signal?: AbortSignal): Promise<string> {
     const extension = coverImageExtension(buffer, contentType);
     await validateCoverImage(buffer, extension, signal);
-    const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
+    const digest = await crypto.subtle.digest('SHA-256', buffer);
     const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
     const name = (sanitizeFileName(title) || 'Untitled').slice(0, 80);
     const role = (sanitizeFileName(label) || 'Image').slice(0, 24);

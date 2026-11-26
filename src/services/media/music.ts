@@ -9,7 +9,7 @@ export function trackArtistNames(track: Pick<MusicTrack, 'artist' | 'artists' | 
     const parts = (track.artist || albumArtist).split(feature);
     const names = track.artists?.length ? [...track.artists] : split(parts[0]);
     names.push(...parts.slice(1).flatMap(guestNames));
-    const titleGuests = track.title.match(/(?:\(|\[|\s[-–—]\s|\s)(?:feat\.?|ft\.?|featuring|при\s+уч\.)\s+([^\)\]]+)/i);
+    const titleGuests = track.title.match(/(?:\(|\[|\s[-–—]\s|\s)(?:feat\.?|ft\.?|featuring|при\s+уч\.)\s+([^)\]]+)/i);
     if (titleGuests) names.push(...guestNames(titleGuests[1]));
     return [...new Map(names.map(name => name.trim()).filter(Boolean).map(name => [name.normalize('NFKC').toLocaleLowerCase(), name])).values()];
 }
@@ -68,7 +68,7 @@ export function formatMusicTotal(value: number | null, locale = 'en'): string {
 export function normalizeMusicTracks(value: unknown): MusicTrack[] {
     if (!Array.isArray(value)) return [];
     const ids = new Set<string>();
-    return value.filter((v) => v && typeof v === 'object' && !Array.isArray(v)).map((v, index) => {
+    return value.filter((v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)).map((v, index) => {
         let id = String(v.id || `track-${index + 1}`);
         while (ids.has(id)) id += `-${index + 1}`;
         ids.add(id);

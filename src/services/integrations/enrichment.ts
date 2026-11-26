@@ -122,7 +122,7 @@ export function mergeProviderMetadata(
         const existingKey = findExistingAlias(current, key);
         const existing = existingKey ? current[existingKey] : undefined;
         if (isPartField(key) && Array.isArray(value)) {
-            let providerParts = value;
+            let providerParts: unknown[] = value;
             const catalog = normalizePartCatalog(current.part_catalog);
             const source = catalog?.source.split(':');
             const sameSource = source && (!incoming.integration_provider || incoming.integration_provider === source[0]) && (!incoming.integration_id || String(incoming.integration_id) === source[1]) && (!incoming.integration_source_kind || incoming.integration_source_kind === source[2]);

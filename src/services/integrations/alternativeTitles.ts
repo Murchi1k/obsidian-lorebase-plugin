@@ -71,7 +71,8 @@ export function readAlternativeTitles(provider: ProviderId, value: unknown): Alt
             add(title.title, languages[String(title.type)]);
         }
     } else if (provider === 'mangadex') {
-        const localized = [item.title, ...(Array.isArray(item.altTitles) ? item.altTitles : [])];
+        const titles: unknown[] = Array.isArray(item.altTitles) ? item.altTitles : [];
+    const localized = [item.title, ...titles];
         for (const titles of localized) for (const [language, title] of Object.entries(record(titles))) add(title, language);
     } else if (provider === 'mangaupdates') {
         add(item.title);

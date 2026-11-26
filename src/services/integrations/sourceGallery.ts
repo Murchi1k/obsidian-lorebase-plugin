@@ -106,7 +106,7 @@ async function getKitsuGallery(fetch: JsonFetcher, id: string, onProgress?: Prog
     const nextPages = new Set<string>();
     for (let offset = 0; ; offset += 20) {
         const params = new URLSearchParams({ 'fields[episodes]': 'thumbnail', 'page[limit]': '20', 'page[offset]': String(offset) });
-        const response = asObject(await fetchKitsu(fetch, 'anime/' + id + '/episodes?' + params));
+        const response = asObject(await fetchKitsu(fetch, 'anime/' + id + '/episodes?' + params.toString()));
         const episodes = getArray(response, 'data');
         for (const episode of episodes) {
             const attributes = getObject(asObject(episode), 'attributes');

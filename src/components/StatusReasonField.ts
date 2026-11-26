@@ -19,9 +19,9 @@ export function mountStatusReason(root: HTMLElement, initial: unknown, status: s
     const suggestions = new Set<string>();
     for (const file of app?.vault.getMarkdownFiles?.() ?? app?.vault.getFiles?.() ?? []) {
         const reasons = normalizeStatusReasons(app?.metadataCache.getFileCache(file)?.frontmatter?.status_reasons);
-        for (const text of Object.values(reasons ?? {})) if (text) suggestions.add(text);
+        for (const text of Object.values(reasons ?? {})) if (typeof text === 'string' && text) suggestions.add(text);
     }
-    for (const text of Object.values(draft)) if (text) suggestions.add(text);
+    for (const text of Object.values(draft)) if (typeof text === 'string' && text) suggestions.add(text);
     for (const value of suggestions) list.createEl('option',{attr:{value}});
     host.prepend(field);
     let current = status;

@@ -2,7 +2,7 @@ import { assertOnlineExtras, runOnlineExtra } from './onlineExtras';
 import type { AnimeItem, LorebaseSettings, MovieItem, SeriesItem } from '../types';
 import { i18n } from '../localization';
 import { fetchJson } from './integrations/shared';
-import type { JsonFetcher } from './integrations/providers/common';
+import { asArray, asObject, type JsonFetcher } from './integrations/providers/common';
 import { fetchKitsu } from './integrations/providers/kitsu';
 import { normalizeTmdbLanguage } from './integrations/providers/tmdb';
 import { anilistRecommendations, findRecommendationTmdbId, recommendationId as id, shikimoriRecommendations, tmdbRecommendations, type Recommendations, type RecommendedWork } from './integrations/providers/recommendations';
@@ -72,8 +72,8 @@ export class RecommendationsService {
             let animeId = source.id, mal = source.provider === 'jikan';
             if (source.provider === 'kitsu') {
                 const payload = await fetchKitsu(this.fetch, `anime/${source.id}/mappings`);
-                const mappings = payload && typeof payload === 'object' && 'data' in payload && Array.isArray(payload.data) ? payload.data : [];
-                const matches = [...new Set(mappings.filter(row => row?.attributes?.externalSite === 'myanimelist/anime').map(row => id(row?.attributes?.externalId)).filter(Boolean))];
+                const mappings = asArray(asObject(payload)?.data).map(row => asObject(asObject(row)?.attributes));
+                const matches = [...new Set(mappings.filter(row => row?.externalSite === 'myanimelist/anime').map(row => id(row?.externalId)).filter(Boolean))];
                 if (matches.length !== 1) throw new Error('RECOMMENDATIONS_SOURCE');
                 animeId = matches[0]; mal = true;
             } else if (!['anilist', 'jikan'].includes(source.provider)) throw new Error('RECOMMENDATIONS_SOURCE');

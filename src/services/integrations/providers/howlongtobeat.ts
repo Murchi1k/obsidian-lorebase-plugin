@@ -18,7 +18,7 @@ const HLTB_ORIGIN = 'https://howlongtobeat.com';
 export function extractHltbSearchPath(script: string): string | null {
     const matches = script.matchAll(/fetch\s*\(\s*["'](\/api\/[a-zA-Z0-9_/-]+)["']\s*,\s*\{[^}]*?method\s*:\s*["']POST["'][^}]*\}/gi);
     for (const match of matches) {
-        if (/searchTerms|searchOptions|searchType/.test(script.slice(Math.max(0, match.index! - 2000), match.index! + 2000))) {
+        if (/searchTerms|searchOptions|searchType/.test(script.slice(Math.max(0, match.index - 2000), match.index + 2000))) {
             return match[1].replace(/\/+$/, '');
         }
     }

@@ -7,7 +7,7 @@ export interface InboxReceipt { state: 'added' | 'dismissed'; at: number; target
 export interface InboxState { receipts: Record<string, InboxReceipt> }
 export interface InboxScan { pending: InboxCandidate[]; handled: InboxCandidate[]; unreadable: string[] }
 export function normalizeInboxState(value: unknown): InboxState {
-    const receipts: Record<string, InboxReceipt> = Object.create(null);
+    const receipts: Record<string, InboxReceipt> = Object.create(null) as Record<string, InboxReceipt>;
     const raw = value && typeof value === 'object' && !Array.isArray(value) ? (value as Partial<InboxState>).receipts : undefined;
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) for (const [id, item] of Object.entries(raw)) {
         if (!item || typeof item !== 'object' || (item.state !== 'added' && item.state !== 'dismissed')) continue;
@@ -41,7 +41,7 @@ export class InboxService {
                     const text = await this.app.vault.cachedRead(file);
                     checkInboxAbort(signal);
                     all.push(...parseInboxNote(file.path, text, fallback, this.tags(cache)));
-                } catch (error) { checkInboxAbort(signal); unreadable.push(file.path); }
+                } catch { checkInboxAbort(signal); unreadable.push(file.path); }
             }
         };
         await Promise.all(Array.from({ length: Math.min(6, files.length) }, read));
@@ -93,7 +93,7 @@ export class InboxService {
         return work;
     }
     private tags(cache: ReturnType<App['metadataCache']['getFileCache']>): string[] {
-        const frontmatter = cache?.frontmatter?.tags;
+        const frontmatter: unknown = cache?.frontmatter?.tags;
         return [...(cache?.tags?.map(tag => tag.tag) ?? []), ...(Array.isArray(frontmatter) ? frontmatter.map(String) : typeof frontmatter === 'string' ? frontmatter.split(/[\s,]+/) : [])];
     }
 }

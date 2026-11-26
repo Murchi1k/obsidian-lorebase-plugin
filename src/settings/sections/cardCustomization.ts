@@ -318,7 +318,7 @@ export function renderCardWorkspace(
                     'Для всіх медіа. Повний текст прокручується в межах вибраної кількості рядків.',
                     '适用于所有媒体。在选定行数范围内滚动查看完整文本。'));
         }
-        if (pane === 'badges') renderCardBadgeSettings(context, body, type() as ConfigurableCardMedia, orientation, forProfiles, commit);
+        if (pane === 'badges') renderCardBadgeSettings(context, body, type(), orientation, forProfiles, commit);
         if (pane === 'appearance') renderAppearance();
         if (pane === 'types' && media !== 'music') renderCardTypeSettings(context, body, media, draw);
     };

@@ -3,7 +3,7 @@ import { normalizeEpisodeDetails } from '../../media/episodeTracking';
 import type { EpisodeInfo } from '../../../types';
 import { inferVideoWorkType } from '../workTypeInference';
 import { SearchResult, VideoDetails, IntegrationVideoPart } from '../types';
-import type { JsonFetcher } from './common';
+import { asArray, type JsonFetcher } from './common';
 
 interface OmdbOptions {
     kind: 'movies' | 'series' | 'mixed';
@@ -143,7 +143,7 @@ async function getOmdbSeasons(
 async function requestOmdbSeason(fetchJson: JsonFetcher, id: string, apiKey: string, season: number): Promise<unknown[]> {
     const payload = await fetchJson(`https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey)}&i=${encodeURIComponent(id)}&Season=${season}`);
     const episodes = payload && typeof payload === 'object' ? (payload as Record<string, unknown>).Episodes : null;
-    return Array.isArray(episodes) ? episodes : [];
+    return asArray(episodes);
 }
 
 export async function getOmdbSeasonEpisodes(fetchJson: JsonFetcher, id: string, apiKey: string, season: number): Promise<EpisodeInfo[]> {

@@ -131,7 +131,7 @@ export class MusicService {
             parentAlbum: 'parent_album', parentTrackId: 'parent_track_id',
             deezerArtistId: 'deezer_artist_id', listeningStats: 'listening_stats',
         };
-        await this.app.fileManager.processFrontMatter(file, fm => {
+        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
             operation.check();
             this.metadata.migrateNoteFieldAliases('music', fm);
             fm[property('type')] = 'music';
@@ -187,7 +187,7 @@ export class MusicService {
             if (!this.app.vault.getAbstractFileByPath(current)) await this.app.vault.createFolder(current);
         }
         const stem = `${draft.artist ? `${draft.artist} - ` : ''}${draft.displayName}`
-            .replace(/[\\/:*?"<>|\[\]#^\u0000-\u001f]/g, '-').replace(/[. ]+$/, '').slice(0, 140) || 'Music';
+            .replace(/[\\/:*?"<>|[\]#^]/g, '-').replace(/[^\u0020-\uFFFF]/g, '-').replace(/[. ]+$/, '').slice(0, 140) || 'Music';
         const base = folder ? `${folder}/${stem}` : stem;
         let path = `${base}.md`;
         for (let n = 2; this.app.vault.getAbstractFileByPath(path); n++) path = `${base} (${n}).md`;

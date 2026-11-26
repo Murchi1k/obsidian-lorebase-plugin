@@ -10,7 +10,6 @@ import type {
     AnimeStatus,
     LorebaseSettings,
     RatingScaleSettings,
-    ReadingStatus,
     UserRating,
 } from '../types';
 import { extractMarkdownSection, upsertMarkdownSection, updateMarkdownSection } from './markdownSections';
@@ -62,7 +61,7 @@ interface LocalSyncItem {
     kind: SyncKind;
     filePath: string;
     integrationId: string;
-    status: AnimeStatus | ReadingStatus;
+    status: AnimeStatus  ;
     userRating: UserRating;
     episodeCurrent: number;
     chapterCurrent: number;
@@ -547,10 +546,10 @@ export class AniListSyncService {
         if (item.kind === 'anime') {
             updates.episode_current = entry.progress;
             updates.episode_total = entry.media.episodes ?? null;
-            const raw = this.app.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+            const raw = this.app.metadataCache.getFileCache(file)?.frontmatter;
             const fm = raw ? this.metadataService.resolveFrontmatter('anime', raw) : {};
-            const parts = Array.isArray(fm.anime_parts) ? fm.anime_parts : [];
-            const index = parts.findIndex(part => part && typeof part === 'object' && String(part.id) === String(fm.active_part_id));
+            const parts: unknown[] = Array.isArray(fm.anime_parts) ? fm.anime_parts : [];
+            const index = parts.findIndex(part => part && typeof part === 'object' && 'id' in part && String(part.id) === String(fm.active_part_id));
             const target = index >= 0 ? index : parts.length === 1 ? 0 : -1;
             const saved = target >= 0 && parts[target] && typeof parts[target] === 'object' ? parts[target] as Record<string, unknown> : null;
             if (saved && readEpisodeFields(saved).watchedEpisodes !== undefined) {
@@ -671,7 +670,7 @@ export class AniListSyncService {
     }
 
     private readLocalItem(file: TFile, kind: SyncKind): LocalSyncItem | null {
-        const raw = this.app.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+        const raw = this.app.metadataCache.getFileCache(file)?.frontmatter;
         const frontmatter = raw ? this.metadataService.resolveFrontmatter(kind, raw) : undefined;
         if (!frontmatter) return null;
         const sourceProvider = String(frontmatter.integration_provider ?? '').toLowerCase();
@@ -835,7 +834,7 @@ export class AniListSyncService {
             && (left.notes ?? '') === (right.notes ?? '');
     }
 
-    private toAniListStatus(status: AnimeStatus | ReadingStatus): string {
+    private toAniListStatus(status: AnimeStatus  ): string {
         const map: Record<AnimeStatus, string> = {
             planned: 'PLANNING',
             watching: 'CURRENT',

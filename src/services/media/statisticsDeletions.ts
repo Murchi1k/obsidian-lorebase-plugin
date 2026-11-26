@@ -17,9 +17,13 @@ export interface StatisticsDeletion {
 }
 export function normalizeStatisticsDeletions(value:unknown):StatisticsDeletion[] {
     if (!Array.isArray(value)) return [];
-    return value.filter((v): v is StatisticsDeletion => !!v && typeof v === 'object'
-        && typeof v.path === 'string' && typeof v.title === 'string' && STAT_MEDIA.includes(v.type)
-        && Number.isFinite(v.at) && v.at > 0).map(v => ({
+    return value.filter((entry: unknown): entry is StatisticsDeletion => {
+        if (!entry || typeof entry !== 'object') return false;
+        const row = entry as Partial<StatisticsDeletion>;
+        return typeof row.path === 'string' && typeof row.title === 'string'
+            && row.type !== undefined && STAT_MEDIA.includes(row.type)
+            && typeof row.at === 'number' && Number.isFinite(row.at) && row.at > 0;
+    }).map(v => ({
         path: v.path, title: v.title, type: v.type, at: v.at,
         added: Number.isFinite(v.added) ? v.added : null,
         finished: Number.isFinite(v.finished) ? v.finished : null,

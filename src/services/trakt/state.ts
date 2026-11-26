@@ -4,7 +4,7 @@ import { normalizeWatchedEpisodes, readEpisodeFields, watchedEpisodeNumbers } fr
 import { rows, text } from './api';
 import type { TraktEntry, TraktSnapshot, TraktState } from './types';
 
-type Data = Record<string, any>;
+type Data = Record<string, unknown>;
 export const TRAKT_STATE_FIELDS: Array<keyof TraktState> = ['rating', 'watchlist', 'watched', 'favorite', 'episodes'];
 export const equalTraktValue = (a: unknown, b: unknown): boolean => Array.isArray(a) && Array.isArray(b) ? JSON.stringify([...new Set(a)].sort()) === JSON.stringify([...new Set(b)].sort()) : a === b;
 export const equalTraktState = (a: TraktState, b: TraktState): boolean => TRAKT_STATE_FIELDS.every(key => equalTraktValue(a[key], b[key]));
@@ -62,15 +62,16 @@ export function traktProgressUpdates(fm: Data, entry: TraktEntry, state: TraktSt
     parts.sort((a, b) => Number(a.season ?? a.seasonNumber) - Number(b.season ?? b.seasonNumber));
     for (const [index, part] of parts.entries()) {
         const season = Number(part.season ?? part.seasonNumber ?? index + 1);
-        part.watched_episodes = normalizeWatchedEpisodes(state.episodes.filter(key => Number(key.split(':')[0]) === season).map(key => Number(key.split(':')[1])));
-        part.episode_tracking = 'episodes'; part.episode_current = part.watched_episodes.length;
-        if (part.episode_total != null) part.episode_total = Math.max(Number(part.episode_total) || 0, ...part.watched_episodes, 0);
-        part.status = Number(part.episode_total) > 0 && part.episode_current >= Number(part.episode_total) ? 'completed' : part.episode_current ? 'watching' : 'planned';
+        const watched = normalizeWatchedEpisodes(state.episodes.filter(key => Number(key.split(':')[0]) === season).map(key => Number(key.split(':')[1])));
+        part.watched_episodes = watched;
+        part.episode_tracking = 'episodes'; part.episode_current = watched.length;
+        if (part.episode_total != null) part.episode_total = Math.max(Number(part.episode_total) || 0, ...watched, 0);
+        part.status = Number(part.episode_total) > 0 && watched.length >= Number(part.episode_total) ? 'completed' : watched.length ? 'watching' : 'planned';
     }
     if (!parts.length) throw new Error('TRAKT_NO_SEASONS');
     const regular = parts.filter((part, index) => Number(part.season ?? part.seasonNumber ?? index + 1) > 0);
-    const started = parts.filter(part => part.episode_current > 0 && part.status !== 'completed');
-    const kept = parts.find(part => part.id === fm.active_part_id && part.episode_current > 0 && part.status !== 'completed');
+    const started = parts.filter(part => Number(part.episode_current) > 0 && part.status !== 'completed');
+    const kept = parts.find(part => part.id === fm.active_part_id && Number(part.episode_current) > 0 && part.status !== 'completed');
     const active = kept ?? started[started.length - 1] ?? regular.find(part => part.status !== 'completed') ?? regular[regular.length - 1] ?? parts[0];
     updates.series_parts = parts; updates.active_part_id = active.id;
     updates.season_current = active.season ?? active.seasonNumber;

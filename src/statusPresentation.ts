@@ -44,7 +44,7 @@ export function getStatusAppearance(media: MediaType, status: MediaStatus): { ic
     const defaults: Record<string, string> = { completed: '#3fffb2', playing: '#00c4ff', watching: '#00c4ff', listening: '#59b5ff',
         dropped: '#ff8c40', sandbox: '#ffeb3b', wishlist: '#b08cff', paused: '#ffeb3b', to_be_released: '#d99cff', on_repeat: '#ba8cff' };
     const color = custom?.color && /^#[0-9a-f]{6}$/i.test(custom.color) ? custom.color : defaults[status] || '#e7e7e7';
-    const labels = activeSettings?.statusLabels?.[statusSettingsKey(media)] as Partial<Record<MediaStatus, string>> | undefined;
+    const labels: Partial<Record<MediaStatus, string>> | undefined = activeSettings?.statusLabels?.[statusSettingsKey(media)];
     const label = custom?.label?.trim() || labels?.[status]?.trim();
     return { icon: custom?.icon || STATUS_ICON_MAP[status] || 'circle', color, label };
 }

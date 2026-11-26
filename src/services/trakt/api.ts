@@ -1,7 +1,7 @@
 import { requestUrl } from 'obsidian';
 import type { TraktEntry, TraktState, TraktSyncSettings } from './types';
 
-type Data = Record<string, any>;
+type Data = Record<string, unknown>;
 export const object = (value: unknown): Data => value && typeof value === 'object' && !Array.isArray(value) ? value as Data : {};
 export const rows = (value: unknown): Data[] => Array.isArray(value) ? value.map(object) : [];
 export const text = (value: unknown): string => typeof value === 'string' || typeof value === 'number' ? String(value) : '';
@@ -16,7 +16,7 @@ export async function waitTraktWork<T>(work: Promise<T>, signal: AbortSignal): P
     } finally { if (timer) clearTimeout(timer); if (abort) signal.removeEventListener('abort', abort); }
 }
 export class TraktHttpError extends Error { constructor(readonly status: number, readonly retryAfter = 0) { super(`Trakt HTTP ${status}`); } }
-export async function traktRequest(url: string, signal: AbortSignal, options: { method?: string; headers?: Record<string, string>; body?: unknown } = {}): Promise<{ data: any; headers: Record<string, string> }> {
+export async function traktRequest(url: string, signal: AbortSignal, options: { method?: string; headers?: Record<string, string>; body?: unknown } = {}): Promise<{ data: unknown; headers: Record<string, string> }> {
     checkTraktAbort(signal);
     let timer: ReturnType<typeof setTimeout> | undefined, abort: (() => void) | undefined;
     try {
@@ -60,7 +60,8 @@ export class TraktApi {
     }
     async beginLogin(signal: AbortSignal): Promise<TraktDeviceCode> {
         const base = this.config(), clientId = this.requireApplication(base);
-        const { data } = await this.request(`${AUTH}/oauth/device/code`, signal, { body: { client_id: clientId } });
+        const response = await this.request(`${AUTH}/oauth/device/code`, signal, { body: { client_id: clientId } });
+        const data = object(response.data);
         if (!data.user_code || !data.device_code || !data.verification_url) throw new Error('TRAKT_INVALID_CODE');
         const expiresAt = Date.now() + (Number(data.expires_in) || 600) * 1000;
         const interval = Math.max(5, Number(data.interval) || 5); let nextPoll = 0;
@@ -73,7 +74,7 @@ export class TraktApi {
                 const connected = this.tokens(base, object(result.data));
                 const profile = await this.request(`${API}/users/settings`, pollSignal, { headers: this.headers(connected) });
                 if (this.config() !== base || base.clientId.trim() !== clientId) throw new Error('TRAKT_ACCOUNT_CHANGED');
-                connected.username = text(profile.data?.user?.username); connected.lastSynced = {};
+                connected.username = text(object(object(profile.data).user).username); connected.lastSynced = {};
                 return connected;
             } catch (error) {
                 if (error instanceof TraktHttpError && [400, 429].includes(error.status)) { nextPoll = Date.now() + Math.max(interval, error.retryAfter, error.status === 429 ? interval + 5 : interval) * 1000; return null; }
@@ -114,10 +115,12 @@ export class TraktApi {
         await this.ready(signal); const entries = new Map<string, TraktEntry>();
         const add = (raw: Data): TraktEntry | undefined => {
             const value = object(raw.movie ?? raw.show), kind = raw.movie ? 'movie' : 'series';
-            if (!value.ids?.trakt || !value.title) return;
-            const key = `${kind}:${value.ids.trakt}`;
-            if (!entries.has(key)) entries.set(key, { key, id: text(value.ids.trakt), kind, title: text(value.title), year: Number(value.year) || undefined,
-                ids: Object.assign({}, ...Object.entries(object(value.ids)).filter(([, value]) => value !== null && value !== undefined && value !== '').map(([key, value]) => ({ [key]: text(value) }))),
+            const ids = object(value.ids);
+            const traktId = text(ids.trakt);
+            if (!traktId || !value.title) return;
+            const key = `${kind}:${traktId}`;
+            if (!entries.has(key)) entries.set(key, { key, id: traktId, kind, title: text(value.title), year: Number(value.year) || undefined,
+                ids: Object.fromEntries(Object.entries(ids).filter(([, value]) => value !== null && value !== undefined && value !== '').map(([key, value]) => [key, text(value)])),
                 state: { rating: null, watchlist: false, watched: false, favorite: false, episodes: [] } });
             return entries.get(key);
         };
@@ -128,7 +131,7 @@ export class TraktApi {
         for (const raw of movies) { const entry = add(raw); if (entry) entry.state.watched = true; }
         for (const raw of shows) {
             if (Number(raw.plays) > 0 && !Array.isArray(raw.seasons)) throw new Error('TRAKT_PROGRESS_UNAVAILABLE');
-            const entry = add(raw); if (entry) entry.state.episodes = [...new Set(rows(raw.seasons).flatMap(season => rows(season.episodes).filter(episode => Number(episode.plays) > 0).map(episode => `${season.number}:${episode.number}`)))].sort();
+            const entry = add(raw); if (entry) entry.state.episodes = [...new Set(rows(raw.seasons).flatMap(season => rows(season.episodes).filter(episode => Number(episode.plays) > 0).map(episode => `${text(season.number)}:${text(episode.number)}`)))].sort();
         }
         for (const raw of watchlist) { if (!raw.movie && !raw.show) continue; const entry = add(raw); if (entry) entry.state.watchlist = true; }
         for (const raw of ratings) { if (!raw.movie && !raw.show) continue; const entry = add(raw); if (entry) entry.state.rating = Number(raw.rating) > 0 ? Math.min(10, Number(raw.rating)) : null; }
@@ -147,7 +150,7 @@ export class TraktApi {
             checkTraktAbort(signal);
             if (this.config() !== config || this.getSessionIdentity() !== session || !config.accessToken) throw new Error('TRAKT_ACCOUNT_CHANGED');
             const response = await this.request(API + path, signal, { headers: this.headers(config), body });
-            if (Object.values(object(response.data?.not_found)).some(value => Array.isArray(value) && value.length)) throw new Error('TRAKT_TITLE_NOT_FOUND');
+            if (Object.values(object(object(response.data).not_found)).some(value => Array.isArray(value) && value.length)) throw new Error('TRAKT_TITLE_NOT_FOUND');
         };
         if (desired.rating !== entry.state.rating) await send(desired.rating === null ? '/sync/ratings/remove' : '/sync/ratings', { [group]: [{ ...id, ...(desired.rating === null ? {} : { rating: desired.rating }) }] });
         if (desired.watchlist !== entry.state.watchlist) await send(desired.watchlist ? '/sync/watchlist' : '/sync/watchlist/remove', { [group]: [id] });

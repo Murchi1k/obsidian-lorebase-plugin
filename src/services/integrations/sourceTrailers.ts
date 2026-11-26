@@ -50,7 +50,7 @@ async function loadTrailers(fetch: JsonFetcher, {
         case 'rawg': {
             if (!/^[a-z0-9][a-z0-9_-]*$/i.test(id)) return [];
             const params = new URLSearchParams({ key: apiKey });
-            const response = await fetch('https://api.rawg.io/api/games/' + id + '/movies?' + params);
+            const response = await fetch('https://api.rawg.io/api/games/' + id + '/movies?' + params.toString());
             const entries = Array.isArray(response) ? response : getArray(asObject(response), 'results');
             return entries.map(raw => {
                 const row = asObject(raw);

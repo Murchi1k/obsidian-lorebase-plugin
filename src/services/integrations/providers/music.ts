@@ -52,7 +52,7 @@ const cover = (v: unknown): string => array(v)
     .map(entry => text(object(entry)['#text']).trim())
     .filter(url => url && !LASTFM_PLACEHOLDER.test(url))
     .pop() || '';
-const lucene = (value: string): string => value.trim().replace(/([+\-!(){}\[\]^"~*?:\\/|&])/g, '\\$1');
+const lucene = (value: string): string => value.trim().replace(/([+\-!(){}[\]^"~*?:\\/|&])/g, '\\$1');
 
 function releaseDate(value: unknown): string | null {
     const raw = text(value).trim();

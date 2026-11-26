@@ -135,7 +135,7 @@ export function getBuiltInFieldDefinitions(
         definitions.splice(1, 0, {
             id: 'workType', label: mediaType === 'anime' ? countryFieldLabel(language) : t('templateFieldWorkType'), icon: 'book-type', type: 'list', source: 'builtin',
             operators: ['containsAny', 'notContains', 'empty', 'notEmpty'],
-            options: mediaType === 'anime' ? countryOptions(language, mangaWorkTypes) : getMediaWorkTypeOptions(mediaType as 'game' | 'movie' | 'series' | 'manga', language, mangaWorkTypes),
+            options: mediaType === 'anime' ? countryOptions(language, mangaWorkTypes) : getMediaWorkTypeOptions(mediaType, language, mangaWorkTypes),
         });
     }
     if (flags.showAdult) {

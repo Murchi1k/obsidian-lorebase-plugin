@@ -9,7 +9,7 @@ import { TraktApi, checkTraktAbort, object, text, waitTraktWork, type TraktDevic
 import { equalTraktState, localTraktState, mergeTraktState, traktProgressUpdates } from './trakt/state';
 import type { TraktEntry, TraktPreparedVideo, TraktPreview, TraktState, TraktSyncSettings } from './trakt/types';
 
-type Data = Record<string, any>;
+type Data = Record<string, unknown>;
 interface RecordItem { file: TFile; kind: 'movie' | 'series'; fm: Data; }
 export interface TraktSelection { row: TraktPreview; resolution?: 'local' | 'remote'; }
 export interface TraktSyncResult { created: number; updated: number; pushed: number; failed: number; skipped: number; errors: string[]; }

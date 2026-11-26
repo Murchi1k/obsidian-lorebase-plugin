@@ -172,7 +172,7 @@ export class NoteConversionService {
                 const raw = String(source.type ?? '').toLowerCase();
                 next.music_kind = ['song', 'track'].includes(raw) || next.parent_track_id ? 'track' : 'album';
             }
-            if (Array.isArray(next.tracks)) next.tracks = next.tracks.map((track, index) => typeof track === 'string'
+            if (Array.isArray(next.tracks)) next.tracks = next.tracks.map((track: unknown, index) => typeof track === 'string'
                 ? { id: `import-track-${index + 1}`, title: track }
                 : this.isPlainRecord(track) ? { ...track, id: String(track.id ?? `import-track-${index + 1}`), title: track.title ?? track.name ?? '',
                     ...(track.userRating === undefined && track.rating !== undefined ? { userRating: track.rating } : {}) } : track);

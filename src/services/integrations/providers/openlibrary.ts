@@ -26,7 +26,7 @@ export async function searchOpenLibrary(fetch: JsonFetcher, query: string, optio
     url.searchParams.set('fields', 'key,title,author_name,cover_i,first_publish_year');
     const root = asObject(await fetch(url.toString(), { Accept: 'application/json' }));
     if (!root || !Array.isArray(root.docs)) throw new Error('Open Library search unavailable');
-    const cache = summaries.get(fetch) ?? new Map(); summaries.set(fetch, cache);
+    const cache = summaries.get(fetch) ?? new Map<string, BookSummary>(); summaries.set(fetch, cache);
     const results: SearchResult[] = [];
     for (const raw of root.docs) {
         const row = asObject(raw);
@@ -36,7 +36,7 @@ export async function searchOpenLibrary(fetch: JsonFetcher, query: string, optio
         const authors = mapStringList(getArray(row, 'author_name'), value => value);
         const year = date(getString(row, 'first_publish_year'));
         const image = cover(row?.cover_i);
-        if (cache.size >= 200) cache.delete(cache.keys().next().value!);
+        if (cache.size >= 200) cache.delete(cache.keys().next().value);
         cache.set(id, { title, authors, year, image, expiresAt: Date.now() + 5 * 60_000 });
         results.push({ id, title, subtitle: authors.join(', '), year, released: year, image, provider: 'openlibrary', format: 'Book / Open Library' });
     }

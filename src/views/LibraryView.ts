@@ -1155,7 +1155,7 @@ export class LibraryView extends ItemView {
         // Small grids, bookshelves and random cards own listeners and image
         // loads too. Removing DOM alone leaves those resources active.
         this.libraryContentEl?.querySelectorAll<HTMLElement>('.lorebase-card')
-            .forEach(GameCard.destroyElement);
+            .forEach(element => GameCard.destroyElement(element));
     }
 
     private observeLayoutResize(): void {

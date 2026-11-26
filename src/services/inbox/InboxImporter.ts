@@ -133,7 +133,8 @@ export class InboxImporter {
                 const type = String(metadata.type ?? '').toLocaleLowerCase();
                 const singular = ({ games: 'game', anime: 'anime', movies: 'movie', series: 'series', books: 'book', manga: 'manga' })[kind];
                 if (type && type !== kind && type !== singular) continue;
-                const names = [metadata.name, metadata.title, ...(Array.isArray(metadata.aliases) ? metadata.aliases : [metadata.aliases])];
+                const aliases: unknown[] = Array.isArray(metadata.aliases) ? metadata.aliases : [metadata.aliases];
+                const names = [metadata.name, metadata.title, ...aliases];
                 if (!metadata.name && !metadata.title) names.push(file.basename);
                 if (names.some(name => typeof name === 'string' && inboxTitleKey(name) === inboxTitleKey(entry.title))) return file;
             }

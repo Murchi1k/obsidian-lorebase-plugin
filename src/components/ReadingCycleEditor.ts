@@ -82,7 +82,7 @@ export class ReadingCycleEditor {
                 ...part, ...('chapterCurrent' in updates ? { chapterCurrent: updates.chapterCurrent } : {}),
                 ...('chapterTotal' in updates ? { chapterTotal: updates.chapterTotal } : {}),
                 ...('status' in updates ? { status: updates.status } : {}),
-            }) } as ReadingCycleUpdates;
+            }) };
         }
         if (item.filePath === this.current.filePath) this.changeCurrent(updates);
         else this.drafts.set(item.filePath, { ...this.drafts.get(item.filePath), ...updates } as ReadingCycleUpdates);

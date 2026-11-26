@@ -38,7 +38,7 @@ export function renderCommunityRatingIcon(host: HTMLElement, icon: CommunityRati
     if (icon === 'tomato') {
         const svg = wrapper.ownerDocument.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('viewBox', '0 0 64 64');
-        const paths = [
+        const paths: Record<string, string>[] = [
             { d: 'M32 18C18 9 6 21 8 37c2 14 12 21 24 21s22-7 24-21C58 21 46 9 32 18Z', fill: '#ef4444', stroke: '#b91c1c', 'stroke-width': '2' },
             { d: 'M32 20c-7-10-13-9-17-7l10 8-12 4c8 4 14 2 19-2 5 4 11 6 19 2l-12-4 10-8c-4-2-10-3-17 7Z', fill: '#22c55e' },
             { d: 'M32 19V9', stroke: '#15803d', 'stroke-width': '3', 'stroke-linecap': 'round' },

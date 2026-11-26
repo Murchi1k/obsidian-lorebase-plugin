@@ -1,7 +1,7 @@
 import { normalizeCountryMetadata } from '../../media/statisticsCountries';
 import { inferVideoWorkType } from '../workTypeInference';
 import { SearchResult, VideoDetails, IntegrationVideoPart } from '../types';
-import type { JsonFetcher } from './common';
+import { asArray, asObject, type JsonFetcher } from './common';
 
 interface TvmazeOptions {
     kind: 'movies' | 'series' | 'mixed';
@@ -139,8 +139,9 @@ export async function getTvmazeDetails(
     if (options.fillMissingEpisodeTotals && seasons.some(part => !part.episodeTotal)) {
         const episodes = await fetchJson(`https://api.tvmaze.com/shows/${encodeURIComponent(id)}/episodes`).catch(() => null);
         const totals = new Map<number, number>();
-        for (const value of Array.isArray(episodes) ? episodes : []) {
-            const season = Number(value?.season), episode = Number(value?.number);
+        for (const value of asArray(episodes)) {
+            const entry = asObject(value);
+            const season = Number(entry?.season), episode = Number(entry?.number);
             if (Number.isInteger(season) && Number.isInteger(episode) && episode > 0) totals.set(season, Math.max(totals.get(season) ?? 0, episode));
         }
         for (const part of seasons) if (!part.episodeTotal && part.seasonNumber !== null) part.episodeTotal = totals.get(part.seasonNumber) ?? null;

@@ -214,7 +214,7 @@ export function collectYamlFieldDefinitions(items: MediaItem[], managedKeys: rea
 
 function readCreditLabels(value: unknown): unknown {
     if (typeof value === 'string') return wikilinkLabel(value);
-    if (Array.isArray(value)) return value.map(entry => typeof entry === 'string' ? wikilinkLabel(entry) : entry);
+    if (Array.isArray(value)) return value.map((entry: unknown) => typeof entry === 'string' ? wikilinkLabel(entry) : entry);
     return value;
 }
 

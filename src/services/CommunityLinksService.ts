@@ -23,9 +23,17 @@ const record = (value: unknown): Record<string, unknown> | null => (
     value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 );
 
+function containsControlCharacters(value: string, allowSpaces = true): boolean {
+    for (const character of value) {
+        const code = character.charCodeAt(0);
+        if (code < (allowSpaces ? 32 : 33) || code === 127) return true;
+    }
+    return false;
+}
+
 /** Any website is supported, while script URLs and embedded credentials are never opened. */
 export function isCommunityWebUrl(value: unknown): value is string {
-    if (typeof value !== 'string' || value.length > 2048 || /[\u0000-\u0020\u007f]/.test(value)) return false;
+    if (typeof value !== 'string' || value.length > 2048 || containsControlCharacters(value, false)) return false;
     try {
         const url = new URL(value);
         return (url.protocol === 'https:' || url.protocol === 'http:') && !!url.hostname && !url.username && !url.password;
@@ -35,7 +43,7 @@ export function isCommunityWebUrl(value: unknown): value is string {
 function readIcon(value: unknown): string {
     if (typeof value !== 'string') return 'lucide:link';
     if (/^(?:brand:(?:kofi|discord|patreon)|(?:lucide:)?[a-z][a-z0-9-]{0,63})$/.test(value)) return value;
-    if (value.startsWith('emoji:') && value.length <= 40 && value.slice(6).trim() && !/[\u0000-\u001f\u007f<>]/.test(value)) return value;
+    if (value.startsWith('emoji:') && value.length <= 40 && value.slice(6).trim() && !containsControlCharacters(value) && !/[<>]/.test(value)) return value;
     if (isCommunityWebUrl(value) && value.startsWith('https://')) return value;
     return 'lucide:link';
 }
@@ -50,7 +58,7 @@ export function readCommunityLinks(value: unknown, fallback: readonly CommunityL
         for (const raw of value) {
             const entry = record(raw);
             if (!entry || typeof entry.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(entry.id) || ids.has(entry.id)) continue;
-            if (typeof entry.label !== 'string' || !entry.label.trim() || entry.label.length > 48 || /[\u0000-\u001f\u007f]/.test(entry.label)) continue;
+            if (typeof entry.label !== 'string' || !entry.label.trim() || entry.label.length > 48 || containsControlCharacters(entry.label)) continue;
             if (!isCommunityWebUrl(entry.url)) continue;
             ids.add(entry.id);
             links.push({ id: entry.id, label: entry.label.trim(), url: entry.url, icon: readIcon(entry.icon) });
