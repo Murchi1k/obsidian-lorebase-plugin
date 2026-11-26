@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "links": [
+    { "id": "kofi", "label": "Ko-fi", "url": "https://ko-fi.com/murch1k", "icon": "brand:kofi" },
+    { "id": "discord", "label": "Discord", "url": "https://discord.gg/qUA4EzafR", "icon": "brand:discord" },
+    { "id": "patreon", "label": "Patreon", "url": "https://www.patreon.com/c/Murch1k", "icon": "brand:patreon" },
+    { "id": "github", "label": "GitHub", "url": "https://github.com/Murchi1k/obsidian-lorebase-plugin", "icon": "lucide:github" }
+  ]
+}
