@@ -1,3 +1,5 @@
+
+import { mt } from '../localization/music';
 /**
  * LOREBASE - Delete Modal
  * Confirmation modal for deleting games
@@ -42,12 +44,12 @@ export class DeleteModal extends Modal {
         const isMovie = this.item.type === 'movie';
         const isSeries = this.item.type === 'series';
         const isReadingMedia = this.item.type === 'book' || this.item.type === 'manga';
-        const title = isReadingMedia
+        const title = this.item.type === 'music' ? mt('deleteTitle') : isReadingMedia
             ? t('deleteTitleReading')
             : isMovie ? t('deleteTitleMovie')
                 : isSeries ? t('deleteTitleSeries')
                     : isAnime ? t('deleteTitleAnime') : t('deleteTitle');
-        const subtitle = isReadingMedia
+        const subtitle = this.item.type === 'music' ? mt('deleteSubtitle') : isReadingMedia
             ? t('deleteSubtitleReading')
             : isMovie ? t('deleteSubtitleMovie')
                 : isSeries ? t('deleteSubtitleSeries')
@@ -71,7 +73,7 @@ export class DeleteModal extends Modal {
         yearLine.appendText(` ${this.item.year || t('yearNotSpecified')}`);
 
         const statusLabels: Record<MediaStatus, string> = i18n.getStatusLabels();
-        let statusLabel = statusLabels[this.item.status] ?? t('statusNotStarted');
+        let statusLabel = this.item.type === 'music' ? mt(this.item.status) : statusLabels[this.item.status] ?? t('statusNotStarted');
         if (this.item.status === 'completed' && this.item.type === 'game') {
             statusLabel = t('statusPlayed');
         } else if (isReadingMedia && this.item.status === 'completed') {
@@ -100,7 +102,7 @@ export class DeleteModal extends Modal {
         });
         confirmCheckbox.setAttr('id', checkboxId);
 
-        const confirmText = isReadingMedia
+        const confirmText = this.item.type === 'music' ? mt('deleteAck') : isReadingMedia
             ? t('deleteConfirmAckReading')
             : isMovie ? t('deleteConfirmAckMovie')
                 : isSeries ? t('deleteConfirmAckSeries')
