@@ -1,0 +1,147 @@
+/* A quiet, shared control surface for all manual media forms. */
+.lorebase-add-workspace.is-manual {
+    --lb-manual-line: color-mix(in srgb, var(--background-modifier-border) 64%, transparent);
+    --lb-manual-fill: color-mix(in srgb, var(--background-secondary) 52%, var(--background-primary));
+    --lb-manual-hover: color-mix(in srgb, var(--text-normal) 5%, transparent);
+    --lb-manual-focus: color-mix(in srgb, var(--interactive-accent) 65%, var(--background-modifier-border));
+    --lb-manual-radius: 8px;
+    --lb-manual-height: 34px;
+}
+
+.lorebase-add-workspace.is-manual .lorebase-select-title { font-size: 18px; font-weight: 600; letter-spacing: -.2px; }
+.lorebase-add-workspace.is-manual .lorebase-select-title-icon svg { width: 20px; height: 20px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tabs { gap: 22px; border-color: var(--lb-manual-line); }
+.lorebase-add-workspace.is-manual .lorebase-manual-tabs > button { padding: 8px 0 10px; font-size: 12px; transition: color 120ms; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tabs > button[aria-selected="true"] { box-shadow: inset 0 -1px var(--interactive-accent); }
+.lorebase-add-workspace.is-manual .lorebase-editmode-field { gap: 5px; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-field-label { font-size: 11px; line-height: 1.35; font-weight: 400; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tab-panel :is(.lorebase-editmode-input, .lorebase-settings-dropdown-btn),
+.lorebase-add-workspace.is-manual .lorebase-manual-category .lorebase-settings-dropdown-btn,
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-url-control .lorebase-editmode-input {
+    min-height: var(--lb-manual-height);
+    height: var(--lb-manual-height);
+    padding: 6px 10px;
+    border: 1px solid var(--lb-manual-line);
+    border-radius: var(--lb-manual-radius);
+    background: var(--lb-manual-fill);
+    color: var(--text-normal);
+    box-shadow: none;
+    font-size: 13px;
+    font-weight: 400;
+    transition: border-color 120ms, background 120ms;
+}
+.lorebase-add-workspace.is-manual .lorebase-settings-dropdown-btn:hover,
+.lorebase-add-workspace.is-manual .lorebase-editmode-input:hover { border-color: var(--background-modifier-border); }
+.lorebase-add-workspace.is-manual .lorebase-manual-tab-panel .lorebase-editmode-input:focus:not(.is-invalid),
+.lorebase-add-workspace.is-manual .lorebase-settings-dropdown-btn:is(.is-open, :focus-visible) {
+    outline: none; border-color: var(--lb-manual-focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+}
+.lorebase-add-workspace.is-manual .lorebase-settings-dropdown-caret { opacity: .65; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-input::placeholder { color: color-mix(in srgb, var(--text-muted) 75%, transparent); font-style: normal; }
+.lorebase-add-workspace.is-manual .lorebase-settings-dropdown-caret svg { width: 13px; height: 13px; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-date-control .lorebase-editmode-input { padding-inline-start: 31px; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-date-control-icon { width: 23px; height: 23px; min-width: 23px; min-height: 23px; left: 4px; padding: 4px; border: 0; background: transparent; box-shadow: none; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-date-control-icon svg { width: 14px; height: 14px; }
+
+/* Button weight distinguishes the final action from small local actions. */
+.lorebase-add-workspace.is-manual .lorebase-manual-tab-panel :is(.lorebase-editmode-btn, .lorebase-manual-platform-add, .lorebase-manual-chip-add),
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-actions > .lorebase-flow-btn,
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-pick {
+    min-height: 32px; height: 32px; padding: 5px 10px; border: 1px solid var(--lb-manual-line); border-radius: var(--lb-manual-radius);
+    background: transparent; color: var(--text-muted); box-shadow: none; font-size: 12px; font-weight: 400;
+}
+.lorebase-add-workspace.is-manual .lorebase-manual-tab-panel :is(.lorebase-editmode-btn, .lorebase-manual-platform-add, .lorebase-manual-chip-add):hover:not(:disabled),
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-pick:hover { background: var(--lb-manual-hover); color: var(--text-normal); border-color: var(--background-modifier-border); }
+.lorebase-add-workspace.is-manual button:disabled { cursor: default; }
+.lorebase-add-workspace.is-manual button:focus-visible { outline: 2px solid var(--lb-manual-focus); outline-offset: 2px; }
+.lorebase-add-workspace.is-manual .lorebase-select-footer { border-color: var(--lb-manual-line); padding-top: 12px; }
+.lorebase-add-workspace.is-manual .lorebase-select-footer .lorebase-flow-btn { min-height: 34px; height: 34px; padding: 6px 14px; border-radius: 8px; box-shadow: none; font-size: 12px; font-weight: 500; }
+.lorebase-add-workspace.is-manual .lorebase-select-footer .lorebase-flow-btn-primary { min-width: 112px; border-color: color-mix(in srgb, var(--interactive-accent) 55%, transparent); background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary)); }
+.lorebase-add-workspace.is-manual .lorebase-select-footer .lorebase-flow-btn-primary:hover { border-color: var(--interactive-accent); background: color-mix(in srgb, var(--interactive-accent) 17%, var(--background-primary)); }
+.lorebase-add-workspace.is-manual .lorebase-select-footer .lorebase-flow-btn-secondary { padding-inline: 2px; background: transparent; border-color: transparent; }
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-preview { border-color: var(--lb-manual-line); background-color: var(--lb-manual-fill); border-radius: 10px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-empty-icon { opacity: .65; }
+.lorebase-add-workspace.is-manual .lorebase-manual-cover-url-control > summary { font-size: 11px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-rating-controls { gap: 10px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-stars { gap: 2px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-stars.lorebase-editmode-stars .lorebase-editmode-star {
+    width: 28px; min-width: 28px; height: 30px; min-height: 30px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; font-size: 22px; transform: none;
+}
+.lorebase-add-workspace.is-manual .lorebase-manual-stars .lorebase-editmode-star::before { display: none; }
+.lorebase-add-workspace.is-manual .lorebase-manual-stars .lorebase-editmode-star:hover { background: var(--lb-manual-hover); }
+.lorebase-add-workspace.is-manual .lorebase-manual-rating-value { font-size: 11px; }
+
+/* Tracking is a short strip: two dates beside compact personal controls. */
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking { margin-top: 14px; padding: 0; border: 1px solid var(--lb-manual-line); border-radius: 8px; background: color-mix(in srgb, var(--background-secondary) 22%, transparent); }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; list-style: none; cursor: pointer; color: var(--text-normal); font-size: 12px; font-weight: 500; border-radius: 8px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-summary::-webkit-details-marker { display: none; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-summary:hover { background: var(--lb-manual-hover); }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-summary:focus-visible { outline: 2px solid var(--lb-manual-focus); outline-offset: 2px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-icon,
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-chevron { display: inline-flex; color: var(--text-muted); }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-chevron { margin-inline-start: auto; transition: transform 120ms; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-summary svg { width: 14px; height: 14px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking[open] > .lorebase-manual-tracking-summary .lorebase-manual-tracking-chevron { transform: rotate(90deg); }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking > .lorebase-manual-detail-group { padding: 2px 12px 12px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-manual-detail-group > h3 { margin-bottom: 9px; font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-manual-section-grid { gap: 8px 18px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking > .lorebase-manual-detail-group > .lorebase-manual-section-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: end; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-manual-tracking-dates { grid-column: auto; margin: 0; padding: 0; border: 0; gap: 10px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-manual-tracking-options { grid-column: auto; justify-content: flex-start; align-content: center; gap: 6px 16px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-manual-tracking-options:only-child { grid-column: 1 / -1; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-options > .lorebase-editmode-switch-row,
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-options > .lorebase-manual-repeat-field { flex: 0 0 auto; min-height: 26px; gap: 8px; justify-content: flex-start; }
+.lorebase-add-workspace.is-manual .lorebase-manual-tracking-options :is(.lorebase-editmode-switch-label, .lorebase-editmode-field-label) { font-size: 11px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-editmode-date-control .lorebase-editmode-input { height: 30px; min-height: 30px; font-size: 12px; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-switch { width: 30px; flex-basis: 30px; height: 18px; min-height: 18px; border-color: var(--lb-manual-line); background: var(--background-modifier-hover); }
+.lorebase-add-workspace.is-manual .lorebase-editmode-switch-thumb { width: 12px; height: 12px; top: 2px; left: 2px; }
+.lorebase-add-workspace.is-manual .lorebase-editmode-switch.is-active .lorebase-editmode-switch-thumb { transform: translateX(12px); }
+.lorebase-add-workspace.is-manual .lorebase-manual-counter { height: 26px; border-color: var(--lb-manual-line); border-radius: 6px; background: transparent; }
+.lorebase-add-workspace.is-manual .lorebase-manual-counter > button { width: 23px; min-width: 23px; height: 24px; min-height: 24px; font-size: 12px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-counter > input { width: 30px; min-width: 30px; height: 24px; min-height: 24px; font-size: 12px; }
+
+/* Progress, credits and notes use the same low-contrast borders and surfaces. */
+.lorebase-add-workspace.is-manual .lorebase-manual-details-layout { gap: 16px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-detail-group > h3 { font-size: 12px; font-weight: 500; }
+.lorebase-add-workspace.is-manual .lorebase-manual-season-row { padding: 10px 12px; border-color: var(--lb-manual-line); }
+.lorebase-add-workspace.is-manual .lorebase-manual-season-row[aria-pressed="true"] { border-color: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border)); background: color-mix(in srgb, var(--interactive-accent) 6%, var(--background-primary)); }
+.lorebase-add-workspace.is-manual .lorebase-manual-season-actions > .lorebase-editmode-btn { border-color: transparent; background: transparent; }
+.lorebase-add-workspace.is-manual .lorebase-manual-season-actions > .lorebase-editmode-btn:disabled { opacity: .4; }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-card { padding: 14px; border-color: var(--lb-manual-line); background: color-mix(in srgb, var(--background-secondary) 30%, var(--background-primary)); }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-card .lorebase-reading-progress-meter { grid-template-columns: 34px minmax(0, 1fr); gap: 10px; margin-bottom: 14px; }
+.lorebase-add-workspace.is-manual .lorebase-reading-progress-ring { width: 32px; height: 32px; box-shadow: none; }
+.lorebase-add-workspace.is-manual .lorebase-reading-progress-current { font-size: 14px; color: var(--text-normal); }
+.lorebase-add-workspace.is-manual .lorebase-reading-progress-label { font-size: 11px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-stepper { gap: 0; height: 34px; border: 1px solid var(--lb-manual-line); border-radius: 8px; overflow: hidden; background: var(--lb-manual-fill); }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-stepper > button { flex: 0 0 26px; min-width: 26px; height: 32px; min-height: 32px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-muted); font-size: 13px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-stepper > button:hover:not(:disabled) { background: var(--lb-manual-hover); color: var(--text-normal); }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-stepper .lorebase-editmode-input { height: 32px; min-height: 32px; padding-block: 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.lorebase-add-workspace.is-manual .lorebase-manual-progress-stepper:focus-within { border-color: var(--lb-manual-focus); }
+.lorebase-add-workspace.is-manual .lorebase-manual-chip-input-row,
+.lorebase-add-workspace.is-manual .lorebase-manual-platform-input-row { grid-template-columns: minmax(0, 1fr) 34px; gap: 6px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-chip-input-row > button,
+.lorebase-add-workspace.is-manual .lorebase-manual-platform-input-row > button { width: 34px; min-width: 34px; height: 34px; min-height: 34px; padding: 0; background: transparent; }
+.lorebase-add-workspace.is-manual .lorebase-manual-chip-row .lorebase-editmode-chip { padding: 3px 9px; min-height: 24px; border: 1px solid var(--lb-manual-line); border-radius: 6px; background: var(--lb-manual-fill); box-shadow: none; font-size: 12px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-platform { border-color: var(--lb-manual-line); border-radius: 7px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-platform > button { height: 28px; min-height: 28px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-notes { border-color: var(--lb-manual-line); background: var(--lb-manual-fill); border-radius: 9px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-note-modes { padding: 5px; gap: 4px; border-color: var(--lb-manual-line); }
+.lorebase-add-workspace.is-manual .lorebase-manual-note-modes > button { height: 28px; min-height: 28px; padding: 4px 10px; font-size: 12px; }
+.lorebase-add-workspace.is-manual .lorebase-manual-note-modes > button[aria-pressed="true"] { background: var(--lb-manual-hover); }
+.lorebase-add-workspace.is-manual .lorebase-manual-notes > .lorebase-manual-textarea { height: auto; min-height: 140px; padding: 12px; border: 0; background: transparent; line-height: 1.6; box-shadow: none; }
+.lorebase-add-workspace.is-manual .lorebase-manual-track-list > details { padding: 12px 0; border-bottom: 1px solid var(--lb-manual-line); }
+
+.lorebase-settings-dropdown-panel.lorebase-floating-dropdown-panel.lorebase-manual-options { padding: 5px; border: 1px solid color-mix(in srgb, var(--background-modifier-border) 75%, transparent); border-radius: 10px; background: var(--background-primary); box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
+.lorebase-manual-options.lorebase-settings-dropdown-panel .lorebase-settings-dropdown-option { min-height: 30px; padding: 6px 9px; border-radius: 6px; font-size: 12px; }
+.lorebase-manual-options.lorebase-settings-dropdown-panel .lorebase-settings-dropdown-option.is-selected { border-color: transparent; background: color-mix(in srgb, var(--interactive-accent) 10%, transparent); color: var(--text-normal); }
+.lorebase-manual-options.lorebase-settings-dropdown-panel .lorebase-settings-dropdown-option:hover { border-color: transparent; background: var(--background-modifier-hover); }
+
+@media (max-width: 680px) {
+    .lorebase-add-workspace.is-manual .lorebase-manual-main-tracking > .lorebase-manual-detail-group > .lorebase-manual-section-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .lorebase-add-workspace.is-manual .lorebase-manual-main-tracking .lorebase-manual-tracking-options { gap: 8px 18px; }
+}
+@media (max-width: 480px) {
+    .lorebase-add-workspace.is-manual .lorebase-manual-tabs { gap: 16px; }
+    .lorebase-add-workspace.is-manual .lorebase-manual-tabs > button { font-size: 11px; }
+    .lorebase-add-workspace.is-manual .lorebase-manual-stars .lorebase-editmode-star { min-width: 25px; width: 25px; }
+}

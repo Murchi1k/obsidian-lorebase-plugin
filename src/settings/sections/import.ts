@@ -1,22 +1,21 @@
-import { Setting, setIcon } from 'obsidian';
-import { DEFAULT_NOTE_IMPORT_FIELD_MAPPINGS } from '../../constants';
+import { setIcon } from 'obsidian';
+import { DEFAULT_NOTE_IMPORT_FIELD_MAPPINGS, MUSIC_NOTE_IMPORT_FIELD_MAPPINGS } from '../../constants';
+import { mt } from '../../localization/music';
 import { FolderSuggest } from '../../components/FolderSuggest';
 import { t } from '../../localization';
 import type { Language, NoteImportSettings, NoteImportTargetMedia, NoteImportWriteMode } from '../../types';
-import { addLorebaseDropdown } from './customDropdown';
+import { createMediaTabs } from './mediaTabs';
+import { createLorebaseDropdown } from '../../components/LorebaseDropdown';
 import type { SettingsSectionContext } from './types';
 
 type ImportTextKey =
+    | 'route' | 'folderExample' | 'autoBrief' | 'copyHint' | 'replaceHint' | 'toFields' | 'toReview' | 'scan' | 'ready' | 'sourceKeys' | 'editMapping' | 'emptyMappings' | 'saveMapping' | 'removeMapping' | 'pendingMapping' | 'removeExcluded'
     | 'section'
     | 'sectionDesc'
     | 'sourceFolder'
-    | 'sourceFolderDesc'
     | 'targetMedia'
-    | 'targetMediaDesc'
     | 'auto'
-    | 'autoHint'
     | 'writeMode'
-    | 'writeModeDesc'
     | 'writeCopy'
     | 'writeReplace'
     | 'fieldMappings'
@@ -29,20 +28,16 @@ type ImportTextKey =
     | 'blacklistDesc'
     | 'blacklistPlaceholder'
     | 'emptyBlacklist'
-    | 'preview';
+    | 'sourceStep' | 'fieldsStep' | 'previewStep' | 'back' | 'sourceUnset' | 'reviewHint';
 
 const IMPORT_TEXT: Record<Language, Record<ImportTextKey, string>> = {
     en: {
         section: 'Import',
-        sectionDesc: 'Import notes from folders and external services into LOREBASE.',
+        sectionDesc: 'Import Markdown notes from a folder in this vault.',
         sourceFolder: 'Source folder',
-        sourceFolderDesc: 'Folder with existing Markdown notes.',
         targetMedia: 'LOREBASE library',
-        targetMediaDesc: 'Choose a library or Auto to route notes by frontmatter type.',
         auto: 'Auto',
-        autoHint: 'Auto routes notes by the frontmatter type field: game, anime, movie, series, book, or manga. Notes without a supported type stay unselected in preview.',
         writeMode: 'Write mode',
-        writeModeDesc: 'Create copies, or update selected notes and move them into the LOREBASE folder.',
         writeCopy: 'Create copies',
         writeReplace: 'Replace and move',
         fieldMappings: 'Field mappings',
@@ -51,23 +46,40 @@ const IMPORT_TEXT: Record<Language, Record<ImportTextKey, string>> = {
         aliases: 'Aliases',
         addMapping: 'Add mapping',
         resetMappings: 'Reset mappings',
-        blacklist: 'Blacklist',
+        blacklist: 'Excluded fields',
         blacklistDesc: 'Fields that must not be imported. Separate by comma or new line.',
         blacklistPlaceholder: 'Add field',
         emptyBlacklist: 'No excluded fields',
-        preview: 'Preview import',
+        sourceStep: 'Source',
+        fieldsStep: 'Fields',
+        previewStep: 'Preview',
+        back: 'Back',
+        sourceUnset: 'Choose a source folder',
+        reviewHint: 'Scan the folder to review changes and select the notes to import.',
+        route: 'Folder → library',
+        folderExample: 'e.g. Archive/Books',
+        autoBrief: 'Match by the type property. Unmatched notes can be assigned in preview.',
+        copyHint: 'Keep the original notes in place.',
+        replaceHint: 'Update the original notes and move them to the library.',
+        toFields: 'Configure fields',
+        toReview: 'Review import',
+        scan: 'Find notes',
+        ready: 'Ready to scan',
+        sourceKeys: 'Source keys',
+        editMapping: 'Edit mapping',
+        emptyMappings: 'No mappings yet',
+        saveMapping: 'Save mapping',
+        removeMapping: 'Remove mapping',
+        pendingMapping: 'Save or cancel the open mapping before scanning notes.',
+        removeExcluded: 'Remove excluded field',
     },
     ru: {
         section: '\u0418\u043c\u043f\u043e\u0440\u0442',
-        sectionDesc: '\u0418\u043c\u043f\u043e\u0440\u0442 \u0437\u0430\u043c\u0435\u0442\u043e\u043a \u0438\u0437 \u043f\u0430\u043f\u043e\u043a \u0438 \u0441\u0442\u043e\u0440\u043e\u043d\u043d\u0438\u0445 \u0441\u0435\u0440\u0432\u0438\u0441\u043e\u0432 \u0432 LOREBASE.',
+        sectionDesc: 'Импорт заметок Markdown из папки в этом хранилище.',
         sourceFolder: '\u041f\u0430\u043f\u043a\u0430-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
-        sourceFolderDesc: '\u041f\u0430\u043f\u043a\u0430 \u0441 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u043c\u0438 Markdown-\u0437\u0430\u043c\u0435\u0442\u043a\u0430\u043c\u0438.',
         targetMedia: '\u0411\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430 LOREBASE',
-        targetMediaDesc: '\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0443 \u0438\u043b\u0438 Auto \u0434\u043b\u044f \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0430\u0446\u0438\u0438 \u043f\u043e type.',
-        auto: 'Auto',
-        autoHint: 'Auto \u0438\u0449\u0435\u0442 \u0442\u0438\u043f \u0437\u0430\u043c\u0435\u0442\u043a\u0438 \u0432 frontmatter-\u043f\u043e\u043b\u0435 type: game, anime, movie, series, book \u0438\u043b\u0438 manga. \u0417\u0430\u043c\u0435\u0442\u043a\u0438 \u0431\u0435\u0437 \u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043c\u043e\u0433\u043e type \u043e\u0441\u0442\u0430\u043d\u0443\u0442\u0441\u044f \u043d\u0435\u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u043c\u0438 \u0432 preview.',
+        auto: 'Автоматически',
         writeMode: '\u0420\u0435\u0436\u0438\u043c \u0437\u0430\u043f\u0438\u0441\u0438',
-        writeModeDesc: '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043a\u043e\u043f\u0438\u0438 \u0438\u043b\u0438 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0438 \u043f\u0435\u0440\u0435\u043d\u0435\u0441\u0442\u0438 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0435 \u0437\u0430\u043c\u0435\u0442\u043a\u0438 \u0432 \u043f\u0430\u043f\u043a\u0443 LOREBASE.',
         writeCopy: '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043a\u043e\u043f\u0438\u0438',
         writeReplace: '\u0417\u0430\u043c\u0435\u043d\u0438\u0442\u044c \u0438 \u043f\u0435\u0440\u0435\u043d\u0435\u0441\u0442\u0438',
         fieldMappings: '\u0428\u0430\u0431\u043b\u043e\u043d \u043f\u043e\u043b\u0435\u0439',
@@ -76,36 +88,116 @@ const IMPORT_TEXT: Record<Language, Record<ImportTextKey, string>> = {
         aliases: '\u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b',
         addMapping: '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u043e\u043b\u0435',
         resetMappings: '\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d',
-        blacklist: '\u0427\u0435\u0440\u043d\u044b\u0439 \u0441\u043f\u0438\u0441\u043e\u043a',
+        blacklist: 'Исключения',
         blacklistDesc: '\u041f\u043e\u043b\u044f, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0435 \u043d\u0443\u0436\u043d\u043e \u043f\u0435\u0440\u0435\u043d\u043e\u0441\u0438\u0442\u044c.',
         blacklistPlaceholder: '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u043e\u043b\u0435',
         emptyBlacklist: '\u041d\u0435\u0442 \u0438\u0441\u043a\u043b\u044e\u0447\u0435\u043d\u043d\u044b\u0445 \u043f\u043e\u043b\u0435\u0439',
-        preview: 'Preview \u0438\u043c\u043f\u043e\u0440\u0442\u0430',
+        sourceStep: 'Источник',
+        fieldsStep: 'Поля',
+        previewStep: 'Превью',
+        back: 'Назад',
+        sourceUnset: 'Выберите папку-источник',
+        reviewHint: 'Просканируйте папку, чтобы проверить изменения и выбрать заметки для импорта.',
+        route: 'Папка → библиотека',
+        folderExample: 'Например, Архив/Книги',
+        autoBrief: 'Распределение по свойству type. Для остальных заметок библиотеку можно выбрать в превью.',
+        copyHint: 'Исходные заметки остаются на месте.',
+        replaceHint: 'Обновляет исходные заметки и переносит их в библиотеку.',
+        toFields: 'Настроить поля',
+        toReview: 'Перейти к превью',
+        scan: 'Найти заметки',
+        ready: 'Подготовка к проверке',
+        sourceKeys: 'Ключи в заметках',
+        editMapping: 'Изменить сопоставление',
+        emptyMappings: 'Сопоставлений пока нет',
+        saveMapping: 'Сохранить правило',
+        removeMapping: 'Удалить правило',
+        pendingMapping: 'Сохрани или отмени открытое правило на шаге «Поля», чтобы найти заметки.',
+        removeExcluded: 'Убрать исключение',
     },
     uk: {
         section: '\u0406\u043c\u043f\u043e\u0440\u0442',
-        sectionDesc: '\u0406\u043c\u043f\u043e\u0440\u0442 \u043d\u043e\u0442\u0430\u0442\u043e\u043a \u0456\u0437 \u043f\u0430\u043f\u043e\u043a \u0456 \u0441\u0442\u043e\u0440\u043e\u043d\u043d\u0456\u0445 \u0441\u0435\u0440\u0432\u0456\u0441\u0456\u0432 \u0443 LOREBASE.',
-        sourceFolder: 'Source folder',
-        sourceFolderDesc: '\u041f\u0430\u043f\u043a\u0430 \u0437 \u043d\u0430\u044f\u0432\u043d\u0438\u043c\u0438 Markdown-\u043d\u043e\u0442\u0430\u0442\u043a\u0430\u043c\u0438.',
-        targetMedia: 'LOREBASE library',
-        targetMediaDesc: 'Choose a library or Auto to route notes by frontmatter type.',
-        auto: 'Auto',
-        autoHint: 'Auto routes notes by the frontmatter type field: game, anime, movie, series, book, or manga. Notes without a supported type stay unselected in preview.',
-        writeMode: 'Write mode',
-        writeModeDesc: 'Create copies, or update selected notes and move them into the LOREBASE folder.',
-        writeCopy: 'Create copies',
-        writeReplace: 'Replace and move',
-        fieldMappings: 'Field mappings',
-        fieldMappingsDesc: 'LOREBASE key and aliases. The first matching alias wins.',
-        canonical: 'LOREBASE key',
-        aliases: 'Aliases',
-        addMapping: 'Add mapping',
-        resetMappings: 'Reset mappings',
-        blacklist: 'Blacklist',
-        blacklistDesc: 'Fields that must not be imported. Separate by comma or new line.',
-        blacklistPlaceholder: 'Add field',
-        emptyBlacklist: 'No excluded fields',
-        preview: 'Preview import',
+        sectionDesc: 'Імпорт нотаток Markdown із папки в цьому сховищі.',
+        sourceFolder: 'Папка-джерело',
+        targetMedia: 'Бібліотека LOREBASE',
+        auto: 'Автоматично',
+        writeMode: 'Режим запису',
+        writeCopy: 'Створити копії',
+        writeReplace: 'Замінити й перемістити',
+        fieldMappings: 'Шаблон полів',
+        fieldMappingsDesc: 'Ключ LOREBASE і його варіанти. Використовується перший відповідний варіант.',
+        canonical: 'Ключ LOREBASE',
+        aliases: 'Варіанти',
+        addMapping: 'Додати поле',
+        resetMappings: 'Скинути шаблон',
+        blacklist: 'Виключені поля',
+        blacklistDesc: 'Поля, які не потрібно переносити. Розділяйте комами або новими рядками.',
+        blacklistPlaceholder: 'Додати поле',
+        emptyBlacklist: 'Виключених полів немає',
+        sourceStep: 'Джерело',
+        fieldsStep: 'Поля',
+        previewStep: 'Перегляд',
+        back: 'Назад',
+        sourceUnset: 'Оберіть папку-джерело',
+        reviewHint: 'Проскануйте папку, щоб перевірити зміни й вибрати нотатки для імпорту.',
+        route: 'Папка → бібліотека',
+        folderExample: 'Наприклад, Архів/Книги',
+        autoBrief: 'Розподіл за властивістю type. Решту нотаток можна призначити бібліотеці під час перегляду.',
+        copyHint: 'Вихідні нотатки залишаються на місці.',
+        replaceHint: 'Оновлює вихідні нотатки й переносить їх до бібліотеки.',
+        toFields: 'Налаштувати поля',
+        toReview: 'Перейти до перегляду',
+        scan: 'Знайти нотатки',
+        ready: 'Підготовка до перевірки',
+        sourceKeys: 'Ключі в нотатках',
+        editMapping: 'Змінити зіставлення',
+        emptyMappings: 'Зіставлень поки немає',
+        saveMapping: 'Зберегти правило',
+        removeMapping: 'Видалити правило',
+        pendingMapping: 'Збережіть або скасуйте відкрите правило на кроці «Поля», щоб знайти нотатки.',
+        removeExcluded: 'Видалити виключення',
+    },
+    'zh-CN': {
+        section: '导入',
+        sectionDesc: '从当前仓库的文件夹导入 Markdown 笔记。',
+        sourceFolder: '来源文件夹',
+        targetMedia: 'LOREBASE 资料库',
+        auto: '自动',
+        writeMode: '写入方式',
+        writeCopy: '创建副本',
+        writeReplace: '替换并移动',
+        fieldMappings: '字段映射',
+        fieldMappingsDesc: 'LOREBASE 字段及其别名。匹配到的第一个别名优先。',
+        canonical: 'LOREBASE 字段',
+        aliases: '别名',
+        addMapping: '添加映射',
+        resetMappings: '重置映射',
+        blacklist: '排除列表',
+        blacklistDesc: '禁止导入的字段，请用逗号或换行分隔。',
+        blacklistPlaceholder: '添加字段',
+        emptyBlacklist: '没有排除字段',
+        sourceStep: '来源',
+        fieldsStep: '字段',
+        previewStep: '预览',
+        back: '返回',
+        sourceUnset: '请选择来源文件夹',
+        reviewHint: '扫描文件夹以检查更改并选择要导入的笔记。',
+        route: '文件夹 → 资料库',
+        folderExample: '例如 归档/书籍',
+        autoBrief: '根据 type 属性分配资料库，剩余笔记可在预览中手动指定。',
+        copyHint: '保留来源笔记及其位置。',
+        replaceHint: '更新来源笔记并将其移至资料库。',
+        toFields: '配置字段',
+        toReview: '查看导入预览',
+        scan: '查找笔记',
+        ready: '准备扫描',
+        sourceKeys: '笔记中的字段',
+        editMapping: '编辑映射',
+        emptyMappings: '尚无字段映射',
+        saveMapping: '保存映射',
+        removeMapping: '删除映射',
+        pendingMapping: '扫描笔记前，请在“字段”步骤保存或取消正在编辑的映射。',
+        removeExcluded: '移除排除字段',
     },
 };
 
@@ -121,98 +213,218 @@ function importText(language: Language, key: ImportTextKey): string {
     return (IMPORT_TEXT[language] ?? IMPORT_TEXT.en)[key];
 }
 
+type ImportStep = 'source' | 'fields' | 'preview';
+const steps: ImportStep[] = ['source', 'fields', 'preview'];
+const activeSteps = new WeakMap<object, ImportStep>();
+
 export function renderImportSection(context: SettingsSectionContext, container: HTMLElement): void {
     const language = context.plugin.settings.language;
     const settings = context.plugin.settings.noteImport;
-    context.createSectionHeader(container, String.fromCodePoint(0x1F4E6), importText(language, 'section'));
+    const label = (key: ImportTextKey): string => importText(language, key);
+    context.createSectionHeader(container, 'lucide:folder-input', label('section'));
 
     const root = container.createDiv({ cls: 'lorebase-import-settings' });
-    root.createDiv({ cls: 'lorebase-settings-section-description', text: importText(language, 'sectionDesc') });
-    renderNoteImportSettings(context, root, settings, language);
+    root.createDiv({ cls: 'lorebase-settings-section-description', text: label('sectionDesc') });
+    const navigation = root.createDiv({ cls: 'lorebase-import-steps' });
+    const panels = root.createDiv({ cls: 'lorebase-import-panels' });
+    const labels = { source: label('sourceStep'), fields: label('fieldsStep'), preview: label('previewStep') };
+    const source = panels.createDiv({ cls: 'lorebase-import-source' });
+    const fields = panels.createDiv({ cls: 'lorebase-import-fields' });
+    const preview = panels.createDiv({ cls: 'lorebase-import-preview' });
+    const sections = { source, fields, preview };
+    const targetOptions = [
+        { value: 'auto', label: label('auto') },
+        { value: 'games', label: t('settingsGames') },
+        { value: 'anime', label: t('settingsAnime') },
+        { value: 'movies', label: t('settingsMovies') },
+        { value: 'series', label: t('settingsSeries') },
+        { value: 'books', label: t('settingsBooks') },
+        { value: 'manga', label: t('settingsManga') },
+        { value: 'music', label: mt('music') },
+    ] satisfies { value: NoteImportTargetMedia; label: string }[];
+    const writeOptions = [
+        { value: 'copy', label: label('writeCopy') },
+        { value: 'replace', label: label('writeReplace') },
+    ] satisfies { value: NoteImportWriteMode; label: string }[];
+    renderImportSource(context, source, settings, language, targetOptions);
+
+    renderMappingEditor(context, fields, settings, language);
+    const blacklist = fields.createDiv();
+    const showBlacklist = (): void => {
+        blacklist.empty();
+        renderBlacklistSetting(context, blacklist, settings, language, showBlacklist);
+    };
+    showBlacklist();
+
+    const overview = preview.createDiv({ cls: 'lorebase-import-surface lorebase-import-overview' });
+    renderImportHeading(overview, 'scan-search', label('ready'), label('reviewHint'));
+    const summary = overview.createEl('dl', { cls: 'lorebase-import-summary' });
+    const pendingMapping = overview.createDiv({ cls: 'lorebase-import-route-hint', text: label('pendingMapping'), attr: { role: 'status' } });
+    pendingMapping.hidden = true;
+    const updateSummary = (): void => {
+        summary.empty();
+        const route = [
+            { icon: 'folder', title: label('sourceFolder'), value: settings.sourceFolderPath || label('sourceUnset') },
+            { icon: 'library', title: label('targetMedia'), value: targetOptions.find(option => option.value === settings.targetMedia)?.label ?? label('auto') },
+            { icon: settings.writeMode === 'replace' ? 'replace' : 'copy', title: label('writeMode'),
+                value: writeOptions.find(option => option.value === settings.writeMode)?.label ?? label('writeCopy') },
+        ];
+        for (const { icon, title, value } of route) {
+            const row = summary.createDiv();
+            const term = row.createEl('dt');
+            setIcon(term.createSpan({ attr: { 'aria-hidden': 'true' } }), icon);
+            term.createSpan({ text: title });
+            row.createEl('dd', { text: value });
+        }
+        overview.toggleClass('is-replace', settings.writeMode === 'replace');
+    };
+
+    const footer = root.createDiv({ cls: 'lorebase-import-navigation' });
+    const back = createImportButton(footer, 'arrow-left', label('back'), 'is-back');
+    const scan = createImportButton(footer, 'scan-search', label('scan'), 'mod-cta lorebase-import-scan');
+    const next = createImportButton(footer, 'arrow-right', label('toFields'), 'mod-cta lorebase-import-next');
+    const reviewHost = preview.createDiv({ cls: 'lorebase-inline-import-review' });
+    let running: AbortController | undefined;
+    const cancelReview = (): void => {
+        running?.abort();
+        reviewHost.empty();
+    };
+    context.signal?.addEventListener('abort', cancelReview, { once: true });
+    container.addEventListener('lorebase-settings-section-hide', cancelReview);
+    scan.addEventListener('click', async () => {
+        if (running || context.signal?.aborted) return;
+        running = new AbortController();
+        reviewHost.empty();
+        scan.disabled = true;
+        const loading = reviewHost.createDiv({ cls: 'lorebase-nir-empty', text: t('settingsImportScanning'), attr: { role: 'status' } });
+        try {
+            await context.plugin.runNoteImport({ host: reviewHost, signal: running.signal });
+        } finally {
+            loading.remove();
+            running = undefined;
+            scan.disabled = !settings.sourceFolderPath.trim() || !pendingMapping.hidden;
+            if (!context.signal?.aborted && !preview.hidden && preview.getClientRects().length && reviewHost.childElementCount === 0) {
+                scan.focus();
+            }
+        }
+    });
+
+    const tabs = createMediaTabs(navigation, [
+        { value: 'source', label: labels.source, icon: 'folder' },
+        { value: 'fields', label: labels.fields, icon: 'list-filter' },
+        { value: 'preview', label: labels.preview, icon: 'scan-search' },
+    ], activeSteps.get(context.plugin) ?? 'source', label('section'), step => {
+        activeSteps.set(context.plugin, step);
+        for (const key of steps) sections[key].hidden = key !== step;
+        back.hidden = step === 'source';
+        next.hidden = step === 'preview';
+        scan.hidden = step !== 'preview';
+        const nextLabel = step === 'source' ? label('toFields') : label('toReview');
+        next.lastElementChild!.textContent = nextLabel;
+        if (step === 'preview') {
+            updateSummary();
+            pendingMapping.hidden = !fields.querySelector('.lorebase-import-rule-editor');
+            scan.disabled = Boolean(running) || !settings.sourceFolderPath.trim() || !pendingMapping.hidden;
+        } else cancelReview();
+    });
+    const tabButtons = navigation.querySelectorAll('button[role="tab"]');
+    steps.forEach((step, index) => {
+        const panelId = 'lorebase-import-step-' + step;
+        const tab = tabButtons[index];
+        tab.id = panelId + '-tab';
+        tab.setAttribute('aria-controls', panelId);
+        sections[step].id = panelId;
+        sections[step].setAttribute('role', 'tabpanel');
+        sections[step].setAttribute('aria-labelledby', tab.id);
+    });
+    back.addEventListener('click', () => tabs.setValue(steps[steps.indexOf(tabs.getValue()) - 1], true));
+    next.addEventListener('click', () => tabs.setValue(steps[steps.indexOf(tabs.getValue()) + 1], true));
 }
 
-function renderNoteImportSettings(
+function createImportButton(container: HTMLElement, icon: string, label: string, classes = ''): HTMLButtonElement {
+    const button = container.createEl('button', {
+        cls: ['lorebase-import-button', classes].filter(Boolean).join(' '),
+        attr: { type: 'button' },
+    });
+    setIcon(button.createSpan({ attr: { 'aria-hidden': 'true' } }), icon);
+    button.createSpan({ text: label });
+    return button;
+}
+
+function renderImportHeading(container: HTMLElement, icon: string, title: string, description?: string): void {
+    const heading = container.createDiv({ cls: 'lorebase-import-heading' });
+    setIcon(heading.createSpan({ cls: 'lorebase-import-heading-icon', attr: { 'aria-hidden': 'true' } }), icon);
+    const text = heading.createDiv();
+    text.createEl('h3', { text: title });
+    if (description) text.createEl('p', { text: description });
+}
+
+function renderImportSource(
     context: SettingsSectionContext,
     container: HTMLElement,
     settings: NoteImportSettings,
-    language: Language
+    language: Language,
+    targetOptions: { value: NoteImportTargetMedia; label: string }[]
 ): void {
-    const sourceSetting = new Setting(container)
-        .setName(importText(language, 'sourceFolder'))
-        .setDesc(importText(language, 'sourceFolderDesc'));
-    sourceSetting.addText(text => {
-        const persist = async (value: string): Promise<void> => {
-            settings.sourceFolderPath = value.trim();
-            await context.plugin.saveSettings();
-        };
-        text
-            .setValue(settings.sourceFolderPath)
-            .onChange((value) => {
-                void persist(value);
-            });
-        new FolderSuggest(context.app, text.inputEl, (path) => {
-            void persist(path);
-        });
+    const label = (key: ImportTextKey): string => importText(language, key);
+    const routing = container.createDiv({ cls: 'lorebase-import-surface' });
+    renderImportHeading(routing, 'route', label('route'));
+    const route = routing.createDiv({ cls: 'lorebase-import-route' });
+    const source = route.createEl('label', { cls: 'lorebase-import-route-node' });
+    source.createSpan({ cls: 'lorebase-import-field-label', text: label('sourceFolder') });
+    const input = source.createEl('input', {
+        type: 'text', attr: { placeholder: label('folderExample'), spellcheck: 'false' },
     });
+    input.value = settings.sourceFolderPath;
+    const persist = (value: string): void => {
+        settings.sourceFolderPath = value.trim();
+        void context.plugin.saveSettings();
+    };
+    input.addEventListener('input', () => persist(input.value));
+    new FolderSuggest(context.app, input, persist);
 
-    const targetSetting = new Setting(container)
-        .setName(importText(language, 'targetMedia'))
-        .setDesc(importText(language, 'targetMediaDesc'));
-    addLorebaseDropdown<NoteImportTargetMedia>(
-        targetSetting,
-        [
-            { value: 'auto', label: importText(language, 'auto') },
-            { value: 'games', label: t('settingsGames') },
-            { value: 'anime', label: t('settingsAnime') },
-            { value: 'movies', label: t('settingsMovies') },
-            { value: 'series', label: t('settingsSeries') },
-            { value: 'books', label: t('settingsBooks') },
-            { value: 'manga', label: t('settingsManga') },
-        ],
-        settings.targetMedia,
-        async (value) => {
-            settings.targetMedia = value;
-            await context.plugin.saveSettings();
-            context.display();
-        }
-    );
+    const direction = route.createSpan({ cls: 'lorebase-import-route-arrow', attr: { 'aria-hidden': 'true' } });
+    setIcon(direction, 'arrow-right');
+    const destination = route.createDiv({
+        cls: 'lorebase-import-route-node',
+        attr: { role: 'group', 'aria-label': label('targetMedia') },
+    });
+    destination.createSpan({ cls: 'lorebase-import-field-label', text: label('targetMedia') });
+    const library = destination.createDiv({ cls: 'lorebase-import-library' });
+    const hint = routing.createDiv({ cls: 'lorebase-import-route-hint' });
+    setIcon(hint.createSpan({ attr: { 'aria-hidden': 'true' } }), 'info');
+    hint.createSpan({ text: label('autoBrief') });
+    hint.hidden = settings.targetMedia !== 'auto';
+    createLorebaseDropdown(library, targetOptions, settings.targetMedia, async value => {
+        settings.targetMedia = value;
+        hint.hidden = value !== 'auto';
+        await context.plugin.saveSettings();
+    }, { floating: true });
 
-    if (settings.targetMedia === 'auto') {
-        const hint = container.createDiv({ cls: 'lorebase-note-import-auto-hint' });
-        setIcon(hint.createSpan({ cls: 'lorebase-note-import-auto-hint-icon' }), 'info');
-        hint.createSpan({ text: importText(language, 'autoHint') });
-    }
-
-    const writeModeSetting = new Setting(container)
-        .setName(importText(language, 'writeMode'))
-        .setDesc(importText(language, 'writeModeDesc'));
-    addLorebaseDropdown<NoteImportWriteMode>(
-        writeModeSetting,
-        [
-            { value: 'copy', label: importText(language, 'writeCopy') },
-            { value: 'replace', label: importText(language, 'writeReplace') },
-        ],
-        settings.writeMode,
-        async (value) => {
-            settings.writeMode = value;
-            await context.plugin.saveSettings();
-        }
-    );
-
-    renderMappingEditor(context, container, settings, language);
-    renderBlacklistSetting(context, container, settings, language);
-
-    new Setting(container)
-        .setName(importText(language, 'preview'))
-        .addButton(button => {
-            button
-                .setIcon('scan-search')
-                .setButtonText(importText(language, 'preview'))
-                .setCta()
-                .onClick(() => {
-                    void context.plugin.runNoteImport();
-                });
+    const writing = container.createDiv({ cls: 'lorebase-import-surface' });
+    renderImportHeading(writing, 'file-output', label('writeMode'));
+    const modes = writing.createDiv({ cls: 'lorebase-import-modes', attr: { role: 'group', 'aria-label': label('writeMode') } });
+    const choices = [
+        { value: 'copy', icon: 'copy', title: label('writeCopy'), description: label('copyHint') },
+        { value: 'replace', icon: 'replace', title: label('writeReplace'), description: label('replaceHint') },
+    ] as const;
+    const buttons = choices.map(choice => {
+        const button = modes.createEl('button', {
+            cls: 'lorebase-import-mode is-' + choice.value,
+            attr: { type: 'button', 'aria-pressed': String(settings.writeMode === choice.value) },
         });
+        setIcon(button.createSpan({ cls: 'lorebase-import-mode-icon', attr: { 'aria-hidden': 'true' } }), choice.icon);
+        const copy = button.createSpan({ cls: 'lorebase-import-mode-copy' });
+        copy.createEl('strong', { text: choice.title });
+        copy.createSpan({ text: choice.description });
+        button.addEventListener('click', () => {
+            if (settings.writeMode === choice.value) return;
+            settings.writeMode = choice.value;
+            for (const [value, control] of buttons) control.setAttribute('aria-pressed', String(value === choice.value));
+            void context.plugin.saveSettings();
+        });
+        return [choice.value, button] as const;
+    });
 }
 
 function renderMappingEditor(
@@ -221,96 +433,120 @@ function renderMappingEditor(
     settings: NoteImportSettings,
     language: Language
 ): void {
-    const wrapper = container.createDiv({ cls: 'lorebase-note-import-mappings' });
-    const header = wrapper.createDiv({ cls: 'lorebase-note-import-mappings-header' });
-    const title = header.createDiv({ cls: 'lorebase-note-import-mappings-title' });
-    title.createDiv({ cls: 'lorebase-note-import-mappings-name', text: importText(language, 'fieldMappings') });
-    title.createDiv({ cls: 'lorebase-note-import-mappings-desc', text: importText(language, 'fieldMappingsDesc') });
-    const actions = header.createDiv({ cls: 'lorebase-note-import-mapping-actions' });
-
-    const addButton = actions.createEl('button', { cls: 'lorebase-note-import-small-button', attr: { type: 'button' } });
-    setIcon(addButton.createSpan({ cls: 'lorebase-note-import-small-button-icon' }), 'plus');
-    addButton.createSpan({ text: importText(language, 'addMapping') });
-    addButton.addEventListener('click', () => {
-        void (async (): Promise<void> => {
-            settings.fieldMappings.push({ key: '', aliases: [] });
-            await context.plugin.saveSettings();
-            context.display();
-        })();
+    const label = (key: ImportTextKey): string => importText(language, key);
+    const wrapper = container.createDiv({ cls: 'lorebase-import-surface' });
+    const header = wrapper.createDiv({ cls: 'lorebase-import-toolbar' });
+    renderImportHeading(header, 'git-merge', label('fieldMappings'), label('fieldMappingsDesc'));
+    const actions = header.createDiv({ cls: 'lorebase-import-actions' });
+    const add = createImportButton(actions, 'plus', label('addMapping'));
+    const reset = createImportButton(actions, 'rotate-ccw', label('resetMappings'), 'is-quiet');
+    const music = createImportButton(actions, 'music', `${label('addMapping')} · ${mt('music')}`, 'is-quiet');
+    music.addEventListener('click', () => {
+        for (const mapping of MUSIC_NOTE_IMPORT_FIELD_MAPPINGS) {
+            if (!settings.fieldMappings.some(item => item.key === mapping.key)) settings.fieldMappings.push({ ...mapping, aliases: [...mapping.aliases] });
+        }
+        renderRules(); void context.plugin.saveSettings();
     });
+    const list = wrapper.createDiv({ cls: 'lorebase-import-rules' });
 
-    const resetButton = actions.createEl('button', { cls: 'lorebase-note-import-small-button', attr: { type: 'button' } });
-    setIcon(resetButton.createSpan({ cls: 'lorebase-note-import-small-button-icon' }), 'rotate-ccw');
-    resetButton.createSpan({ text: importText(language, 'resetMappings') });
-    resetButton.addEventListener('click', () => {
-        void (async (): Promise<void> => {
-            settings.fieldMappings = DEFAULT_NOTE_IMPORT_FIELD_MAPPINGS.map((mapping) => ({
-                key: mapping.key,
-                aliases: [...mapping.aliases],
-            }));
-            await context.plugin.saveSettings();
-            context.display();
-        })();
-    });
+    const renderRules = (editIndex?: number, focusIndex?: number): void => {
+        list.empty();
+        const editing = editIndex !== undefined;
+        add.disabled = reset.disabled = music.disabled = editing;
+        const columns = list.createDiv({ cls: 'lorebase-import-rule-columns', attr: { 'aria-hidden': 'true' } });
+        columns.createSpan({ text: label('sourceKeys') });
+        columns.createSpan({ text: label('canonical') });
+        if (!settings.fieldMappings.length && !editing) {
+            list.createDiv({ cls: 'lorebase-import-rule-empty', text: label('emptyMappings') });
+        }
 
-    const list = wrapper.createDiv({ cls: 'lorebase-note-import-mapping-list' });
-    const columns = list.createDiv({ cls: 'lorebase-note-import-mapping-columns', attr: { 'aria-hidden': 'true' } });
-    columns.createSpan({ text: importText(language, 'canonical') });
-    columns.createSpan();
-    columns.createSpan({ text: importText(language, 'aliases') });
-    columns.createSpan();
-
-    settings.fieldMappings.forEach((mapping, index) => {
-        const row = list.createDiv({ cls: 'lorebase-note-import-mapping-row' });
-        const keyInput = row.createEl('input', {
-            cls: 'lorebase-note-import-key-input',
-            attr: { type: 'text', placeholder: importText(language, 'canonical') },
+        settings.fieldMappings.forEach((mapping, index) => {
+            const row = list.createEl('button', {
+                cls: 'lorebase-import-rule',
+                attr: { type: 'button', title: label('editMapping'), 'aria-expanded': String(index === editIndex) },
+            });
+            row.disabled = editing;
+            const aliases = row.createSpan({ cls: 'lorebase-import-aliases' });
+            for (const alias of mapping.aliases) aliases.createEl('code', { text: alias });
+            if (!mapping.aliases.length) aliases.createSpan({ text: '–' });
+            setIcon(row.createSpan({ cls: 'lorebase-import-rule-icon', attr: { 'aria-hidden': 'true' } }), 'arrow-right');
+            row.createEl('code', { cls: 'lorebase-import-rule-key', text: mapping.key || '–' });
+            setIcon(row.createSpan({ cls: 'lorebase-import-rule-edit', attr: { 'aria-hidden': 'true' } }), 'pencil');
+            row.addEventListener('click', () => renderRules(index));
+            if (index === editIndex) renderEditor(index);
+            if (index === focusIndex) row.focus();
         });
-        keyInput.value = mapping.key;
-        keyInput.addEventListener('input', () => {
-            mapping.key = keyInput.value.trim();
-            void context.plugin.saveSettings();
-        });
+        if (editIndex === settings.fieldMappings.length) renderEditor(editIndex);
+    };
 
-        const direction = row.createSpan({ cls: 'lorebase-note-import-mapping-direction', attr: { 'aria-hidden': 'true' } });
-        setIcon(direction, 'arrow-right');
-
-        const aliasesInput = row.createEl('input', {
-            cls: 'lorebase-note-import-aliases-input',
-            attr: { type: 'text', placeholder: importText(language, 'aliases') },
-        });
-        aliasesInput.value = mapping.aliases.join(', ');
-        aliasesInput.addEventListener('input', () => {
-            mapping.aliases = parsePropertyList(aliasesInput.value);
-            void context.plugin.saveSettings();
-        });
-
-        const removeButton = row.createEl('button', {
-            cls: 'lorebase-note-import-icon-button',
-            attr: { type: 'button', 'aria-label': t('settingsPlanRemove') },
-        });
-        setIcon(removeButton, 'trash-2');
-        removeButton.addEventListener('click', () => {
-            void (async (): Promise<void> => {
+    const renderEditor = (index: number): void => {
+        const mapping = settings.fieldMappings[index];
+        const editor = list.createEl('form', { cls: 'lorebase-import-rule-editor' });
+        const controls = editor.createDiv({ cls: 'lorebase-import-rule-inputs' });
+        const field = (title: string, value: string): HTMLInputElement => {
+            const wrapper = controls.createEl('label');
+            wrapper.createSpan({ cls: 'lorebase-import-field-label', text: title });
+            const input = wrapper.createEl('input', { type: 'text', attr: { spellcheck: 'false' } });
+            input.value = value;
+            return input;
+        };
+        const aliases = field(label('aliases'), mapping?.aliases.join(', ') ?? '');
+        const key = field(label('canonical'), mapping?.key ?? '');
+        key.required = true;
+        key.pattern = '.*\\S.*';
+        const footer = editor.createDiv({ cls: 'lorebase-import-actions' });
+        if (mapping) {
+            const remove = createImportButton(footer, 'trash-2', label('removeMapping'), 'is-danger is-remove');
+            remove.addEventListener('click', () => {
                 settings.fieldMappings.splice(index, 1);
-                await context.plugin.saveSettings();
-                context.display();
-            })();
+                const focusIndex = Math.min(index, settings.fieldMappings.length - 1);
+                renderRules(undefined, focusIndex);
+                if (focusIndex < 0) add.focus();
+                void context.plugin.saveSettings();
+            });
+        }
+        const cancel = createImportButton(footer, 'x', t('deleteCancel'), 'is-quiet');
+        const close = (): void => {
+            renderRules(undefined, mapping ? index : undefined);
+            if (!mapping) add.focus();
+        };
+        cancel.addEventListener('click', close);
+        editor.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            close();
         });
+        const save = createImportButton(footer, 'check', label('saveMapping'), 'mod-cta');
+        save.type = 'submit';
+        editor.addEventListener('submit', event => {
+            event.preventDefault();
+            const next = { key: key.value.trim(), aliases: parsePropertyList(aliases.value) };
+            if (!next.key) return;
+            settings.fieldMappings.splice(index, mapping ? 1 : 0, next);
+            renderRules(undefined, index);
+            void context.plugin.saveSettings();
+        });
+        (mapping ? aliases : key).focus();
+    };
+
+    add.addEventListener('click', () => renderRules(settings.fieldMappings.length));
+    reset.addEventListener('click', () => {
+        settings.fieldMappings = DEFAULT_NOTE_IMPORT_FIELD_MAPPINGS.map(({ key, aliases }) => ({ key, aliases: [...aliases] }));
+        renderRules();
+        void context.plugin.saveSettings();
     });
+    renderRules();
 }
 
 function renderBlacklistSetting(
     context: SettingsSectionContext,
     container: HTMLElement,
     settings: NoteImportSettings,
-    language: Language
+    language: Language,
+    refresh: () => void
 ): void {
-    const wrapper = container.createDiv({ cls: 'lorebase-note-import-blacklist' });
-    const header = wrapper.createDiv({ cls: 'lorebase-note-import-blacklist-header' });
-    const title = header.createDiv({ cls: 'lorebase-note-import-mappings-title' });
-    title.createDiv({ cls: 'lorebase-note-import-mappings-name', text: importText(language, 'blacklist') });
-    title.createDiv({ cls: 'lorebase-note-import-mappings-desc', text: importText(language, 'blacklistDesc') });
+    const wrapper = container.createDiv({ cls: 'lorebase-import-surface lorebase-note-import-blacklist' });
+    renderImportHeading(wrapper, 'list-filter', importText(language, 'blacklist'), importText(language, 'blacklistDesc'));
 
     const chips = wrapper.createDiv({ cls: 'lorebase-note-import-blacklist-chips' });
     const normalizedBlacklist = parsePropertyList(settings.blacklist.join(','));
@@ -323,7 +559,7 @@ function renderBlacklistSetting(
     normalizedBlacklist.forEach((field, index) => {
         const chip = chips.createEl('button', {
             cls: 'lorebase-note-import-blacklist-chip',
-            attr: { type: 'button', 'aria-label': `${t('settingsPlanRemove')} ${field}` },
+            attr: { type: 'button', 'aria-label': `${importText(language, 'removeExcluded')} ${field}` },
         });
         chip.createSpan({ cls: 'lorebase-note-import-blacklist-chip-text', text: field });
         setIcon(chip.createSpan({ cls: 'lorebase-note-import-blacklist-chip-icon' }), 'x');
@@ -331,7 +567,7 @@ function renderBlacklistSetting(
             void (async (): Promise<void> => {
                 settings.blacklist.splice(index, 1);
                 await context.plugin.saveSettings();
-                context.display();
+                refresh();
             })();
         });
     });
@@ -339,14 +575,9 @@ function renderBlacklistSetting(
     const inputRow = wrapper.createDiv({ cls: 'lorebase-note-import-blacklist-input-row' });
     const input = inputRow.createEl('input', {
         cls: 'lorebase-note-import-blacklist-input',
-        attr: { type: 'text', placeholder: importText(language, 'blacklistPlaceholder') },
+        attr: { type: 'text', placeholder: importText(language, 'blacklistPlaceholder'), 'aria-label': importText(language, 'blacklistPlaceholder') },
     });
-    const addButton = inputRow.createEl('button', {
-        cls: 'lorebase-note-import-small-button',
-        attr: { type: 'button' },
-    });
-    setIcon(addButton.createSpan({ cls: 'lorebase-note-import-small-button-icon' }), 'plus');
-    addButton.createSpan({ text: importText(language, 'blacklistPlaceholder') });
+    const addButton = createImportButton(inputRow, 'plus', importText(language, 'blacklistPlaceholder'));
 
     const addFields = async (): Promise<void> => {
         const fields = parsePropertyList(input.value);
@@ -359,7 +590,7 @@ function renderBlacklistSetting(
         }
         input.value = '';
         await context.plugin.saveSettings();
-        context.display();
+        refresh();
     };
 
     input.addEventListener('keydown', (event) => {

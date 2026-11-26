@@ -5,6 +5,9 @@ import { ensureFolder } from './integrations/shared';
 import { getAllMarkdownFiles } from './media/serviceUtils';
 import type { MediaSourceSelection } from './integrations/types';
 import { mergeProviderMetadata } from './integrations/enrichment';
+import { getTemplateYamlKeys, orderTemplateFrontmatter } from './integrations/templateSchema';
+import { MUSIC_NOTE_IMPORT_FIELD_MAPPINGS } from '../constants';
+import { OperationLifetime, isOperationCancelled, type BackgroundOperation } from './BackgroundOperation';
 
 export interface NoteImportPreviewItem {
     id: string;
@@ -28,6 +31,7 @@ export interface NoteImportPreview {
 }
 
 export interface NoteImportApplyResult {
+    cancelled?: boolean;
     created: number;
     updated: number;
     skipped: number;
@@ -45,48 +49,65 @@ interface PreparedNote extends NoteImportPreviewItem {
 }
 
 export class NoteConversionService {
-    constructor(private readonly app: App) {}
+    private readonly operations = new OperationLifetime();
+    constructor(private readonly app: App, private readonly currentSettings?: () => LorebaseSettings) {}
+    dispose(): void { this.operations.dispose(); }
+    private context(value: LorebaseSettings): string {
+        return JSON.stringify({ import: value.noteImport,
+            folders: [value.games, value.anime, value.movies, value.series, value.books, value.manga, value.music].map(config => config.folderPath) });
+    }
 
-    async preview(settings: LorebaseSettings): Promise<NoteImportPreview> {
-        const prepared = await this.prepare(settings.noteImport, settings);
-        return {
-            items: prepared.map(({ file: _file, ...item }) => item),
-            warnings: this.getSettingsWarnings(settings.noteImport),
-        };
+    async preview(settings: LorebaseSettings, signal?: AbortSignal): Promise<NoteImportPreview> {
+        const operation = this.operations.begin(() => this.context(this.currentSettings?.() ?? settings), signal, undefined, this.context(settings));
+        try {
+            const prepared = await operation.wait(() => this.prepare(settings.noteImport, settings, {}, {}, operation));
+            return {
+                items: prepared.map(({ file: _file, ...item }) => item),
+                warnings: this.getSettingsWarnings(settings.noteImport),
+            };
+        } finally { operation.close(); }
     }
 
     async apply(
         settings: LorebaseSettings,
         selection: Set<string> | NoteImportReviewResult,
         enrichmentsOrProgress: Record<string, Record<string, unknown>> | ((message: string) => void) = {},
-        onProgress?: (message: string) => void
+        onProgress?: (message: string) => void,
+        signal?: AbortSignal
     ): Promise<NoteImportApplyResult> {
         const enrichments = typeof enrichmentsOrProgress === 'function' ? {} : enrichmentsOrProgress;
         const progress = typeof enrichmentsOrProgress === 'function' ? enrichmentsOrProgress : onProgress;
         const selectedIds = selection instanceof Set ? selection : selection.selectedIds;
         const targetOverrides = selection instanceof Set ? {} : selection.targetMediaById;
-        const prepared = await this.prepare(settings.noteImport, settings, targetOverrides, enrichments);
-        const selected = prepared.filter((item) => selectedIds.has(item.id) && item.canImport);
-        const result: NoteImportApplyResult = { created: 0, updated: 0, skipped: 0, failed: 0 };
+        const expected = this.context(settings);
+        const operation = this.operations.begin(() => this.context(this.currentSettings?.() ?? settings), signal, undefined, expected);
+        if (this.currentSettings && this.context(this.currentSettings()) !== expected) { operation.close(); throw new Error('Import settings changed. Open the preview again.'); }
+        try {
+            const prepared = await operation.wait(() => this.prepare(settings.noteImport, settings, targetOverrides, enrichments, operation));
+            const selected = prepared.filter((item) => selectedIds.has(item.id) && item.canImport);
+            const result: NoteImportApplyResult = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
-        for (const item of selected) {
-            try {
-                progress?.(item.sourcePath);
-                if (settings.noteImport.writeMode === 'replace') {
-                    await this.replaceFrontmatter(item.file, item.targetPath, item.nextFrontmatter);
-                    result.updated++;
-                } else {
-                    await this.createCopy(item.file, item.targetPath, item.nextFrontmatter);
-                    result.created++;
+            for (const item of selected) {
+                try {
+                    operation.check();
+                    progress?.(item.sourcePath);
+                    if (settings.noteImport.writeMode === 'replace') {
+                        await this.replaceFrontmatter(item.file, item.targetPath, item.nextFrontmatter, operation);
+                        result.updated++;
+                    } else {
+                        await this.createCopy(item.file, item.targetPath, item.nextFrontmatter, operation);
+                        result.created++;
+                    }
+                } catch (error) {
+                    if (isOperationCancelled(error)) { result.cancelled = true; result.skipped += selected.length - result.created - result.updated - result.failed; break; }
+                    console.error('[LOREBASE Note Import] Failed to import note:', item.sourcePath, error);
+                    result.failed++;
                 }
-            } catch (error) {
-                console.error('[LOREBASE Note Import] Failed to import note:', item.sourcePath, error);
-                result.failed++;
             }
-        }
 
-        result.skipped = Math.max(0, prepared.length - selected.length);
-        return result;
+            result.skipped += Math.max(0, prepared.length - selected.length);
+            return result;
+        } finally { operation.close(); }
     }
 
     buildFrontmatter(
@@ -100,7 +121,12 @@ export class NoteConversionService {
         const kept: string[] = [];
         const removed: string[] = [];
 
-        for (const mapping of settings.fieldMappings) {
+        const media = settings.targetMedia === 'auto' ? this.detectTargetMedia(source) : settings.targetMedia;
+        const mappings = media === 'music' ? [
+            ...settings.fieldMappings.map(mapping => ({ ...mapping, key: mapping.key === 'name' ? 'title' : mapping.key === 'plot' ? 'description' : mapping.key })),
+            ...MUSIC_NOTE_IMPORT_FIELD_MAPPINGS.filter(mapping => !settings.fieldMappings.some(item => item.key === mapping.key)),
+        ] : settings.fieldMappings;
+        for (const mapping of mappings) {
             const foundKey = this.findMappedKey(source, mapping);
             if (!foundKey) continue;
             if (blacklist.has(mapping.key)) {
@@ -139,6 +165,18 @@ export class NoteConversionService {
             next.type = targetType;
             if (!kept.includes('type')) kept.push('type');
         }
+        if (media === 'music') {
+            if (!blacklist.has('type')) next.type = 'music';
+            if (typeof next.music_kind === 'string') next.music_kind = next.music_kind.trim().toLowerCase() === 'song' ? 'track' : next.music_kind.trim().toLowerCase();
+            if (!blacklist.has('music_kind') && !next.music_kind) {
+                const raw = String(source.type ?? '').toLowerCase();
+                next.music_kind = ['song', 'track'].includes(raw) || next.parent_track_id ? 'track' : 'album';
+            }
+            if (Array.isArray(next.tracks)) next.tracks = next.tracks.map((track, index) => typeof track === 'string'
+                ? { id: `import-track-${index + 1}`, title: track }
+                : this.isPlainRecord(track) ? { ...track, id: String(track.id ?? `import-track-${index + 1}`), title: track.title ?? track.name ?? '',
+                    ...(track.userRating === undefined && track.rating !== undefined ? { userRating: track.rating } : {}) } : track);
+        }
 
         return {
             nextFrontmatter: next,
@@ -158,15 +196,20 @@ export class NoteConversionService {
         settings: NoteImportSettings,
         fullSettings: LorebaseSettings,
         targetOverrides: Record<string, Exclude<NoteImportTargetMedia, 'auto'>> = {},
-        enrichments: Record<string, Record<string, unknown>> = {}
+        enrichments: Record<string, Record<string, unknown>> = {},
+        operation?: BackgroundOperation
     ): Promise<PreparedNote[]> {
         const sourceFiles = this.getSourceFiles(settings.sourceFolderPath);
         const reservedPaths = new Set<string>();
         const items: PreparedNote[] = [];
+        const priorMusicCopies = new Map(this.getSourceFiles(fullSettings.music.folderPath).map(file => [String(this.readFrontmatter(file).lorebase_import_source ?? ''), file.path]));
+        let processed = 0;
 
         for (const file of sourceFiles) {
+            if (++processed % 100 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0));
+            operation?.check();
             const frontmatter = this.readFrontmatter(file);
-            const conversion = this.buildFrontmatter(frontmatter, settings);
+            const conversion = this.buildFrontmatter(frontmatter, { ...settings, targetMedia: targetOverrides[file.path] ?? settings.targetMedia });
             const incoming = enrichments[file.path] ? { ...enrichments[file.path] } : null;
             if (incoming && conversion.nextFrontmatter.cm_poster) {
                 delete incoming.poster;
@@ -188,10 +231,25 @@ export class NoteConversionService {
             ) {
                 nextFrontmatter.type = this.getTargetType(targetMedia);
             }
-            const canImport = targetMedia !== null;
-            const targetPath = targetMedia
+            if (targetMedia) {
+                const config = targetMedia === 'music' ? fullSettings.music.noteTemplate : fullSettings.integrations?.media[targetMedia];
+                const keys = config?.templateEnabled ? getTemplateYamlKeys(config.template)
+                    .filter(key => Object.prototype.hasOwnProperty.call(nextFrontmatter, key)) : [];
+                // Respect the importer's explicit field mapping and blacklist; only order existing properties.
+                orderTemplateFrontmatter(nextFrontmatter, keys, {}, { compact: fullSettings.integrations?.compactTemplates });
+            }
+            const musicValid = targetMedia !== 'music' || (nextFrontmatter.type === 'music'
+                && ['album', 'track'].includes(String(nextFrontmatter.music_kind))
+                && (nextFrontmatter.tracks === undefined || Array.isArray(nextFrontmatter.tracks) && nextFrontmatter.tracks.every(track => this.isPlainRecord(track) && typeof track.title === 'string' && track.title.trim())
+                    && new Set(nextFrontmatter.tracks.map(track => (track as Record<string, unknown>).id)).size === nextFrontmatter.tracks.length));
+            const priorMusicCopy = targetMedia === 'music' && settings.writeMode === 'copy' ? priorMusicCopies.get(file.path) : undefined;
+            const canImport = targetMedia !== null && musicValid && !priorMusicCopy;
+            if (targetMedia === 'music' && settings.writeMode === 'copy' && !settings.blacklist.includes('lorebase_import_source')) {
+                nextFrontmatter.lorebase_import_source = file.path;
+            }
+            const targetPath = priorMusicCopy ?? (targetMedia
                 ? this.resolveTargetPath(fullSettings[targetMedia].folderPath, title, reservedPaths, settings.writeMode === 'replace' ? file.path : undefined)
-                : '';
+                : '');
             if (targetPath) reservedPaths.add(targetPath);
             items.push({
                 ...conversion,
@@ -202,7 +260,9 @@ export class NoteConversionService {
                 targetPath,
                 title,
                 poster: this.getPoster(nextFrontmatter),
-                warnings: this.getItemWarnings(frontmatter, nextFrontmatter, settings, targetMedia),
+                warnings: [...this.getItemWarnings(frontmatter, nextFrontmatter, settings, targetMedia),
+                    ...(!musicValid ? ['Music type or tracklist is invalid. Use album/track, an array of named tracks and unique track IDs.'] : []),
+                    ...(priorMusicCopy ? [`This music note was already imported: ${priorMusicCopy}`] : [])],
                 canImport,
                 targetMedia,
             });
@@ -254,6 +314,7 @@ export class NoteConversionService {
         if (raw === 'series' || raw === 'show' || raw === 'tv') return 'series';
         if (raw === 'book' || raw === 'books') return 'books';
         if (raw === 'manga') return 'manga';
+        if (['music', 'album', 'track', 'song'].includes(raw) || ['album', 'track'].includes(String(frontmatter.music_kind ?? frontmatter.musicKind ?? frontmatter.music_type ?? '').trim().toLowerCase())) return 'music';
         return null;
     }
 
@@ -295,20 +356,22 @@ export class NoteConversionService {
         return path !== ignoreExistingPath;
     }
 
-    private async replaceFrontmatter(file: TFile, targetPath: string, nextFrontmatter: Record<string, unknown>): Promise<void> {
-        const content = await this.app.vault.read(file);
+    private async replaceFrontmatter(file: TFile, targetPath: string, nextFrontmatter: Record<string, unknown>, operation: BackgroundOperation): Promise<void> {
         const folder = targetPath.split('/').slice(0, -1).join('/');
         if (folder) await ensureFolder(this.app, folder);
-        await this.app.vault.modify(file, this.serializeMarkdownWithFrontmatter(content, nextFrontmatter));
+        operation.check();
+        await this.app.vault.process(file, content => { operation.check(); return this.serializeMarkdownWithFrontmatter(content, nextFrontmatter); });
         if (targetPath !== file.path) {
+            operation.check();
             await this.app.fileManager.renameFile(file, targetPath);
         }
     }
 
-    private async createCopy(file: TFile, targetPath: string, nextFrontmatter: Record<string, unknown>): Promise<void> {
-        const content = await this.app.vault.read(file);
+    private async createCopy(file: TFile, targetPath: string, nextFrontmatter: Record<string, unknown>, operation: BackgroundOperation): Promise<void> {
+        const content = await operation.wait(() => this.app.vault.read(file));
         const folder = targetPath.split('/').slice(0, -1).join('/');
         if (folder) await ensureFolder(this.app, folder);
+        operation.check();
         await this.app.vault.create(targetPath, this.serializeMarkdownWithFrontmatter(content, nextFrontmatter));
     }
 
@@ -328,11 +391,13 @@ export class NoteConversionService {
 
     private serializeYamlEntry(key: string, value: unknown, indent: number): string {
         const prefix = ' '.repeat(indent);
+        key = /^[A-Za-z_][A-Za-z0-9_-]*$/.test(key) ? key : JSON.stringify(key);
         if (Array.isArray(value)) {
             if (!value.length) return `${prefix}${key}: []\n`;
             return `${prefix}${key}:\n${value.map((item) => this.serializeYamlListItem(item, indent + 2)).join('')}`;
         }
         if (this.isPlainRecord(value)) {
+            if (!Object.keys(value).length) return `${prefix}${key}: {}\n`;
             const nested = Object.entries(value)
                 .map(([childKey, childValue]) => this.serializeYamlEntry(childKey, childValue, indent + 2))
                 .join('');
@@ -343,7 +408,11 @@ export class NoteConversionService {
 
     private serializeYamlListItem(value: unknown, indent: number): string {
         const prefix = ' '.repeat(indent);
+        if (Array.isArray(value)) return value.length
+            ? `${prefix}-\n${value.map(item => this.serializeYamlListItem(item, indent + 2)).join('')}`
+            : `${prefix}- []\n`;
         if (this.isPlainRecord(value)) {
+            if (!Object.keys(value).length) return `${prefix}- {}\n`;
             const nested = Object.entries(value)
                 .map(([key, childValue]) => this.serializeYamlEntry(key, childValue, indent + 2))
                 .join('');
@@ -358,9 +427,10 @@ export class NoteConversionService {
         if (typeof value === 'boolean') return value ? 'true' : 'false';
         const text = String(value);
         if (!text) return '""';
-        if (/^https?:\/\//i.test(text)) return text;
-        if (/^[A-Za-z0-9_./:@+-]+$/.test(text) && !/^(true|false|null|~)$/i.test(text)) return text;
-        return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+        if (/^[A-Za-z0-9_./:@+-]+$/.test(text) && Number.isNaN(Number(text))
+            && !/^(true|false|null|yes|no|on|off|~|[-+]?\.inf|\.nan)$/i.test(text)
+            && !/^\d{4}-\d{2}-\d{2}(?:$|[Tt])/.test(text)) return text;
+        return JSON.stringify(text);
     }
 
     private isPlainRecord(value: unknown): value is Record<string, unknown> {

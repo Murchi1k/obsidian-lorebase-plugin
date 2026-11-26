@@ -148,6 +148,9 @@ describe('NoteConversionService', () => {
                 async modify(_file: TFile, content: string): Promise<void> {
                     modified = content;
                 },
+                async process(_file: TFile, transform: (content: string) => string): Promise<string> {
+                    modified = transform('---\ntitle: Portal\n---\n# Portal'); return modified;
+                },
                 async createFolder(): Promise<void> {
                     return;
                 },
@@ -173,7 +176,7 @@ describe('NoteConversionService', () => {
         expect(result.updated).toBe(1);
         expect(modified).toContain('name: Portal');
         expect(modified).toContain('plot: "Puzzle game"');
-        expect(renamedTo).toBe('Games/Portal.md');
+        expect(renamedTo).toBe('LOREBASE/Games/Portal.md');
     });
 
     it('imports an auto-mode note without type after review assigns a media kind and source', async () => {
@@ -238,7 +241,7 @@ describe('NoteConversionService', () => {
         expect(created).toContain('status: beaten');
         expect(created).toContain('hours: 45.4');
         expect(created).toContain('integration_provider: steam');
-        expect(created).toContain('integration_id: 1297900');
+        expect(created).toContain('integration_id: "1297900"');
         expect(created).toContain('plot: "Provider description"');
         expect(created).toContain('# Notes');
     });

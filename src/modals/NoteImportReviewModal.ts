@@ -1,8 +1,10 @@
+
 import { App, Modal, setIcon } from 'obsidian';
 import type { Language, NoteImportTargetMedia, NoteImportWriteMode } from '../types';
 import type { NoteImportPreviewItem, NoteImportReviewResult } from '../services/NoteConversionService';
 import type { MediaKind, MediaSourceSelection } from '../services/integrations/types';
 import { sanitizeFileName } from '../services/integrations/templateUtils';
+import { mt } from '../localization/music';
 
 type NoteImportFilter = 'all' | 'changed' | 'warnings' | 'selected';
 
@@ -104,31 +106,67 @@ const TEXT: Record<Language, NoteImportReviewText> = {
         source: 'Джерело',
         target: 'Куди',
     },
+    'zh-CN': {
+        title: '将笔记导入 LOREBASE',
+        subtitleCopy: '检查即将复制到所选 LOREBASE 文件夹的笔记。',
+        subtitleReplace: '替换模式会更新所选笔记，并将其移动到 LOREBASE 文件夹。',
+        search: '搜索笔记…',
+        all: '全部',
+        changed: '有更改',
+        warnings: '警告',
+        selected: '已选择',
+        shown: '当前显示',
+        total: '总计',
+        selectAll: '全选',
+        clear: '清除',
+        cancel: '取消',
+        applyCopy: '创建副本',
+        applyReplace: '替换并移动',
+        notImportable: '无法导入',
+        empty: '没有符合当前筛选条件的笔记。',
+        renamed: '已重命名',
+        kept: '已保留',
+        removed: '已移除',
+        source: '来源',
+        target: '目标',
+    },
 };
 
-export class NoteImportReviewModal extends Modal {
-    private selected = new Set<string>();
-    private resolve?: (value: NoteImportReviewResult | null) => void;
-    private hasResolved = false;
-    private query = '';
-    private activeFilter: NoteImportFilter = 'all';
-    private listEl?: HTMLElement;
-    private countEl?: HTMLElement;
-    private filterEl?: HTMLElement;
-    private applyBtn?: HTMLButtonElement;
+export interface NoteImportReviewOptions {
+    items: NoteImportPreviewItem[];
+    writeMode: NoteImportWriteMode;
+    language: Language;
+    targetFolders?: Record<Exclude<NoteImportTargetMedia, 'auto'>, string>;
+    showTypeSelector?: boolean;
+    onFindSource?: (item: NoteImportPreviewItem, kind: MediaKind) => Promise<MediaSourceSelection | null>;
+}
 
-    constructor(
-        app: App,
-        private readonly items: NoteImportPreviewItem[],
-        private readonly writeMode: NoteImportWriteMode,
-        private readonly language: Language = 'en',
-        private readonly targetFolders?: Record<Exclude<NoteImportTargetMedia, 'auto'>, string>,
-        private readonly showTypeSelector = false,
-        private readonly onFindSource?: (
-            item: NoteImportPreviewItem,
-            kind: MediaKind
-        ) => Promise<MediaSourceSelection | null>
-    ) {
+export function reviewNoteImportInline(
+    host: HTMLElement,
+    options: NoteImportReviewOptions,
+    signal: AbortSignal
+): Promise<NoteImportReviewResult | null> {
+    return new Promise(resolve => {
+        if (signal.aborted) {
+            resolve(null);
+            return;
+        }
+        const content = host.createDiv();
+        const finish = (result: NoteImportReviewResult | null): void => {
+            signal.removeEventListener('abort', cancel);
+            content.remove();
+            resolve(result);
+        };
+        const cancel = (): void => finish(null);
+        signal.addEventListener('abort', cancel, { once: true });
+        new NoteImportReview(content, options, finish).render();
+    });
+}
+
+export class NoteImportReviewModal extends Modal {
+    private resolve?: (value: NoteImportReviewResult | null) => void;
+
+    constructor(app: App, private readonly options: NoteImportReviewOptions) {
         super(app);
     }
 
@@ -141,27 +179,48 @@ export class NoteImportReviewModal extends Modal {
 
     onOpen(): void {
         this.modalEl.addClass('lorebase-note-import-review-container');
-        this.render();
+        new NoteImportReview(this.contentEl, this.options, result => {
+            this.resolve?.(result);
+            this.resolve = undefined;
+            this.close();
+        }).render();
     }
 
     onClose(): void {
         this.modalEl.removeClass('lorebase-note-import-review-container');
-        if (!this.hasResolved) this.resolve?.(null);
+        this.resolve?.(null);
+        this.resolve = undefined;
         this.contentEl.empty();
     }
+}
 
-    private render(): void {
+class NoteImportReview {
+    private selected = new Set<string>();
+    private query = '';
+    private activeFilter: NoteImportFilter = 'all';
+    private listEl?: HTMLElement;
+    private countEl?: HTMLElement;
+    private filterEl?: HTMLElement;
+    private applyBtn?: HTMLButtonElement;
+
+    constructor(
+        private readonly contentEl: HTMLElement,
+        private readonly options: NoteImportReviewOptions,
+        private readonly complete: (result: NoteImportReviewResult | null) => void,
+    ) {}
+
+    render(): void {
         this.contentEl.empty();
         this.contentEl.addClass('lorebase-note-import-review');
 
         const header = this.contentEl.createDiv({ cls: 'lorebase-nir-header' });
         const titleRow = header.createDiv({ cls: 'lorebase-nir-title-row' });
         const titleIcon = titleRow.createSpan({ cls: 'lorebase-nir-title-icon' });
-        setIcon(titleIcon, this.writeMode === 'replace' ? 'replace' : 'copy');
+        setIcon(titleIcon, this.options.writeMode === 'replace' ? 'replace' : 'copy');
         titleRow.createSpan({ cls: 'lorebase-nir-title-text', text: this.text('title') });
         header.createDiv({
-            cls: `lorebase-nir-subtitle ${this.writeMode === 'replace' ? 'is-danger' : ''}`,
-            text: this.writeMode === 'replace' ? this.text('subtitleReplace') : this.text('subtitleCopy'),
+            cls: `lorebase-nir-subtitle ${this.options.writeMode === 'replace' ? 'is-danger' : ''}`,
+            text: this.options.writeMode === 'replace' ? this.text('subtitleReplace') : this.text('subtitleCopy'),
         });
 
         const toolbar = this.contentEl.createDiv({ cls: 'lorebase-nir-toolbar' });
@@ -201,30 +260,24 @@ export class NoteImportReviewModal extends Modal {
         });
         setIcon(cancelBtn.createSpan({ cls: 'lorebase-flow-btn-icon' }), 'x');
         cancelBtn.createSpan({ cls: 'lorebase-flow-btn-label', text: this.text('cancel') });
-        cancelBtn.addEventListener('click', () => {
-            this.hasResolved = true;
-            this.resolve?.(null);
-            this.close();
-        });
+        cancelBtn.addEventListener('click', () => this.complete(null));
 
         this.applyBtn = footer.createEl('button', {
-            cls: `lorebase-flow-btn lorebase-flow-btn-primary lorebase-nir-apply ${this.writeMode === 'replace' ? 'is-danger' : ''}`,
+            cls: `lorebase-flow-btn lorebase-flow-btn-primary lorebase-nir-apply ${this.options.writeMode === 'replace' ? 'is-danger' : ''}`,
             attr: { type: 'button' },
         });
         this.applyBtn.addEventListener('click', () => {
-            this.hasResolved = true;
             const targetMediaById: NoteImportReviewResult['targetMediaById'] = {};
             const sourcesById: NoteImportReviewResult['sourcesById'] = {};
-            for (const item of this.items) {
+            for (const item of this.options.items) {
                 if (item.targetMedia) targetMediaById[item.id] = item.targetMedia;
                 if (item.source) sourcesById[item.id] = item.source;
             }
-            this.resolve?.({
+            this.complete({
                 selectedIds: new Set(this.selected),
                 targetMediaById,
                 sourcesById,
             });
-            this.close();
         });
         this.updateApplyButton();
 
@@ -235,9 +288,9 @@ export class NoteImportReviewModal extends Modal {
         if (!this.filterEl) return;
         this.filterEl.empty();
         const filters: Array<{ id: NoteImportFilter; label: string; count: number; icon: string }> = [
-            { id: 'all', label: this.text('all'), count: this.items.length, icon: 'layout-grid' },
-            { id: 'changed', label: this.text('changed'), count: this.items.filter((item) => item.renamed.length || item.removed.length).length, icon: 'shuffle' },
-            { id: 'warnings', label: this.text('warnings'), count: this.items.filter((item) => item.warnings.length).length, icon: 'triangle-alert' },
+            { id: 'all', label: this.text('all'), count: this.options.items.length, icon: 'layout-grid' },
+            { id: 'changed', label: this.text('changed'), count: this.options.items.filter((item) => item.renamed.length || item.removed.length).length, icon: 'shuffle' },
+            { id: 'warnings', label: this.text('warnings'), count: this.options.items.filter((item) => item.warnings.length).length, icon: 'triangle-alert' },
             { id: 'selected', label: this.text('selected'), count: this.selected.size, icon: 'check-circle' },
         ];
 
@@ -261,7 +314,7 @@ export class NoteImportReviewModal extends Modal {
     private renderList(): void {
         if (!this.listEl || !this.countEl) return;
         const filtered = this.getFilteredItems();
-        this.countEl.setText(`${this.selected.size} ${this.text('selected').toLowerCase()} / ${filtered.length} ${this.text('shown')} / ${this.items.length} ${this.text('total')}`);
+        this.countEl.setText(`${this.selected.size} ${this.text('selected').toLowerCase()} / ${filtered.length} ${this.text('shown')} / ${this.options.items.length} ${this.text('total')}`);
         this.listEl.empty();
 
         if (!filtered.length) {
@@ -296,8 +349,15 @@ export class NoteImportReviewModal extends Modal {
 
             const body = row.createDiv({ cls: 'lorebase-nir-body' });
             body.createDiv({ cls: 'lorebase-nir-title', text: item.title });
-            body.createDiv({ cls: 'lorebase-nir-path', text: `${this.text('source')}: ${item.sourcePath}` });
-            body.createDiv({ cls: 'lorebase-nir-path', text: `${this.text('target')}: ${item.targetPath || this.text('notImportable')}` });
+            const paths = body.createDiv({ cls: 'lorebase-nir-paths' });
+            for (const [label, path] of [
+                [this.text('source'), item.sourcePath],
+                [this.text('target'), item.targetPath || this.text('notImportable')],
+            ]) {
+                const line = paths.createDiv({ cls: 'lorebase-nir-path' });
+                line.createSpan({ cls: 'lorebase-nir-path-label', text: label + ':' });
+                line.createSpan({ cls: 'lorebase-nir-path-value', text: ' ' + path });
+            }
             this.renderEnrichmentControls(body, item);
             this.renderSummary(body, item);
 
@@ -313,7 +373,7 @@ export class NoteImportReviewModal extends Modal {
             };
             row.addEventListener('click', toggle);
             row.addEventListener('keydown', (event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
+                if (event.target !== row || (event.key !== 'Enter' && event.key !== ' ')) return;
                 event.preventDefault();
                 toggle();
             });
@@ -322,15 +382,15 @@ export class NoteImportReviewModal extends Modal {
 
     private renderEnrichmentControls(container: HTMLElement, item: NoteImportPreviewItem): void {
         const controls = container.createDiv({ cls: 'lorebase-nir-enrichment-controls' });
-        if (this.showTypeSelector) {
+        if (this.options.showTypeSelector) {
             const select = controls.createEl('select', {
                 cls: 'lorebase-nir-media-type',
                 attr: { 'aria-label': this.extraText('mediaType') },
             });
             select.createEl('option', { value: '', text: this.extraText('mediaType') });
-            const labels = this.language === 'ru'
+            const labels = this.options.language === 'ru'
                 ? ['\u0418\u0433\u0440\u0430', '\u0410\u043d\u0438\u043c\u0435', '\u0424\u0438\u043b\u044c\u043c', '\u0421\u0435\u0440\u0438\u0430\u043b', '\u041a\u043d\u0438\u0433\u0430', '\u041c\u0430\u043d\u0433\u0430']
-                : this.language === 'uk'
+                : this.options.language === 'uk'
                     ? ['\u0413\u0440\u0430', '\u0410\u043d\u0456\u043c\u0435', '\u0424\u0456\u043b\u044c\u043c', '\u0421\u0435\u0440\u0456\u0430\u043b', '\u041a\u043d\u0438\u0433\u0430', '\u041c\u0430\u043d\u0491\u0430']
                     : ['Game', 'Anime', 'Movie', 'Series', 'Book', 'Manga'];
             const choices: Array<[Exclude<NoteImportTargetMedia, 'auto'>, string]> = [
@@ -340,6 +400,7 @@ export class NoteImportReviewModal extends Modal {
                 ['series', labels[3]],
                 ['books', labels[4]],
                 ['manga', labels[5]],
+                ['music', mt('music')],
             ];
             for (const [value, label] of choices) select.createEl('option', { value, text: label });
             select.value = item.targetMedia ?? '';
@@ -364,7 +425,7 @@ export class NoteImportReviewModal extends Modal {
         });
         sourceLabel.setAttr('title', item.source?.id ?? '');
 
-        if (item.targetMedia && this.onFindSource) {
+        if (item.targetMedia && item.targetMedia !== 'music' && this.options.onFindSource) {
             const button = controls.createEl('button', {
                 cls: 'lorebase-nir-source-button',
                 attr: { type: 'button' },
@@ -376,7 +437,7 @@ export class NoteImportReviewModal extends Modal {
                 event.stopPropagation();
                 void (async (): Promise<void> => {
                     button.disabled = true;
-                    const source = await this.onFindSource?.(item, item.targetMedia as MediaKind);
+                    const source = await this.options.onFindSource?.(item, item.targetMedia as MediaKind);
                     if (source) item.source = source;
                     this.refresh();
                 })();
@@ -385,7 +446,7 @@ export class NoteImportReviewModal extends Modal {
     }
 
     private makeTargetPath(media: Exclude<NoteImportTargetMedia, 'auto'>, title: string): string {
-        const folder = this.targetFolders?.[media]?.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') ?? '';
+        const folder = this.options.targetFolders?.[media]?.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') ?? '';
         const fileName = `${sanitizeFileName(title) || 'Untitled'}.md`;
         return folder ? `${folder}/${fileName}` : fileName;
     }
@@ -410,8 +471,14 @@ export class NoteImportReviewModal extends Modal {
                 changeSource: '\u0417\u043c\u0456\u043d\u0438\u0442\u0438 \u0434\u0436\u0435\u0440\u0435\u043b\u043e',
                 noSource: '\u0414\u0436\u0435\u0440\u0435\u043b\u043e \u043d\u0435 \u0432\u0438\u0431\u0440\u0430\u043d\u043e',
             },
+            'zh-CN': {
+                mediaType: '媒体类型',
+                findSource: '查找数据源',
+                changeSource: '更换数据源',
+                noSource: '未选择数据源',
+            },
         };
-        return (values[this.language] ?? values.en)[key];
+        return (values[this.options.language] ?? values.en)[key];
     }
 
     private renderSummary(container: HTMLElement, item: NoteImportPreviewItem): void {
@@ -445,7 +512,7 @@ export class NoteImportReviewModal extends Modal {
     }
 
     private getFilteredItems(): NoteImportPreviewItem[] {
-        return this.items.filter((item) => {
+        return this.options.items.filter((item) => {
             if (this.activeFilter === 'selected' && !this.selected.has(item.id)) return false;
             if (this.activeFilter === 'changed' && !item.renamed.length && !item.removed.length) return false;
             if (this.activeFilter === 'warnings' && !item.warnings.length) return false;
@@ -466,13 +533,13 @@ export class NoteImportReviewModal extends Modal {
         if (!this.applyBtn) return;
         this.applyBtn.empty();
         const count = this.selected.size;
-        setIcon(this.applyBtn.createSpan({ cls: 'lorebase-flow-btn-icon' }), this.writeMode === 'replace' ? 'replace' : 'copy');
-        const label = this.writeMode === 'replace' ? this.text('applyReplace') : this.text('applyCopy');
+        setIcon(this.applyBtn.createSpan({ cls: 'lorebase-flow-btn-icon' }), this.options.writeMode === 'replace' ? 'replace' : 'copy');
+        const label = this.options.writeMode === 'replace' ? this.text('applyReplace') : this.text('applyCopy');
         this.applyBtn.createSpan({ cls: 'lorebase-flow-btn-label', text: count > 0 ? `${label} (${count})` : label });
         this.applyBtn.disabled = count === 0;
     }
 
     private text<K extends keyof NoteImportReviewText>(key: K): NoteImportReviewText[K] {
-        return (TEXT[this.language] ?? TEXT.en)[key];
+        return (TEXT[this.options.language] ?? TEXT.en)[key];
     }
 }
