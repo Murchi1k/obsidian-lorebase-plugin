@@ -16,7 +16,7 @@ describe('mapInFrameBatches', () => {
     it('finishes when the browser suspends animation frames in a hidden window', async () => {
         vi.useFakeTimers();
         const cancel = vi.fn();
-        vi.stubGlobal('window', { requestAnimationFrame: vi.fn(() => 123), cancelAnimationFrame: cancel });
+        vi.stubGlobal('window', { ...window, requestAnimationFrame: vi.fn(() => 123), cancelAnimationFrame: cancel });
         const loading = mapInFrameBatches([1, 2, 3], value => value, 1);
         await vi.advanceTimersByTimeAsync(64);
         expect(await loading).toEqual([1, 2, 3]);
@@ -30,7 +30,7 @@ describe('mapInFrameBatches', () => {
         const frames = vi.fn((callback: FrameRequestCallback) => {
             return setTimeout(() => callback(clock), 0) as unknown as number;
         });
-        vi.stubGlobal('window', { requestAnimationFrame: frames, cancelAnimationFrame: clearTimeout });
+        vi.stubGlobal('window', { ...window, requestAnimationFrame: frames, cancelAnimationFrame: clearTimeout });
         const loading = mapInFrameBatches(Array.from({ length: 1000 }, (_, i) => i), value => {
             clock += .05;
             return value;

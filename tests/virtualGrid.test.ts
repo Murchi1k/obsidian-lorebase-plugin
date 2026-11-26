@@ -157,7 +157,7 @@ describe('virtual grid resizing', () => {
 
     it.each([false, true])('keeps scrolling work bounded with 100,000 items (grouped: %s)', grouped => {
         const frames: FrameRequestCallback[] = [];
-        vi.stubGlobal('window', { requestAnimationFrame: (fn: FrameRequestCallback) => { frames.push(fn); return frames.length; }, cancelAnimationFrame: vi.fn() });
+        vi.stubGlobal('window', { ...window, requestAnimationFrame: (fn: FrameRequestCallback) => { frames.push(fn); return frames.length; }, cancelAnimationFrame: vi.fn() });
         const container = element(), gridEl = element();
         // Include a toolbar above the grid, as in the real library.
         gridEl.getBoundingClientRect = () => ({ top: 150 - container.scrollTop }) as DOMRect;

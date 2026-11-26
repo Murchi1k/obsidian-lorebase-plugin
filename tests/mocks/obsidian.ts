@@ -54,15 +54,6 @@ export class Notice {
     }
 }
 
-if (typeof window === 'undefined') {
-    Object.defineProperty(globalThis, 'window', {
-        value: {
-            setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
-        },
-        configurable: true,
-    });
-}
-
 type RequestUrlOptions = string | { url: string; method?: string; headers?: Record<string, string>; body?: string | ArrayBuffer };
 type RequestUrlResponse = { json: unknown; text?: string; arrayBuffer: ArrayBuffer; headers: Record<string, string>; status: number };
 type RequestUrlMock = (options: RequestUrlOptions) => Promise<Partial<RequestUrlResponse>> | Partial<RequestUrlResponse>;
