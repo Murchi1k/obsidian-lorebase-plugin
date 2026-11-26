@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/qUA4EzafR"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord community" /></a>
+  <a href="https://discord.gg/fZ8FbPhG2"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord community" /></a>
   <a href="https://ko-fi.com/murch1k"><img src="https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi" /></a>
   <a href="https://www.patreon.com/c/Murch1k"><img src="https://img.shields.io/badge/Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon" /></a>
 </p>

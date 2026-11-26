@@ -8,7 +8,7 @@ const RETRY_MS = 10 * 60 * 1000;
 const TIMEOUT_MS = 4000;
 export const DEFAULT_COMMUNITY_LINKS: Readonly<CommunityLinks> = {
     kofi: 'https://ko-fi.com/murch1k',
-    discord: 'https://discord.gg/qUA4EzafR',
+    discord: 'https://discord.gg/fZ8FbPhG2',
     patreon: 'https://www.patreon.com/c/Murch1k',
     github: REPOSITORY_URL,
 };
