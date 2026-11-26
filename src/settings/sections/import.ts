@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { setIcon } from 'obsidian';
 import { DEFAULT_NOTE_IMPORT_FIELD_MAPPINGS, MUSIC_NOTE_IMPORT_FIELD_MAPPINGS } from '../../constants';
 import { mt } from '../../localization/music';
@@ -291,7 +292,7 @@ export function renderImportSection(context: SettingsSectionContext, container: 
     };
     context.signal?.addEventListener('abort', cancelReview, { once: true });
     container.addEventListener('lorebase-settings-section-hide', cancelReview);
-    scan.addEventListener('click', async () => {
+    scan.addEventListener('click', handleAsyncAction(async () => {
         if (running || context.signal?.aborted) return;
         running = new AbortController();
         reviewHost.empty();
@@ -307,7 +308,7 @@ export function renderImportSection(context: SettingsSectionContext, container: 
                 scan.focus();
             }
         }
-    });
+    }));
 
     const tabs = createMediaTabs(navigation, [
         { value: 'source', label: labels.source, icon: 'folder' },

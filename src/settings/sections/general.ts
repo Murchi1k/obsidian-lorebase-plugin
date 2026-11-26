@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { renderCardWorkspace } from './cardCustomization';
 import { onlineExtrasText } from '../../localization/onlineExtras';
 import { renderStatusSettings } from './statuses';
@@ -89,10 +90,10 @@ export function renderGeneralSettings(context: SettingsSectionContext, container
     renderChoiceButtons<CardClickAction>(action.createDiv({ cls: 'lorebase-general-segments' }), actionTitle, [
         { value: 'open', label: generalLabel('Open note', 'Заметка', 'Нотатка', '打开笔记'), icon: 'file-text' },
         { value: 'edit', label: generalLabel('Edit card', 'Редактор', 'Редактор', '编辑卡片'), icon: 'pencil' },
-    ], settings.cardClickAction ?? 'open', async value => {
+    ], settings.cardClickAction ?? 'open', handleAsyncAction(async value => {
         settings.cardClickAction = value;
         await context.plugin.saveSettings();
-    });
+    }));
 
     const editor = behavior.createEl('section', { cls: 'lorebase-general-panel lorebase-general-row' });
     const editorTitle = compactGameText('setting');
@@ -292,11 +293,11 @@ function renderRatingScaleSettings(context: SettingsSectionContext, container: H
     renderChoiceButtons<RatingScaleMode>(heading.createDiv({ cls: 'lorebase-general-segments' }), title, [
         { value: 'classic', label: label('Classic', 'Классическая', 'Класична', '经典') },
         { value: 'custom', label: label('Custom', 'Своя', 'Власна', '自定义') },
-    ], scale.mode, async value => {
+    ], scale.mode, handleAsyncAction(async value => {
         scale.mode = value;
         updateRatingPreview();
         await saveRating();
-    });
+    }));
 
     const classic = body.createDiv({ cls: 'lorebase-rating-classic-settings' });
     const presetRow = classic.createDiv({ cls: 'lorebase-general-row lorebase-rating-preset-row' });
@@ -439,11 +440,11 @@ function renderRatingScaleSettings(context: SettingsSectionContext, container: H
     };
 
     renderGeneralRange(custom.createDiv(), label('Maximum score', 'Максимальная оценка', 'Максимальна оцінка', '最高分'),
-        2, 10, scale.max, async value => {
+        2, 10, scale.max, handleAsyncAction(async value => {
             scale.max = value;
             updateRatingPreview();
             await saveRating();
-        });
+        }));
 
     const stepSetting = custom.createDiv({ cls: 'lorebase-general-option' });
     stepSetting.createSpan({ text: stepLabel });
@@ -451,11 +452,11 @@ function renderRatingScaleSettings(context: SettingsSectionContext, container: H
         { value: '1', label: '1' },
         { value: '0.5', label: stepFormat.format(0.5) },
         { value: '0.1', label: stepFormat.format(0.1) },
-    ], scale.step === 0.1 ? '0.1' : scale.step === 0.5 ? '0.5' : '1', async value => {
+    ], scale.step === 0.1 ? '0.1' : scale.step === 0.5 ? '0.5' : '1', handleAsyncAction(async value => {
         scale.step = value === '0.1' ? 0.1 : value === '0.5' ? 0.5 : 1;
         updateRatingPreview();
         await saveRating();
-    });
+    }));
 
     const displayLabel = label('Display on cards', 'Вид на карточках', 'Вигляд на картках', '卡片显示');
     const display = custom.createDiv({ cls: 'lorebase-general-option' });
@@ -465,11 +466,11 @@ function renderRatingScaleSettings(context: SettingsSectionContext, container: H
         { value: 'number', label: label('Number', 'Число', 'Число', '数字') },
         { value: 'stars', label: label('Star', 'Звезда', 'Зірка', '星标'), icon: 'star' },
         { value: 'custom', label: label('Custom', 'Свой', 'Власний', '自定义'), icon: scale.icon ?? 'star' },
-    ], scale.display, async value => {
+    ], scale.display, handleAsyncAction(async value => {
         scale.display = value;
         updateRatingPreview();
         await saveRating();
-    });
+    }));
     const chooseIcon = label('Choose rating icon', 'Выбрать иконку оценки', 'Обрати іконку оцінки', '选择评分图标');
     const customButton = controls.querySelector<HTMLButtonElement>('.lorebase-settings-choices > button:last-child')!;
     customButton.addClass('lorebase-rating-display-custom');

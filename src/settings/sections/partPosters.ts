@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { setIcon, setTooltip } from 'obsidian';
 import { i18n } from '../../localization';
 import { normalizePosterMode } from '../../services/media/partPoster';
@@ -24,11 +25,11 @@ export function renderPartPosterSetting(context: SettingsSectionContext, contain
     renderChoiceButtons<PosterMode>(row, copy.name,
         [{ value: 'active-part', label: copy.active, icon: 'layers' }, { value: 'title', label: copy.title, icon: 'pin' }],
         normalizePosterMode(context.plugin.settings[media].posterMode),
-        async mode => {
+        handleAsyncAction(async mode => {
             context.plugin.settings[media].posterMode = mode;
             updatePreview();
             await context.plugin.saveSettings();
             context.plugin.refreshViews();
-        });
+        }));
 
 }

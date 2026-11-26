@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../utils/actionHandler';
 import { setIcon } from 'obsidian';
 import { i18n } from '../localization';
 import { renderMediaSwitch } from './sections/mediaSwitch';
@@ -60,12 +61,12 @@ export function renderSyncOperations(container: HTMLElement, operations: readonl
         });
         setIcon(button.createSpan({ cls: 'lorebase-sync-operation-icon', attr: { 'aria-hidden': 'true' } }), operation.icon);
         button.createSpan({ text: operation.label });
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', handleAsyncAction(async () => {
             if (button.disabled) return;
             buttons.forEach(control => { control.disabled = true; });
             try { await operation.run(); }
             finally { buttons.forEach(control => { control.disabled = false; }); }
-        });
+        }));
         return button;
     });
 }
@@ -127,7 +128,7 @@ export function renderSyncConnectionTest(
         }
         for (const detail of details) copy.createDiv({ cls: 'setting-item-description', text: detail });
     };
-    button.addEventListener('click', async () => {
+    button.addEventListener('click', handleAsyncAction(async () => {
         if (button.disabled) return;
         const request = ++revision;
         button.disabled = true;
@@ -141,7 +142,7 @@ export function renderSyncConnectionTest(
         } finally {
             button.disabled = false;
         }
-    });
+    }));
     return () => {
         revision++;
         result.empty();

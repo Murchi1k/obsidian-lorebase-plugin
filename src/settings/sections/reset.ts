@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { Notice, setIcon } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../../constants';
 import { t } from '../../localization';
@@ -48,7 +49,7 @@ export function renderResetSettings(context: SettingsSectionContext, container: 
         event.stopPropagation();
         close();
     });
-    confirm.addEventListener('click', async () => {
+    confirm.addEventListener('click', handleAsyncAction(async () => {
         if (confirm.disabled) return;
         confirm.disabled = cancel.disabled = true;
         const previous = context.plugin.settings;
@@ -66,5 +67,5 @@ export function renderResetSettings(context: SettingsSectionContext, container: 
         const settings = container.closest('.lorebase-settings');
         context.display();
         settings?.querySelector<HTMLButtonElement>('.lorebase-reset-trigger')?.focus();
-    });
+    }));
 }

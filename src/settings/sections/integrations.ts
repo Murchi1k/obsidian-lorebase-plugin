@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { renderTemplateFieldsEditor } from '../../components/TemplateFieldsEditor';
 import { buildDefaultAdvancedTemplate, completeAdvancedTemplate, rememberAdvancedTemplate, switchTemplateMode } from '../../services/integrations/templatePreferences';
 import { renderAdditionalProviderHelp } from './additionalProviderHelp';
@@ -763,7 +764,7 @@ export function renderTemplatesSection(context: SettingsSectionContext, containe
                 syncButtons();
                 status.setText(save.disabled ? '' : templateCopy('unsaved'));
             });
-            save.addEventListener('click', async () => {
+            save.addEventListener('click', handleAsyncAction(async () => {
                 const draft = editor.value;
                 if (draft.trimStart().startsWith('---') && !/^\uFEFF?---[ \t]*\r?\n[\s\S]*?^---[ \t]*$/m.test(draft)) {
                     status.setText(templateCopy('invalid'));
@@ -781,7 +782,7 @@ export function renderTemplatesSection(context: SettingsSectionContext, containe
                 syncButtons();
                 await context.plugin.saveSettings();
                 status.setText(save.disabled ? templateCopy('saved') : templateCopy('unsaved'));
-            });
+            }));
             editor.addEventListener('keydown', event => {
                 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
                     event.preventDefault();

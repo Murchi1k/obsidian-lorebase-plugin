@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../utils/actionHandler';
 import { createLorebaseDropdown } from '../components/LorebaseDropdown';
 import { setIcon } from 'obsidian';
 import { tt } from '../localization/trakt';
@@ -38,10 +39,10 @@ export function renderTraktSyncSettings(context: SettingsSectionContext, contain
         actions.empty();
         const connect = renderSyncButton(actions, 'key-round', tt('connect'), 'primary');
         connect.disabled = !config.clientId;
-        connect.addEventListener('click', async () => { connect.disabled = true; try { await context.plugin.connectTrakt(); } finally { if (!context.signal?.aborted) context.display(); } });
+        connect.addEventListener('click', handleAsyncAction(async () => { connect.disabled = true; try { await context.plugin.connectTrakt(); } finally { if (!context.signal?.aborted) context.display(); } }));
         if (config.accessToken) {
             const disconnect = renderSyncButton(actions, 'log-out', tt('disconnect'));
-            disconnect.addEventListener('click', async () => { context.plugin.settings.traktSync = { ...defaultTraktSettings(), clientId: config.clientId, movieProvider: config.movieProvider, seriesProvider: config.seriesProvider }; await context.plugin.saveSettings(); if (!context.signal?.aborted) context.display(); });
+            disconnect.addEventListener('click', handleAsyncAction(async () => { context.plugin.settings.traktSync = { ...defaultTraktSettings(), clientId: config.clientId, movieProvider: config.movieProvider, seriesProvider: config.seriesProvider }; await context.plugin.saveSettings(); if (!context.signal?.aborted) context.display(); }));
         }
         operations.querySelectorAll<HTMLButtonElement>('.lorebase-sync-operation').forEach(button => { button.disabled = !config.accessToken; });
     };

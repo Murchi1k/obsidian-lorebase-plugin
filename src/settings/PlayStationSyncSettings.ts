@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../utils/actionHandler';
 import { createLorebaseDropdown } from '../components/LorebaseDropdown';
 import { setIcon } from 'obsidian';
 import { renderMediaSwitch } from './sections/mediaSwitch';
@@ -58,19 +59,19 @@ export function renderPlayStationSyncSettings(context: SettingsSectionContext, c
     const actions = connection.createDiv({ cls: 'lorebase-sync-surface-actions' });
     const connect = renderSyncButton(actions, 'key-round', pt('connect'), 'primary');
     connect.disabled = true; input.addEventListener('input', () => { connect.disabled = !input.value.trim(); });
-    connect.addEventListener('click', async () => {
+    connect.addEventListener('click', handleAsyncAction(async () => {
         connect.disabled = true; message.textContent = pt('loading');
         try { await context.plugin.connectPlayStation(input.value); if (!context.signal?.aborted) context.display(); }
         catch (error) { if (!context.signal?.aborted) message.textContent = psnError(error); }
         finally { input.value = ''; }
-    });
+    }));
     if (config.accountId) {
         const disconnect = renderSyncButton(actions, 'log-out', pt('disconnect'));
-        disconnect.addEventListener('click', async () => {
+        disconnect.addEventListener('click', handleAsyncAction(async () => {
             disconnect.disabled = true;
             try { await context.plugin.disconnectPlayStation(); if (!context.signal?.aborted) context.display(); }
             catch (error) { message.textContent = psnError(error); disconnect.disabled = false; }
-        });
+        }));
     }
     const security = connection.createEl('details', { cls: 'lorebase-psn-security' });
     security.createEl('summary', { text: pt('security') });

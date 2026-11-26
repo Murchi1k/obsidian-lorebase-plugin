@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { Notice, setIcon } from 'obsidian';
 import { t } from '../../localization';
 import { renderMediaSwitch } from './mediaSwitch';
@@ -39,7 +40,7 @@ export function renderLocalImageSettings(context: SettingsSectionContext, contai
     });
     setIcon(download.createSpan({ attr: { 'aria-hidden': 'true' } }), 'download');
     download.createSpan({ text: t('settingsIntegrationsImageStorageDownloadExisting') });
-    download.addEventListener('click', async () => {
+    download.addEventListener('click', handleAsyncAction(async () => {
         if (download.disabled) return;
         download.disabled = true;
         new Notice(t('settingsIntegrationsImageStorageDownloadStarted'));
@@ -57,5 +58,5 @@ export function renderLocalImageSettings(context: SettingsSectionContext, contai
         } finally {
             download.disabled = false;
         }
-    });
+    }));
 }

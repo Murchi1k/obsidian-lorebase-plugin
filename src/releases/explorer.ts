@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../utils/actionHandler';
 import { setIcon } from 'obsidian';
 import type { Language } from '../types';
 import { getReleaseHighlights, type ReleaseTarget } from './features';
@@ -41,11 +42,11 @@ export function renderReleaseExplorer(container: HTMLElement, language: Language
         const action = story.createEl('button', { cls: 'lorebase-release-explore', attr: { type: 'button' } });
         action.createSpan({ text: copy.open });
         setIcon(action.createSpan({ attr: { 'aria-hidden': 'true' } }), 'arrow-up-right');
-        action.addEventListener('click', async () => {
+        action.addEventListener('click', handleAsyncAction(async () => {
             action.disabled = true;
             try { if (await navigate(feature.target)) onNavigated(); }
             finally { action.disabled = false; }
-        });
+        }));
         previous.disabled = index === 0;
         next.disabled = index === features.length - 1;
         counter.textContent = `${index + 1} / ${features.length}`;

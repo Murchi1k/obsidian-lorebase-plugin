@@ -1,3 +1,4 @@
+import { handleAsyncAction } from '../../utils/actionHandler';
 import { MusicCatalog } from '../../services/MusicCatalog';
 import { Notice, Setting } from 'obsidian';
 import { mt } from '../../localization/music';
@@ -16,12 +17,12 @@ export function renderMusicCardSettings(context: SettingsSectionContext, section
             { value: 'square', label: mt('square'), icon: 'square' },
             { value: 'vinyl', label: mt('vinyl'), icon: 'disc-3' },
             { value: 'cd', label: mt('cdCase'), icon: 'disc' },
-        ], settings[key], async value => {
+        ], settings[key], handleAsyncAction(async value => {
             settings[key] = value;
             updatePreview();
             await plugin.saveSettings();
             plugin.refreshViews();
-        });
+        }));
     }
 }
 
