@@ -1,1689 +1,502 @@
-import { Setting, SliderComponent, ToggleComponent, setIcon } from 'obsidian';
-import { CARD_SIZES, COLOR_PRESETS, DEFAULT_COVER, DEFAULT_GAME_TAG_PRESETS, DEFAULT_SETTINGS, HORIZONTAL_CARD_SIZES, PARTICLE_INTENSITY_MAX, PARTICLE_INTENSITY_MIN, RATING_EMOJI, STATUS_CONFIG } from '../../constants';
+import { renderCardWorkspace } from './cardCustomization';
+import { onlineExtrasText } from '../../localization/onlineExtras';
+import { renderStatusSettings } from './statuses';
+import { LucideIconPickerModal } from '../../modals/LucideIconPickerModal';
+import { setIcon } from 'obsidian';
+import { COLOR_PRESETS, DEFAULT_GAME_TAG_PRESETS, PARTICLE_INTENSITY_MAX, PARTICLE_INTENSITY_MIN } from '../../constants';
 import { i18n, t } from '../../localization';
-import type { BadgePosition, CardClickAction, CardStyle, CompletionDateBadgeFormat, Language, LorebaseSettings, ParticleEffect, RatingBadgeMode, TagPreset } from '../../types';
+import { mt } from '../../localization/music';
+import { hasClassicRatingPreset } from '../../classicRatingPresets';
+import { ratingPresetName } from '../../localization/ratingPresets';
+import type { CardClickAction, ClassicRatingHoliday, ClassicRatingPreset, ClassicRatingSeason, CustomRatingDisplay, Language, MediaType, ParticleEffect, RatingScaleMode, TagPreset } from '../../types';
 import { ICON_CARD_CUSTOMIZATION, ICON_GENERAL, LABEL_RU, LABEL_UK } from './constants';
-import { addLorebaseDropdown, LorebaseDropdownHandle } from './customDropdown';
-import { createMediaTabs } from './mediaTabs';
+import { createLorebaseDropdown } from '../../components/LorebaseDropdown';
+import { renderChoiceButtons } from './choiceButtons';
+import { renderMediaSwitch } from './mediaSwitch';
+import { compactGameText } from '../../localization/compactGameEditor';
+import { getRatingBadgeText, getRatingMax, getRatingStep, getRatingValues } from '../../utils/rating';
+import { renderRatingBadgeContent } from '../../components/RatingBadgeContent';
 import { renderResetSettings } from './reset';
 import { normalizeObsidianTag } from '../settingsNormalization';
-import type { MediaTypeKey, SettingsSectionContext } from './types';
+import type { SettingsSectionContext } from './types';
 
-type BadgeKey = keyof LorebaseSettings['badges'];
-type OverlayFieldKey = keyof LorebaseSettings['overlayTextLayout'];
+function generalLabel(en: string, ru: string, uk: string, zh: string): string {
+    return ({ en, ru, uk, 'zh-CN': zh })[i18n.getLanguage()];
+}
 
-const BADGE_KEYS: BadgeKey[] = ['status', 'rating', 'favorite'];
-const BADGES_PERSIST_DEBOUNCE_MS = 120;
-const VISUAL_REFRESH_DEBOUNCE_MS = 40;
-const MAX_PREVIEW_CARD_WIDTH = 340;
-const FAVORITE_BADGE_PATH = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
-type PreviewMode = 'game' | 'anime' | 'movie' | 'series' | 'book' | 'manga';
-
-function createSvgPathIcon(pathD: string, options: { fill?: string; stroke?: string; width?: string; height?: string } = {}): SVGElement {
-    const svg = createSvg('svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', options.fill ?? 'none');
-    svg.setAttribute('stroke', options.stroke ?? 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    if (options.width) svg.setAttribute('width', options.width);
-    if (options.height) svg.setAttribute('height', options.height);
-    const path = svg.createSvg('path');
-    path.setAttribute('d', pathD);
-    svg.appendChild(path);
-    return svg;
+function generalHeading(container: HTMLElement, title: string, icon: string): HTMLElement {
+    const heading = container.createDiv({ cls: 'lorebase-general-heading' });
+    const name = heading.createEl('h3');
+    setIcon(name.createSpan({ attr: { 'aria-hidden': 'true' } }), icon);
+    name.createSpan({ text: title });
+    return heading;
 }
 
 export function renderGeneralSettings(context: SettingsSectionContext, container: HTMLElement): void {
     context.createSectionHeader(container, ICON_GENERAL, t('settingsGeneral'));
+    const workspace = container.createDiv({ cls: 'lorebase-general-workspace' });
+    const appearance = workspace.createDiv({ cls: 'lorebase-general-group' });
+    const settings = context.plugin.settings;
+    const language = appearance.createDiv({
+        cls: 'lorebase-general-panel lorebase-general-row',
+        attr: { role: 'group', 'aria-label': t('settingsLanguage') },
+    });
+    generalHeading(language, t('settingsLanguage'), 'languages');
+    createLorebaseDropdown<Language>(language.createDiv({ cls: 'lorebase-general-language' }), [
+        { value: 'en', label: 'English' },
+        { value: 'ru', label: LABEL_RU },
+        { value: 'uk', label: LABEL_UK },
+        { value: 'zh-CN', label: '简体中文' },
+    ], settings.language, async value => {
+        settings.language = value;
+        i18n.setLanguage(value);
+        await context.plugin.saveSettings();
+        context.display();
+        context.plugin.refreshViews();
+    }, { floating: true });
 
-    const languageSetting = new Setting(container)
-        .setName(t('settingsLanguage'))
-        .setDesc(t('settingsDescLanguage'));
-    addLorebaseDropdown<Language>(
-        languageSetting,
-        [
-            { value: 'en', label: 'English' },
-            { value: 'ru', label: LABEL_RU },
-            { value: 'uk', label: LABEL_UK },
-        ],
-        context.plugin.settings.language,
-        async (value) => {
-            context.plugin.settings.language = value;
-            i18n.setLanguage(value);
-            await context.plugin.saveSettings();
-            context.display();
-            context.plugin.refreshViews();
-        }
-    );
+    renderAccentSettings(context, appearance);
+    renderParticleSettings(context, workspace);
 
-    let intensitySlider: SliderComponent;
-    let particleIntensitySetting: Setting;
+    const behavior = workspace.createDiv({ cls: 'lorebase-general-group' });
+    const network = behavior.createEl('section', { cls: 'lorebase-general-panel lorebase-general-row lorebase-online-extras-settings' });
+    const networkHeading = generalHeading(network, onlineExtrasText('title'), 'globe');
+    const networkHelp = networkHeading.createEl('details', { cls: 'lorebase-online-extras-help' });
+    const networkHelpButton = networkHelp.createEl('summary', { attr: {
+        'aria-label': generalLabel('About additional online features', 'О дополнительных онлайн-функциях',
+            'Про додаткові онлайн-функції', '关于附加在线功能'),
+    } });
+    setIcon(networkHelpButton, 'circle-help');
+    networkHelp.createDiv({ cls: 'lorebase-online-extras-help-body', text: onlineExtrasText('description') });
+    networkHelp.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        networkHelp.open = false;
+        networkHelpButton.focus({ preventScroll: true });
+    });
+    network.ownerDocument.addEventListener('pointerdown', event => {
+        if (networkHelp.open && !event.composedPath().includes(networkHelp)) networkHelp.open = false;
+    }, { signal: context.signal });
+    renderMediaSwitch(network, onlineExtrasText('title'), settings.onlineExtrasEnabled, value => {
+        settings.onlineExtrasEnabled = value;
+        void context.plugin.saveSettings();
+        return true;
+    });
+    const action = behavior.createEl('section', { cls: 'lorebase-general-panel lorebase-general-row' });
+    const actionTitle = t('settingsCardClick');
+    generalHeading(action, actionTitle, 'mouse-pointer-2');
+    renderChoiceButtons<CardClickAction>(action.createDiv({ cls: 'lorebase-general-segments' }), actionTitle, [
+        { value: 'open', label: generalLabel('Open note', 'Заметка', 'Нотатка', '打开笔记'), icon: 'file-text' },
+        { value: 'edit', label: generalLabel('Edit card', 'Редактор', 'Редактор', '编辑卡片'), icon: 'pencil' },
+    ], settings.cardClickAction ?? 'open', async value => {
+        settings.cardClickAction = value;
+        await context.plugin.saveSettings();
+    });
 
-    const particleSetting = new Setting(container)
-        .setName(t('settingsParticle'));
-    addLorebaseDropdown<ParticleEffect>(
-        particleSetting,
-        [
-            { value: 'none', label: t('settingsParticleNone') },
-            { value: 'sakura', label: t('settingsParticleSakura') },
-            { value: 'snow', label: t('settingsParticleSnow') },
-        ],
-        context.plugin.settings.particleEffect,
-        async (value) => {
-            context.plugin.settings.particleEffect = value;
-            await context.plugin.saveSettings();
-            const isNone = value === 'none';
-            intensitySlider?.setDisabled(isNone);
-            particleIntensitySetting?.settingEl.toggleClass('is-disabled', isNone);
-        }
-    );
+    const editor = behavior.createEl('section', { cls: 'lorebase-general-panel lorebase-general-row' });
+    const editorTitle = compactGameText('setting');
+    generalHeading(editor, editorTitle, 'pencil');
+    renderMediaSwitch(editor, editorTitle, settings.updatedEditor, value => {
+        settings.updatedEditor = value;
+        void context.plugin.saveSettings();
+        return true;
+    });
+    renderRatingScaleSettings(context, behavior);
+    renderResetSettings(context, workspace);
+}
 
-    particleIntensitySetting = new Setting(container)
-        .setName(t('settingsParticleIntensity'))
-        .addSlider(slider => {
-            intensitySlider = slider;
-            slider
-                .setLimits(PARTICLE_INTENSITY_MIN, PARTICLE_INTENSITY_MAX, 1)
-                .setValue(Math.min(
-                    PARTICLE_INTENSITY_MAX,
-                    Math.max(PARTICLE_INTENSITY_MIN, context.plugin.settings.particleIntensity)
-                ))
-
-                .setDisabled(context.plugin.settings.particleEffect === 'none')
-                .onChange(async (value) => {
-                    context.plugin.settings.particleIntensity = value;
-                    await context.plugin.saveSettings();
-                });
+function renderAccentSettings(context: SettingsSectionContext, container: HTMLElement): void {
+    const { settings } = context.plugin;
+    const colors = container.createEl('section', { cls: 'lorebase-general-panel' });
+    generalHeading(colors, t('settingsColor'), 'palette');
+    const palette = colors.createDiv({
+        cls: 'lorebase-general-palette',
+        attr: { role: 'group', 'aria-label': t('settingsColor') },
+    });
+    const customColorLabel = generalLabel('Custom color', 'Свой цвет', 'Власний колір', '自定义颜色');
+    const swatches = COLOR_PRESETS.map(color => {
+        const swatch = palette.createEl('button', {
+            cls: 'lorebase-general-swatch',
+            attr: { type: 'button', title: color, 'aria-label': color },
         });
+        swatch.style.setProperty('--swatch', color);
+        swatch.addEventListener('click', () => setColor(color));
+        return { swatch, color };
+    });
+    const trigger = palette.createEl('button', {
+        cls: 'lorebase-general-custom-color',
+        attr: { type: 'button', 'aria-expanded': 'false', 'aria-controls': 'lorebase-general-color-form' },
+    });
+    const colorDot = trigger.createSpan({ cls: 'lorebase-general-color-dot', attr: { 'aria-hidden': 'true' } });
+    trigger.createSpan({ text: customColorLabel });
 
-    if (context.plugin.settings.particleEffect === 'none') {
-        particleIntensitySetting.settingEl.addClass('is-disabled');
-    }
-
-    new Setting(container)
-        .setName(t('settingsColor'))
-        .setDesc(t('settingsDescColor'))
-        .addColorPicker(picker => {
-            picker
-                .setValue(context.plugin.settings.accentColor)
-                .onChange(async (value) => {
-                    context.plugin.settings.accentColor = value;
-                    await context.plugin.saveSettings();
-                    context.applyAccentColor(value);
-                });
-        });
-
-    const presetsContainer = container.createDiv({ cls: 'lorebase-color-presets' });
-    for (const color of COLOR_PRESETS) {
-        const swatch = presetsContainer.createDiv({ cls: 'lorebase-color-swatch' });
-        swatch.setCssStyles({ backgroundColor: color });
-        if (context.plugin.settings.accentColor === color) {
-            swatch.addClass('selected');
+    const form = colors.createEl('form', {
+        cls: 'lorebase-general-color-form', attr: { id: 'lorebase-general-color-form' },
+    });
+    form.hidden = true;
+    const picker = form.createEl('input', { type: 'color', attr: { 'aria-label': customColorLabel } });
+    const hex = form.createEl('input', {
+        type: 'text',
+        attr: { 'aria-label': 'HEX', placeholder: '#A1B2C3', spellcheck: 'false', maxlength: '7', required: '' },
+    });
+    form.createEl('button', {
+        text: generalLabel('Apply', 'Применить', 'Застосувати', '应用'), attr: { type: 'submit' },
+    });
+    const syncColor = (): void => {
+        picker.value = settings.accentColor;
+        hex.value = settings.accentColor;
+        hex.setCustomValidity('');
+        colorDot.style.setProperty('--swatch', settings.accentColor);
+        for (const { swatch, color } of swatches) {
+            swatch.setAttribute('aria-pressed', String(color.toLowerCase() === settings.accentColor.toLowerCase()));
         }
-        swatch.addEventListener('click', () => {
-            context.plugin.settings.accentColor = color;
+    };
+    const setColor = (value: string): void => {
+        settings.accentColor = value;
+        syncColor();
+        context.applyAccentColor(value);
+        void context.plugin.saveSettings();
+    };
+    const toggleEditor = (open: boolean): void => {
+        form.hidden = !open;
+        trigger.setAttribute('aria-expanded', String(open));
+        syncColor();
+        if (open) {
+            hex.focus();
+            hex.select();
+        } else trigger.focus();
+    };
+    trigger.addEventListener('click', () => toggleEditor(form.hidden));
+    picker.addEventListener('input', () => {
+        hex.value = picker.value;
+        hex.setCustomValidity('');
+    });
+    hex.addEventListener('input', () => {
+        hex.setCustomValidity('');
+        const value = hex.value.trim().replace(/^#/, '');
+        if (/^[0-9a-f]{6}$/i.test(value)) picker.value = '#' + value;
+    });
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        const value = hex.value.trim().replace(/^#/, '');
+        if (!/^[0-9a-f]{6}$/i.test(value)) {
+            hex.setCustomValidity(generalLabel('Enter a six-digit HEX color.', 'Введите HEX-цвет из шести знаков.',
+                'Введіть HEX-колір із шести знаків.', '请输入六位十六进制颜色。'));
+            hex.reportValidity();
+            return;
+        }
+        setColor('#' + value.toLowerCase());
+        toggleEditor(false);
+    });
+    form.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        event.stopPropagation();
+        toggleEditor(false);
+    });
+    syncColor();
+}
+
+function renderParticleSettings(context: SettingsSectionContext, container: HTMLElement): void {
+    const { settings } = context.plugin;
+    const section = container.createEl('section', { cls: 'lorebase-general-panel lorebase-general-particles' });
+    const title = t('settingsParticle');
+    generalHeading(section, title, 'sparkles');
+    const effects: { value: ParticleEffect; label: string }[] = [
+        { value: 'none', label: t('settingsParticleNone') },
+        { value: 'sakura', label: t('settingsParticleSakura') },
+        { value: 'snow', label: t('settingsParticleSnow') },
+        { value: 'leaves', label: t('settingsParticleLeaves') },
+        { value: 'fireflies', label: t('settingsParticleFireflies') },
+        { value: 'rain', label: t('settingsParticleRain') },
+    ];
+    const tiles = section.createDiv({ cls: 'lorebase-general-effect-grid', attr: { role: 'group', 'aria-label': title } });
+    const buttons = effects.map(({ value, label }) => {
+        const button = tiles.createEl('button', {
+            cls: 'lorebase-general-effect',
+            attr: { type: 'button', 'data-effect': value },
+        });
+        const scene = button.createSpan({ cls: 'lorebase-general-effect-scene', attr: { 'aria-hidden': 'true' } });
+        if (value === 'none') setIcon(scene, 'circle-off');
+        else {
+            for (let index = 0; index < 5; index++) {
+                scene.createSpan({ cls: 'lorebase-general-particle lorebase-particle-' + value });
+            }
+        }
+        button.createSpan({ cls: 'lorebase-general-effect-label', text: label });
+        button.addEventListener('click', () => {
+            if (settings.particleEffect === value) return;
+            settings.particleEffect = value;
+            syncEffect();
+            context.plugin.applyParticles();
             void context.plugin.saveSettings();
-            context.applyAccentColor(color);
-            presetsContainer.querySelectorAll('.lorebase-color-swatch').forEach(el => el.removeClass('selected'));
-            swatch.addClass('selected');
         });
+        return { button, value };
+    });
+    const intensity = section.createDiv({ cls: 'lorebase-general-intensity' });
+    renderGeneralRange(intensity, t('settingsParticleIntensity'), PARTICLE_INTENSITY_MIN, PARTICLE_INTENSITY_MAX,
+        settings.particleIntensity, value => {
+            settings.particleIntensity = value;
+            context.plugin.applyParticles();
+        }, () => { void context.plugin.saveSettings(); });
+    const motionLabel = intensity.createEl('label', { cls: 'lorebase-particle-motion-option' });
+    const motion = motionLabel.createEl('input', { type: 'checkbox' });
+    motion.checked = settings.animateParticlesWithReducedMotion;
+    motionLabel.createSpan({
+        text: generalLabel('Animate despite reduced motion', 'Анимировать частицы при ограничении движения',
+            'Анімувати частинки за обмеженого руху', '减少动态效果时仍播放粒子动画'),
+    });
+    motion.addEventListener('change', () => {
+        settings.animateParticlesWithReducedMotion = motion.checked;
+        syncEffect();
+        context.plugin.applyParticles();
+        void context.plugin.saveSettings();
+    });
+    const syncEffect = (): void => {
+        const active = effects.some(effect => effect.value === settings.particleEffect) ? settings.particleEffect : 'none';
+        for (const { button, value } of buttons) button.setAttribute('aria-pressed', String(value === active));
+        intensity.hidden = active === 'none';
+        section.toggleAttribute('data-animate-with-reduced-motion', settings.animateParticlesWithReducedMotion);
+    };
+    syncEffect();
+}
+
+function renderGeneralRange(
+    container: HTMLElement, name: string, min: number, max: number, value: number,
+    onInput: (value: number) => void, onCommit?: () => void
+): void {
+    const label = container.createEl('label', { cls: 'lorebase-general-range' });
+    label.createSpan({ text: name });
+    const input = label.createEl('input', { type: 'range', attr: { min: String(min), max: String(max), step: '1', 'aria-label': name } });
+    input.value = String(value);
+    const reading = label.createEl('output', { text: input.value });
+    const updateFill = (): void => {
+        input.style.setProperty('--range-fill', `${((input.valueAsNumber - min) / (max - min)) * 100}%`);
+    };
+    updateFill();
+    input.addEventListener('input', () => {
+        reading.value = input.value;
+        updateFill();
+        onInput(input.valueAsNumber);
+    });
+    if (onCommit) input.addEventListener('change', onCommit);
+}
+
+function renderRatingScaleSettings(context: SettingsSectionContext, container: HTMLElement): void {
+    const label = generalLabel;
+    const scale = context.plugin.settings.ratingScale;
+    const body = container.createEl('section', { cls: 'lorebase-general-panel lorebase-rating-scale-settings' });
+    const title = label('User rating', 'Пользовательская оценка', 'Користувацька оцінка', '个人评分');
+    const heading = generalHeading(body, title, 'star');
+    heading.addClass('lorebase-general-row');
+    renderChoiceButtons<RatingScaleMode>(heading.createDiv({ cls: 'lorebase-general-segments' }), title, [
+        { value: 'classic', label: label('Classic', 'Классическая', 'Класична', '经典') },
+        { value: 'custom', label: label('Custom', 'Своя', 'Власна', '自定义') },
+    ], scale.mode, async value => {
+        scale.mode = value;
+        updateRatingPreview();
+        await saveRating();
+    });
+
+    const classic = body.createDiv({ cls: 'lorebase-rating-classic-settings' });
+    const presetRow = classic.createDiv({ cls: 'lorebase-general-row lorebase-rating-preset-row' });
+    const presetLabel = label('Preset', 'Пресет', 'Пресет', '预设');
+    presetRow.createSpan({ text: presetLabel });
+    const presetPicker = presetRow.createDiv({ cls: 'lorebase-rating-preset-picker' });
+    createLorebaseDropdown<ClassicRatingPreset>(presetPicker, [
+        { value: 'standard', label: label('Standard', 'Стандартный', 'Стандартний', '标准') },
+        { value: 'themed', label: label('Themed', 'Тематический', 'Тематичний', '主题') },
+        { value: 'seasonal', label: label('Seasonal', 'Сезонный', 'Сезонний', '季节') },
+        { value: 'holiday', label: label('Holiday', 'Праздничный', 'Святковий', '节日') },
+    ], scale.classicPreset ?? 'standard', async value => {
+        scale.classicPreset = value;
+        updateRatingPreview();
+        await saveRating();
+    }, { floating: true, minPanelWidth: 180 });
+    presetPicker.querySelector('button')?.setAttribute('aria-label', presetLabel);
+
+    const standardPreview = classic.createDiv({
+        cls: 'lorebase-rating-classic',
+        attr: { role: 'group', 'aria-label': t('settingsPreview') },
+    });
+    standardPreview.createSpan({ text: t('settingsPreview') });
+    const classicBadges = standardPreview.createDiv({ cls: 'lorebase-rating-classic-badges' });
+    const classicMode = context.plugin.settings.badges.rating.mode;
+    const classicScale = { ...scale, mode: 'classic' as const };
+    for (let value = 1; value <= 5; value++) {
+        const badge = classicBadges.createSpan({ cls: 'lorebase-rating-classic-badge' });
+        badge.createSpan({
+            cls: 'lorebase-rating-classic-symbol', text: getRatingBadgeText(value, classicScale, classicMode),
+        });
+        if (classicMode === 'emoji') badge.createSpan({ cls: 'lorebase-rating-classic-score', text: String(value) });
     }
 
-    const addModeSetting = new Setting(container)
-        .setName(t('settingsShowAddModeChoice'))
-        .setDesc(t('settingsShowAddModeChoiceDesc'))
-        .addToggle(toggle => {
-            toggle
-                .setValue(context.plugin.settings.showAddModeChoice !== false)
-                .onChange(async (value) => {
-                    context.plugin.settings.showAddModeChoice = value;
-                    await context.plugin.saveSettings();
-                });
-        });
-    addModeSetting.settingEl.addClass('lorebase-add-mode-choice-setting');
-
-    const cardClickSetting = new Setting(container)
-        .setName(i18n.getLanguage() === 'ru' ? 'Клик по карточке' : i18n.getLanguage() === 'uk' ? 'Клік по картці' : 'Card click')
-        .setDesc(i18n.getLanguage() === 'ru'
-            ? 'Что делать при обычном клике по карточке в библиотеке.'
-            : i18n.getLanguage() === 'uk'
-                ? 'Що робити при звичайному кліку по картці в бібліотеці.'
-                : 'Choose what a normal click on a library card does.');
-    addLorebaseDropdown<CardClickAction>(
-        cardClickSetting,
-        [
-            {
-                value: 'open',
-                label: i18n.getLanguage() === 'ru' ? 'Открывать заметку' : i18n.getLanguage() === 'uk' ? 'Відкривати нотатку' : 'Open note',
-            },
-            {
-                value: 'edit',
-                label: i18n.getLanguage() === 'ru' ? 'Открывать редактирование' : i18n.getLanguage() === 'uk' ? 'Відкривати редагування' : 'Edit item',
-            },
-        ],
-        context.plugin.settings.cardClickAction ?? 'open',
-        async (value) => {
-            context.plugin.settings.cardClickAction = value;
-            await context.plugin.saveSettings();
+    const themedPreview = classic.createDiv({
+        cls: 'lorebase-rating-theme-preview',
+        attr: { role: 'group', 'aria-label': t('settingsPreview') },
+    });
+    const mediaLabels: Record<MediaType, string> = {
+        game: t('settingsGames'), anime: t('settingsAnime'), movie: t('settingsMovies'),
+        series: t('settingsSeries'), music: mt('music'), book: t('settingsBooks'), manga: t('settingsManga'),
+    };
+    const mediaPicker = themedPreview.createDiv({ cls: 'lorebase-rating-theme-picker' });
+    const seasonPicker = themedPreview.createDiv({ cls: 'lorebase-rating-theme-picker' });
+    const holidayPicker = themedPreview.createDiv({ cls: 'lorebase-rating-theme-picker' });
+    const levels = themedPreview.createDiv({ cls: 'lorebase-rating-theme-levels' });
+    const previewMediaLabel = label('Preview media', 'Медиа для превью', 'Медіа для перегляду', '预览媒体');
+    let previewMedia: MediaType = 'game';
+    const renderThemePreview = (): void => {
+        mediaPicker.hidden = scale.classicPreset !== 'themed';
+        seasonPicker.hidden = scale.classicPreset !== 'seasonal';
+        holidayPicker.hidden = scale.classicPreset !== 'holiday';
+        seasonPicker.querySelector('button')?.setAttribute('title', ratingPresetName(scale.classicSeason ?? 'spring'));
+        holidayPicker.querySelector('button')?.setAttribute('title', ratingPresetName(scale.classicHoliday ?? 'christmas'));
+        mediaPicker.querySelector('button')?.setAttribute('title', ratingPresetName(previewMedia));
+        levels.empty();
+        themedPreview.dataset.media = previewMedia;
+        for (let value = 1; value <= 5; value++) {
+            const level = levels.createSpan({ cls: 'lorebase-rating-theme-level' });
+            renderRatingBadgeContent(level, value, { ...scale, mode: 'classic' }, classicMode, previewMedia);
         }
-    );
+    };
+    createLorebaseDropdown<MediaType>(mediaPicker,
+        (Object.keys(mediaLabels) as MediaType[]).map(value => ({ value, label: mediaLabels[value] })),
+        previewMedia, value => { previewMedia = value; renderThemePreview(); }, { floating: true, minPanelWidth: 150 });
+    mediaPicker.querySelector('button')?.setAttribute('aria-label', previewMediaLabel);
+    createLorebaseDropdown<ClassicRatingSeason>(seasonPicker, [
+        { value: 'spring', label: label('Spring', 'Весна', 'Весна', '春季') },
+        { value: 'summer', label: label('Summer', 'Лето', 'Літо', '夏季') },
+        { value: 'autumn', label: label('Autumn', 'Осень', 'Осінь', '秋季') },
+        { value: 'winter', label: label('Winter', 'Зима', 'Зима', '冬季') },
+    ], scale.classicSeason ?? 'spring', async value => {
+        scale.classicSeason = value;
+        renderThemePreview();
+        await saveRating();
+    }, { floating: true, minPanelWidth: 150 });
+    seasonPicker.querySelector('button')?.setAttribute('aria-label', label('Season', 'Сезон', 'Сезон', '季节'));
+    createLorebaseDropdown<ClassicRatingHoliday>(holidayPicker, [
+        { value: 'christmas', label: label('Christmas', 'Рождество', 'Різдво', '圣诞节') },
+        { value: 'halloween', label: label('Halloween', 'Хэллоуин', 'Гелловін', '万圣节') },
+        { value: 'easter', label: label('Easter', 'Пасха', 'Великдень', '复活节') },
+        { value: 'lights', label: label('Festival of Lights', 'Фестиваль огней', 'Фестиваль вогнів', '灯光节') },
+    ], scale.classicHoliday ?? 'christmas', async value => {
+        scale.classicHoliday = value;
+        renderThemePreview();
+        await saveRating();
+    }, { floating: true, minPanelWidth: 190 });
+    holidayPicker.querySelector('button')?.setAttribute('aria-label', label('Holiday', 'Праздник', 'Свято', '节日'));
+    const stepLabel = label('Score step', 'Шаг оценки', 'Крок оцінки', '评分步长');
+    const stepFormat = new Intl.NumberFormat(i18n.getLocale());
+    const summary = body.createDiv({ cls: 'lorebase-rating-summary', attr: { role: 'status' } });
+    const ruler = summary.createDiv({ cls: 'lorebase-rating-ruler' });
+    const markers = ruler.createDiv({ cls: 'lorebase-rating-markers', attr: { 'aria-hidden': 'true' } });
+    const range = ruler.createDiv({ cls: 'lorebase-rating-range', attr: { 'aria-hidden': 'true' } });
+    const previewInput = ruler.createEl('input', { cls: 'lorebase-rating-preview-input', attr: {
+        type: 'range', min: '1', 'aria-label': label('Try the rating scale', 'Попробовать шкалу оценки', 'Спробувати шкалу оцінки', '试用评分刻度'),
+    } });
+    const badge = summary.createDiv({ cls: 'lorebase-rating-example' });
+    badge.createSpan({ text: t('settingsPreview') });
+    const sample = badge.createSpan({ cls: 'lorebase-rating-sample' });
+    const updateSample = (): void => {
+        const value = previewInput.valueAsNumber;
+        const max = getRatingMax(scale);
+        ruler.style.setProperty('--rating-fill', `${((value - 1) / (max - 1)) * 100}%`);
+        previewInput.setAttribute('aria-valuetext', `${stepFormat.format(value)} / ${max}`);
+        sample.empty();
+        renderRatingBadgeContent(sample, value, scale, context.plugin.settings.badges.rating.mode);
+    };
+    previewInput.addEventListener('input', updateSample);
 
-    renderResetSettings(context, container);
+    const custom = body.createDiv({ cls: 'lorebase-rating-options' });
+    let displayIcon: HTMLElement;
+    const updateRatingPreview = (): void => {
+        custom.hidden = summary.hidden = scale.mode !== 'custom';
+        classic.hidden = !custom.hidden;
+        standardPreview.hidden = hasClassicRatingPreset(scale);
+        themedPreview.hidden = !hasClassicRatingPreset(scale);
+        renderThemePreview();
+        const max = getRatingMax(scale);
+        const step = getRatingStep(scale);
+        previewInput.max = String(max);
+        previewInput.step = String(step);
+        previewInput.value = String(Math.round((max - step) * 10) / 10);
+        markers.empty();
+        range.empty();
+        for (const value of getRatingValues(scale)) {
+            const whole = Number.isInteger(value);
+            const half = !whole && Number.isInteger(value * 2);
+            const mark = markers.createSpan({ cls: `lorebase-rating-mark ${whole ? 'is-whole' : half ? 'is-half' : 'is-minor'}` });
+            mark.style.setProperty('--mark-position', `${((value - 1) / (max - 1)) * 100}%`);
+            if (whole) range.createSpan({ text: String(value) });
+        }
+        markers.createSpan({ cls: 'lorebase-rating-cursor' });
+        updateSample();
+        setIcon(displayIcon, scale.icon ?? 'star');
+    };
+    const saveRating = async (): Promise<void> => {
+        await context.plugin.saveSettings();
+        context.plugin.refreshViews();
+    };
+
+    renderGeneralRange(custom.createDiv(), label('Maximum score', 'Максимальная оценка', 'Максимальна оцінка', '最高分'),
+        2, 10, scale.max, async value => {
+            scale.max = value;
+            updateRatingPreview();
+            await saveRating();
+        });
+
+    const stepSetting = custom.createDiv({ cls: 'lorebase-general-option' });
+    stepSetting.createSpan({ text: stepLabel });
+    renderChoiceButtons<'1' | '0.5' | '0.1'>(stepSetting.createDiv({ cls: 'lorebase-general-segments' }), stepLabel, [
+        { value: '1', label: '1' },
+        { value: '0.5', label: stepFormat.format(0.5) },
+        { value: '0.1', label: stepFormat.format(0.1) },
+    ], scale.step === 0.1 ? '0.1' : scale.step === 0.5 ? '0.5' : '1', async value => {
+        scale.step = value === '0.1' ? 0.1 : value === '0.5' ? 0.5 : 1;
+        updateRatingPreview();
+        await saveRating();
+    });
+
+    const displayLabel = label('Display on cards', 'Вид на карточках', 'Вигляд на картках', '卡片显示');
+    const display = custom.createDiv({ cls: 'lorebase-general-option' });
+    display.createSpan({ text: displayLabel });
+    const controls = display.createDiv({ cls: 'lorebase-general-segments lorebase-rating-display-controls' });
+    renderChoiceButtons<CustomRatingDisplay>(controls, displayLabel, [
+        { value: 'number', label: label('Number', 'Число', 'Число', '数字') },
+        { value: 'stars', label: label('Star', 'Звезда', 'Зірка', '星标'), icon: 'star' },
+        { value: 'custom', label: label('Custom', 'Свой', 'Власний', '自定义'), icon: scale.icon ?? 'star' },
+    ], scale.display, async value => {
+        scale.display = value;
+        updateRatingPreview();
+        await saveRating();
+    });
+    const chooseIcon = label('Choose rating icon', 'Выбрать иконку оценки', 'Обрати іконку оцінки', '选择评分图标');
+    const customButton = controls.querySelector<HTMLButtonElement>('.lorebase-settings-choices > button:last-child')!;
+    customButton.addClass('lorebase-rating-display-custom');
+    customButton.setAttribute('title', chooseIcon);
+    displayIcon = customButton.querySelector('span')!;
+    const caret = customButton.createSpan({ cls: 'lorebase-rating-display-caret', attr: { 'aria-hidden': 'true' } });
+    setIcon(caret, 'chevron-down');
+    customButton.addEventListener('click', () => {
+        new LucideIconPickerModal(context.app, scale.icon ?? 'star', icon => {
+            scale.icon = icon;
+            updateRatingPreview();
+            void saveRating();
+        }).open();
+    });
+    updateRatingPreview();
 }
 
 export function renderCardCustomizationSettings(context: SettingsSectionContext, container: HTMLElement): void {
     context.createSectionHeader(container, ICON_CARD_CUSTOMIZATION, t('settingsBadges'));
-    const renderBadgesPreview = renderBadgesEditor(context, container);
-    renderBadgeOptions(context, container, renderBadgesPreview);
-    renderStatusLabelAndPlanSettings(context, container);
+    renderCardWorkspace(context, container, (body, updatePreview) => renderStatusLabelAndPlanSettings(context, body, updatePreview));
 }
 
-function renderBadgesEditor(context: SettingsSectionContext, container: HTMLElement): () => void {
-    container.createDiv({ cls: 'lorebase-badges-editor-hint', text: t('settingsBadgesEditorHint') });
-    let previewMode: PreviewMode = 'game';
-    container.dataset.previewMode = previewMode;
-    container.dataset.previewOrientation = 'vertical';
-
-    const editor = container.createDiv({ cls: 'lorebase-badges-editor' });
-    const card = editor.createDiv({ cls: 'lorebase-card lorebase-badges-editor-card lorebase-overlay-edit-card' });
-    const imageContainer = card.createDiv({ cls: 'lorebase-card-image' });
-    const imageWrapper = imageContainer.createDiv({ cls: 'lorebase-card-image-wrapper' });
-    imageWrapper.createEl('img', {
-        attr: {
-            src: DEFAULT_COVER,
-            alt: 'LOREBASE Preview',
-            loading: 'lazy',
-        },
-    });
-
-    const overlay = imageContainer.createDiv({ cls: 'lorebase-card-overlay' });
-    const previewTitle = overlay.createDiv({ cls: 'lorebase-card-title lorebase-overlay-editable is-title', text: 'LOREBASE Preview Card' });
-    const previewYear = overlay.createDiv({ cls: 'lorebase-card-year lorebase-overlay-editable is-year', text: '2026' });
-    const previewFormat = overlay.createDiv({ cls: 'lorebase-card-year lorebase-card-format lorebase-overlay-editable is-format', text: 'TV' });
-    const previewDescriptionGame = Array.from({ length: 70 }, (_, index) => {
-        const line = String(index + 1).padStart(2, '0');
-        return `${line}. Preview description line for layout testing.`;
-    }).join('\n');
-    const previewDescriptionAnime = Array.from({ length: 70 }, (_, index) => {
-        const line = String(index + 1).padStart(2, '0');
-        return `${line}. Anime synopsis line for hover preview and clipping checks.`;
-    }).join('\n');
-    const previewDescriptionMovie = Array.from({ length: 70 }, (_, index) => {
-        const line = String(index + 1).padStart(2, '0');
-        return `${line}. Movie plot preview line for hover layout testing.`;
-    }).join('\n');
-    const previewDescriptionSeries = Array.from({ length: 70 }, (_, index) => {
-        const line = String(index + 1).padStart(2, '0');
-        return `${line}. Series synopsis preview line for hover layout testing.`;
-    }).join('\n');
-    const previewDescriptionBook = Array.from({ length: 70 }, (_, index) => {
-        const line = String(index + 1).padStart(2, '0');
-        return `${line}. Book summary preview line for hover layout testing.`;
-    }).join('\n');
-    const previewDescriptionManga = Array.from({ length: 70 }, (_, index) => {
-        const line = String(index + 1).padStart(2, '0');
-        return `${line}. Manga synopsis preview line for hover layout testing.`;
-    }).join('\n');
-    const previewDescription = overlay.createDiv({
-        cls: 'lorebase-card-description lorebase-overlay-editable is-description is-preview-description',
-        text: previewDescriptionGame,
-    });
-    const previewAnimeProgress = imageContainer.createDiv({ cls: 'lorebase-card-metacritic lorebase-preview-anime-progress is-hidden' });
-    const previewSeasonBadge = previewAnimeProgress.createSpan({ cls: 'lorebase-card-progress-season is-only', text: 'S 2/3' });
-    const previewEpisodeBadge = previewAnimeProgress.createSpan({ cls: 'lorebase-card-progress-ep', text: 'EP 8/12' });
-    const previewProgressFooter = card.createDiv({ cls: 'lorebase-card-progress-footer lorebase-preview-progress-footer is-hidden' });
-    const previewProgressHeader = previewProgressFooter.createDiv({ cls: 'lorebase-card-progress-header' });
-    const previewProgressTitle = previewProgressHeader.createDiv({ cls: 'lorebase-card-progress-title', text: 'LOREBASE Preview Card' });
-    const previewProgressMeta = previewProgressHeader.createSpan({ cls: 'lorebase-card-progress-meta', text: 'EP 8/12' });
-    const previewProgressRow = previewProgressFooter.createDiv({ cls: 'lorebase-card-progress-row' });
-    const previewProgressTrack = previewProgressRow.createDiv({ cls: 'lorebase-card-progress-track' });
-    const previewProgressFill = previewProgressTrack.createDiv({ cls: 'lorebase-card-progress-fill' });
-
-    const positions: BadgePosition[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-    const zoneLabels: Record<BadgePosition, string> = {
-        'top-left': t('settingsBadgesPosTopLeft'),
-        'top-right': t('settingsBadgesPosTopRight'),
-        'bottom-left': t('settingsBadgesPosBottomLeft'),
-        'bottom-right': t('settingsBadgesPosBottomRight'),
-    };
-    const zones = new Map<BadgePosition, HTMLElement>();
-    let persistTimer: number | null = null;
-    let persistInFlight = false;
-    let persistQueued = false;
-    type OverlayProfileKey = 'games' | 'anime' | 'movies' | 'series' | 'books' | 'manga';
-    type OverlayOrientationKey = 'vertical' | 'horizontal';
-    let previewOrientation: OverlayOrientationKey = 'vertical';
-
-    const getActiveOverlayProfile = (): OverlayProfileKey => {
-        if (previewMode === 'anime') return 'anime';
-        if (previewMode === 'movie') return 'movies';
-        if (previewMode === 'series') return 'series';
-        if (previewMode === 'book') return 'books';
-        if (previewMode === 'manga') return 'manga';
-        return 'games';
-    };
-    const getActiveOverlayOrientation = (): OverlayOrientationKey => previewOrientation;
-
-    const getDefaultLayout = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): LorebaseSettings['overlayTextLayout'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.animeHorizontalOverlayTextLayout
-                : DEFAULT_SETTINGS.animeOverlayTextLayout;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.movieHorizontalOverlayTextLayout
-                : DEFAULT_SETTINGS.movieOverlayTextLayout;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.seriesHorizontalOverlayTextLayout
-                : DEFAULT_SETTINGS.seriesOverlayTextLayout;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.bookHorizontalOverlayTextLayout
-                : DEFAULT_SETTINGS.bookOverlayTextLayout;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.mangaHorizontalOverlayTextLayout
-                : DEFAULT_SETTINGS.mangaOverlayTextLayout;
-        }
-        return orientation === 'horizontal'
-            ? DEFAULT_SETTINGS.horizontalOverlayTextLayout
-            : DEFAULT_SETTINGS.overlayTextLayout;
-    };
-
-    const getDefaultVisibility = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): LorebaseSettings['overlayTextVisibility'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.animeHorizontalOverlayTextVisibility
-                : DEFAULT_SETTINGS.animeOverlayTextVisibility;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.movieHorizontalOverlayTextVisibility
-                : DEFAULT_SETTINGS.movieOverlayTextVisibility;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.seriesHorizontalOverlayTextVisibility
-                : DEFAULT_SETTINGS.seriesOverlayTextVisibility;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.bookHorizontalOverlayTextVisibility
-                : DEFAULT_SETTINGS.bookOverlayTextVisibility;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.mangaHorizontalOverlayTextVisibility
-                : DEFAULT_SETTINGS.mangaOverlayTextVisibility;
-        }
-        return orientation === 'horizontal'
-            ? DEFAULT_SETTINGS.horizontalOverlayTextVisibility
-            : DEFAULT_SETTINGS.overlayTextVisibility;
-    };
-
-    const getOverlayLayout = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): LorebaseSettings['overlayTextLayout'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.animeHorizontalOverlayTextLayout
-                : context.plugin.settings.animeOverlayTextLayout;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.movieHorizontalOverlayTextLayout
-                : context.plugin.settings.movieOverlayTextLayout;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.seriesHorizontalOverlayTextLayout
-                : context.plugin.settings.seriesOverlayTextLayout;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.bookHorizontalOverlayTextLayout
-                : context.plugin.settings.bookOverlayTextLayout;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.mangaHorizontalOverlayTextLayout
-                : context.plugin.settings.mangaOverlayTextLayout;
-        }
-        return orientation === 'horizontal'
-            ? context.plugin.settings.horizontalOverlayTextLayout
-            : context.plugin.settings.overlayTextLayout;
-    };
-
-    const getOverlayVisibility = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): LorebaseSettings['overlayTextVisibility'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.animeHorizontalOverlayTextVisibility
-                : context.plugin.settings.animeOverlayTextVisibility;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.movieHorizontalOverlayTextVisibility
-                : context.plugin.settings.movieOverlayTextVisibility;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.seriesHorizontalOverlayTextVisibility
-                : context.plugin.settings.seriesOverlayTextVisibility;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.bookHorizontalOverlayTextVisibility
-                : context.plugin.settings.bookOverlayTextVisibility;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.mangaHorizontalOverlayTextVisibility
-                : context.plugin.settings.mangaOverlayTextVisibility;
-        }
-        return orientation === 'horizontal'
-            ? context.plugin.settings.horizontalOverlayTextVisibility
-            : context.plugin.settings.overlayTextVisibility;
-    };
-
-    const getDescriptionLines = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): number => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.animeHorizontalDescriptionLines
-                : context.plugin.settings.animeDescriptionLines;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.movieHorizontalDescriptionLines
-                : context.plugin.settings.movieDescriptionLines;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.seriesHorizontalDescriptionLines
-                : context.plugin.settings.seriesDescriptionLines;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.bookHorizontalDescriptionLines
-                : context.plugin.settings.bookDescriptionLines;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.mangaHorizontalDescriptionLines
-                : context.plugin.settings.mangaDescriptionLines;
-        }
-        return orientation === 'horizontal'
-            ? context.plugin.settings.horizontalDescriptionLines
-            : context.plugin.settings.descriptionLines;
-    };
-
-    const getBadges = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): LorebaseSettings['badges'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.animeHorizontalBadges
-                : context.plugin.settings.animeBadges;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.movieHorizontalBadges
-                : context.plugin.settings.movieBadges;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.seriesHorizontalBadges
-                : context.plugin.settings.seriesBadges;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.bookHorizontalBadges
-                : context.plugin.settings.bookBadges;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.mangaHorizontalBadges
-                : context.plugin.settings.mangaBadges;
-        }
-        return orientation === 'horizontal'
-            ? context.plugin.settings.horizontalBadges
-            : context.plugin.settings.badges;
-    };
-
-    const setDescriptionLines = (
-        profile: OverlayProfileKey,
-        value: number,
-        orientation: OverlayOrientationKey = getActiveOverlayOrientation()
-    ): void => {
-        if (profile === 'anime') {
-            if (orientation === 'horizontal') {
-                context.plugin.settings.animeHorizontalDescriptionLines = value;
-                return;
-            }
-            context.plugin.settings.animeDescriptionLines = value;
-            return;
-        }
-        if (profile === 'movies') {
-            if (orientation === 'horizontal') {
-                context.plugin.settings.movieHorizontalDescriptionLines = value;
-                return;
-            }
-            context.plugin.settings.movieDescriptionLines = value;
-            return;
-        }
-        if (profile === 'series') {
-            if (orientation === 'horizontal') {
-                context.plugin.settings.seriesHorizontalDescriptionLines = value;
-                return;
-            }
-            context.plugin.settings.seriesDescriptionLines = value;
-            return;
-        }
-        if (profile === 'books') {
-            if (orientation === 'horizontal') {
-                context.plugin.settings.bookHorizontalDescriptionLines = value;
-                return;
-            }
-            context.plugin.settings.bookDescriptionLines = value;
-            return;
-        }
-        if (profile === 'manga') {
-            if (orientation === 'horizontal') {
-                context.plugin.settings.mangaHorizontalDescriptionLines = value;
-                return;
-            }
-            context.plugin.settings.mangaDescriptionLines = value;
-            return;
-        }
-        if (orientation === 'horizontal') {
-            context.plugin.settings.horizontalDescriptionLines = value;
-            return;
-        }
-        context.plugin.settings.descriptionLines = value;
-    };
-
-    const getDefaultDescriptionLines = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey
-    ): number => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.animeHorizontalDescriptionLines
-                : DEFAULT_SETTINGS.animeDescriptionLines;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.movieHorizontalDescriptionLines
-                : DEFAULT_SETTINGS.movieDescriptionLines;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.seriesHorizontalDescriptionLines
-                : DEFAULT_SETTINGS.seriesDescriptionLines;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.bookHorizontalDescriptionLines
-                : DEFAULT_SETTINGS.bookDescriptionLines;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.mangaHorizontalDescriptionLines
-                : DEFAULT_SETTINGS.mangaDescriptionLines;
-        }
-        return orientation === 'horizontal'
-            ? DEFAULT_SETTINGS.horizontalDescriptionLines
-            : DEFAULT_SETTINGS.descriptionLines;
-    };
-
-    const getDefaultBadges = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey
-    ): LorebaseSettings['badges'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.animeHorizontalBadges
-                : DEFAULT_SETTINGS.animeBadges;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.movieHorizontalBadges
-                : DEFAULT_SETTINGS.movieBadges;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.seriesHorizontalBadges
-                : DEFAULT_SETTINGS.seriesBadges;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.bookHorizontalBadges
-                : DEFAULT_SETTINGS.bookBadges;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? DEFAULT_SETTINGS.mangaHorizontalBadges
-                : DEFAULT_SETTINGS.mangaBadges;
-        }
-        return orientation === 'horizontal'
-            ? DEFAULT_SETTINGS.horizontalBadges
-            : DEFAULT_SETTINGS.badges;
-    };
-
-    const overlayProfiles: OverlayProfileKey[] = ['games', 'anime', 'movies', 'series', 'books', 'manga'];
-    const overlayOrientations: OverlayOrientationKey[] = ['vertical', 'horizontal'];
-
-    const forPreviewTargets = (fn: (profile: OverlayProfileKey, orientation: OverlayOrientationKey) => void): void => {
-        const active = getActiveOverlayProfile();
-        const orientation = getActiveOverlayOrientation();
-        if (!context.plugin.settings.overlayApplyToAllMedia) {
-            fn(active, orientation);
-            return;
-        }
-        for (const profile of overlayProfiles) {
-            for (const targetOrientation of overlayOrientations) {
-                fn(profile, targetOrientation);
-            }
-        }
-    };
-
-    const cloneLayout = (value: LorebaseSettings['overlayTextLayout']): LorebaseSettings['overlayTextLayout'] => ({
-        title: Object.assign({}, value.title),
-        year: Object.assign({}, value.year),
-        format: Object.assign({}, value.format),
-        description: Object.assign({}, value.description),
-    });
-
-    const cloneVisibility = (value: LorebaseSettings['overlayTextVisibility']): LorebaseSettings['overlayTextVisibility'] => ({
-        title: value.title,
-        year: value.year,
-        format: value.format,
-        description: value.description,
-    });
-
-    const cloneBadges = (value: LorebaseSettings['badges']): LorebaseSettings['badges'] => ({
-        status: Object.assign({}, value.status),
-        rating: Object.assign({}, value.rating),
-        favorite: Object.assign({}, value.favorite),
-    });
-
-    const setOverlayLayout = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey,
-        layout: LorebaseSettings['overlayTextLayout']
-    ): void => {
-        if (profile === 'anime') {
-            if (orientation === 'horizontal') context.plugin.settings.animeHorizontalOverlayTextLayout = layout;
-            else context.plugin.settings.animeOverlayTextLayout = layout;
-            return;
-        }
-        if (profile === 'movies') {
-            if (orientation === 'horizontal') context.plugin.settings.movieHorizontalOverlayTextLayout = layout;
-            else context.plugin.settings.movieOverlayTextLayout = layout;
-            return;
-        }
-        if (profile === 'series') {
-            if (orientation === 'horizontal') context.plugin.settings.seriesHorizontalOverlayTextLayout = layout;
-            else context.plugin.settings.seriesOverlayTextLayout = layout;
-            return;
-        }
-        if (profile === 'books') {
-            if (orientation === 'horizontal') context.plugin.settings.bookHorizontalOverlayTextLayout = layout;
-            else context.plugin.settings.bookOverlayTextLayout = layout;
-            return;
-        }
-        if (profile === 'manga') {
-            if (orientation === 'horizontal') context.plugin.settings.mangaHorizontalOverlayTextLayout = layout;
-            else context.plugin.settings.mangaOverlayTextLayout = layout;
-            return;
-        }
-        if (orientation === 'horizontal') context.plugin.settings.horizontalOverlayTextLayout = layout;
-        else context.plugin.settings.overlayTextLayout = layout;
-    };
-
-    const setOverlayVisibility = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey,
-        visibility: LorebaseSettings['overlayTextVisibility']
-    ): void => {
-        if (profile === 'anime') {
-            if (orientation === 'horizontal') context.plugin.settings.animeHorizontalOverlayTextVisibility = visibility;
-            else context.plugin.settings.animeOverlayTextVisibility = visibility;
-            return;
-        }
-        if (profile === 'movies') {
-            if (orientation === 'horizontal') context.plugin.settings.movieHorizontalOverlayTextVisibility = visibility;
-            else context.plugin.settings.movieOverlayTextVisibility = visibility;
-            return;
-        }
-        if (profile === 'series') {
-            if (orientation === 'horizontal') context.plugin.settings.seriesHorizontalOverlayTextVisibility = visibility;
-            else context.plugin.settings.seriesOverlayTextVisibility = visibility;
-            return;
-        }
-        if (profile === 'books') {
-            if (orientation === 'horizontal') context.plugin.settings.bookHorizontalOverlayTextVisibility = visibility;
-            else context.plugin.settings.bookOverlayTextVisibility = visibility;
-            return;
-        }
-        if (profile === 'manga') {
-            if (orientation === 'horizontal') context.plugin.settings.mangaHorizontalOverlayTextVisibility = visibility;
-            else context.plugin.settings.mangaOverlayTextVisibility = visibility;
-            return;
-        }
-        if (orientation === 'horizontal') context.plugin.settings.horizontalOverlayTextVisibility = visibility;
-        else context.plugin.settings.overlayTextVisibility = visibility;
-    };
-
-    const setBadges = (
-        profile: OverlayProfileKey,
-        orientation: OverlayOrientationKey,
-        badges: LorebaseSettings['badges']
-    ): void => {
-        if (profile === 'anime') {
-            if (orientation === 'horizontal') context.plugin.settings.animeHorizontalBadges = badges;
-            else context.plugin.settings.animeBadges = badges;
-            return;
-        }
-        if (profile === 'movies') {
-            if (orientation === 'horizontal') context.plugin.settings.movieHorizontalBadges = badges;
-            else context.plugin.settings.movieBadges = badges;
-            return;
-        }
-        if (profile === 'series') {
-            if (orientation === 'horizontal') context.plugin.settings.seriesHorizontalBadges = badges;
-            else context.plugin.settings.seriesBadges = badges;
-            return;
-        }
-        if (profile === 'books') {
-            if (orientation === 'horizontal') context.plugin.settings.bookHorizontalBadges = badges;
-            else context.plugin.settings.bookBadges = badges;
-            return;
-        }
-        if (profile === 'manga') {
-            if (orientation === 'horizontal') context.plugin.settings.mangaHorizontalBadges = badges;
-            else context.plugin.settings.mangaBadges = badges;
-            return;
-        }
-        if (orientation === 'horizontal') context.plugin.settings.horizontalBadges = badges;
-        else context.plugin.settings.badges = badges;
-    };
-
-    const copyTargetState = (
-        sourceProfile: OverlayProfileKey,
-        sourceOrientation: OverlayOrientationKey,
-        targetProfile: OverlayProfileKey,
-        targetOrientation: OverlayOrientationKey
-    ): void => {
-        setOverlayLayout(targetProfile, targetOrientation, cloneLayout(getOverlayLayout(sourceProfile, sourceOrientation)));
-        setOverlayVisibility(targetProfile, targetOrientation, cloneVisibility(getOverlayVisibility(sourceProfile, sourceOrientation)));
-        setBadges(targetProfile, targetOrientation, cloneBadges(getBadges(sourceProfile, sourceOrientation)));
-        setDescriptionLines(targetProfile, getDescriptionLines(sourceProfile, sourceOrientation), targetOrientation);
-    };
-
-    const syncProfilesFromActive = (): void => {
-        if (!context.plugin.settings.overlayApplyToAllMedia) return;
-        const active = getActiveOverlayProfile();
-        const orientation = getActiveOverlayOrientation();
-        for (const profile of overlayProfiles) {
-            for (const targetOrientation of overlayOrientations) {
-                copyTargetState(active, orientation, profile, targetOrientation);
-            }
-        }
-    };
-
-    let visualRefreshTimer: number | null = null;
-
-    const scheduleVisualRefresh = (): void => {
-        if (visualRefreshTimer !== null) {
-            window.clearTimeout(visualRefreshTimer);
-        }
-        visualRefreshTimer = window.setTimeout(() => {
-            visualRefreshTimer = null;
-            window.requestAnimationFrame(() => {
-                context.plugin.refreshViewsVisuals();
-            });
-        }, VISUAL_REFRESH_DEBOUNCE_MS);
-    };
-
-    const flushPersistPreviewChanges = async (): Promise<void> => {
-        if (persistInFlight) {
-            persistQueued = true;
-            return;
-        }
-        persistInFlight = true;
-        try {
-            await context.plugin.saveSettings();
-        } catch (error) {
-            console.error('Failed to persist preview changes', error);
-        } finally {
-            persistInFlight = false;
-            if (persistQueued) {
-                persistQueued = false;
-                void flushPersistPreviewChanges();
-            }
-        }
-    };
-    const persistPreviewChanges = (): void => {
-        scheduleVisualRefresh();
-        if (persistTimer !== null) {
-            window.clearTimeout(persistTimer);
-        }
-        persistTimer = window.setTimeout(() => {
-            persistTimer = null;
-            void flushPersistPreviewChanges();
-        }, BADGES_PERSIST_DEBOUNCE_MS);
-    };
-    const setBadgeDragging = (isDragging: boolean): void => {
-        card.toggleClass('is-badge-dragging', isDragging);
-        if (!isDragging) {
-            zones.forEach((zone) => zone.removeClass('is-over'));
-        }
-    };
-    const overlayElements: Record<OverlayFieldKey, HTMLElement> = {
-        title: previewTitle,
-        year: previewYear,
-        format: previewFormat,
-        description: previewDescription,
-    };
-    const overlayLabels: Record<OverlayFieldKey, string> = {
-        title: t('templateFieldName'),
-        year: t('year'),
-        format: t('templateFieldFormat'),
-        description: t('editDescription'),
-    };
-    let activeOverlayField: OverlayFieldKey | null = null;
-
-    const normalizeOverlayPercent = (value: number, fallback: number): number => {
-        if (!Number.isFinite(value)) return fallback;
-        const rounded = Math.round(value * 10) / 10;
-        if (rounded < -20 || rounded > 120) return fallback;
-        return rounded;
-    };
-
-    const clampOverlayPoint = (
-        field: OverlayFieldKey,
-        x: number,
-        y: number
-    ): { x: number; y: number } => {
-        const maxX = field === 'description' ? 66 : 84;
-        const minX = 2;
-        const minY = 2;
-        const maxY = 92;
-        return {
-            x: Math.max(minX, Math.min(maxX, x)),
-            y: Math.max(minY, Math.min(maxY, y)),
-        };
-    };
-
-    const applySnap = (field: OverlayFieldKey, x: number, y: number): { x: number; y: number } => {
-        const xZones: Record<OverlayFieldKey, number[]> = {
-            title: [5, 7, 10, 14],
-            year: [5, 7, 10, 14],
-            format: [26, 30, 34, 40],
-            description: [2, 7, 10, 14],
-        };
-        const yZones: Record<OverlayFieldKey, number[]> = {
-            title: [6.5, 10, 14, 18],
-            year: [15, 19, 24, 30],
-            format: [15, 19, 24, 30],
-            description: [24, 32, 40, 50, 62, 74, 84],
-        };
-        const snapAxis = (value: number, zones: number[], threshold = 1.8): number => {
-            const nearest = zones.reduce((best, zone) => (
-                Math.abs(zone - value) < Math.abs(best - value) ? zone : best
-            ), zones[0]);
-            return Math.abs(nearest - value) <= threshold ? nearest : value;
-        };
-        return {
-            x: snapAxis(x, xZones[field], 1.6),
-            y: snapAxis(y, yZones[field], 2.1),
-        };
-    };
-
-    const overlayHint = container.createDiv({
-        cls: 'lorebase-overlay-edit-hint',
-        text: t('settingsOverlayHint'),
-    });
-    const overlayControls = container.createDiv({ cls: 'lorebase-overlay-controls' });
-    const overlayReadout = overlayControls.createDiv({ cls: 'lorebase-overlay-readout' });
-    const overlayReset = overlayControls.createEl('button', {
-        cls: 'lorebase-overlay-reset-btn',
-        text: t('resetConfirm'),
-        attr: { type: 'button' },
-    });
-    const previewModeSetting = new Setting(container)
-        .setName(t('settingsPreviewMode'));
-    addLorebaseDropdown<PreviewMode>(
-        previewModeSetting,
-        [
-            { value: 'game', label: t('settingsPreviewGame') },
-            { value: 'anime', label: t('settingsPreviewAnime') },
-            { value: 'movie', label: t('settingsPreviewMovie') },
-            { value: 'series', label: t('settingsPreviewSeries') },
-            { value: 'book', label: t('settingsPreviewBook') },
-            { value: 'manga', label: t('settingsPreviewManga') },
-        ],
-        previewMode,
-        (value) => {
-            const nextMode: PreviewMode = value;
-            if (nextMode === previewMode) return;
-            previewMode = nextMode;
-            container.dataset.previewMode = previewMode;
-            container.dispatchEvent(new CustomEvent('lorebase-preview-mode-change', { detail: previewMode }));
-            applyPreviewMode();
-            renderPreview();
-            applyOverlayLayout();
-            applyOverlayVisibility();
-        }
-    );
-    const previewOrientationSetting = new Setting(container)
-        .setName(t('settingsOrientation'));
-    addLorebaseDropdown<OverlayOrientationKey>(
-        previewOrientationSetting,
-        [
-            { value: 'vertical', label: t('settingsOrientationVertical') },
-            { value: 'horizontal', label: t('settingsOrientationHorizontal') },
-        ],
-        previewOrientation,
-        (value) => {
-            const nextOrientation = value === 'horizontal' ? 'horizontal' : 'vertical';
-            if (nextOrientation === previewOrientation) return;
-            previewOrientation = nextOrientation;
-            container.dataset.previewOrientation = previewOrientation;
-            container.dispatchEvent(new CustomEvent('lorebase-preview-orientation-change', { detail: previewOrientation }));
-            applyPreviewMode();
-            renderPreview();
-            applyOverlayLayout();
-            applyOverlayVisibility();
-        }
-    );
-    new Setting(container)
-        .setName(t('settingsOverlayApplyAllMedia'))
-        .setDesc(t('settingsOverlayApplyAllMediaDesc'))
-        .addToggle(toggle => {
-            toggle
-                .setValue(context.plugin.settings.overlayApplyToAllMedia)
-                .onChange((value) => {
-                    const wasEnabled = context.plugin.settings.overlayApplyToAllMedia;
-                    context.plugin.settings.overlayApplyToAllMedia = value;
-                    if (value && !wasEnabled) {
-                        syncProfilesFromActive();
-                        renderPreview();
-                        applyOverlayLayout();
-                        applyOverlayVisibility();
-                    }
-                    persistPreviewChanges();
-                });
-        });
-
-    const normalizeDescriptionLines = (value: number): number => {
-        if (!Number.isFinite(value)) return DEFAULT_SETTINGS.descriptionLines;
-        return Math.max(1, Math.min(70, Math.round(value)));
-    };
-    const applyDescriptionClamp = (): void => {
-        const profile = getActiveOverlayProfile();
-        const lines = normalizeDescriptionLines(getDescriptionLines(profile));
-        setDescriptionLines(profile, lines);
-        previewDescription.setCssStyles({
-            display: '-webkit-box',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'pre-line',
-            webkitBoxOrient: 'vertical',
-        });
-        previewDescription.style.setProperty('-webkit-line-clamp', String(lines));
-        previewDescription.style.setProperty('line-clamp', String(lines));
-    };
-
-    const applyOverlayVisibility = (): void => {
-        const profile = getActiveOverlayProfile();
-        const visibility = getOverlayVisibility(profile);
-        const isAnimePreview = previewMode === 'anime';
-        (Object.keys(overlayElements) as OverlayFieldKey[]).forEach((field) => {
-            const hiddenByMode = field === 'format' && !isAnimePreview;
-            const visible = !hiddenByMode && visibility[field];
-            const el = overlayElements[field];
-            el.setCssStyles({ display: hiddenByMode ? 'none' : '' });
-            el.toggleClass('is-disabled-preview', !visible);
-        });
-    };
-
-    const setActiveOverlayField = (field: OverlayFieldKey | null): void => {
-        activeOverlayField = field;
-        (Object.keys(overlayElements) as OverlayFieldKey[]).forEach((key) => {
-            overlayElements[key].toggleClass('is-active-target', key === field);
-        });
-        updateOverlayReadout();
-    };
-
-    const updateOverlayReadout = (): void => {
-        if (!activeOverlayField) {
-            overlayReadout.textContent = t('settingsOverlayReadoutIdle');
-            return;
-        }
-        const profile = getActiveOverlayProfile();
-        const layout = getOverlayLayout(profile);
-        const visibility = getOverlayVisibility(profile);
-        const point = layout[activeOverlayField];
-        const defaultPoint = getDefaultLayout(profile)[activeOverlayField];
-        const x = normalizeOverlayPercent(point.x, defaultPoint.x);
-        const y = normalizeOverlayPercent(point.y, defaultPoint.y);
-        const visibilityLabel = visibility[activeOverlayField] ? 'ON' : 'OFF';
-        const linesInfo = activeOverlayField === 'description'
-            ? ` | lines ${normalizeDescriptionLines(getDescriptionLines(profile))}`
-            : '';
-        overlayReadout.textContent = `${overlayLabels[activeOverlayField]} (${visibilityLabel}): X ${x}% / Y ${y}%${linesInfo}`;
-    };
-
-    const getActiveMediaSettings = (): LorebaseSettings['games'] => {
-        if (previewMode === 'anime') return context.plugin.settings.anime;
-        if (previewMode === 'movie') return context.plugin.settings.movies;
-        if (previewMode === 'series') return context.plugin.settings.series;
-        if (previewMode === 'book') return context.plugin.settings.books;
-        if (previewMode === 'manga') return context.plugin.settings.manga;
-        return context.plugin.settings.games;
-    };
-
-    const getActiveProgressSettings = (): LorebaseSettings['games'] | null => {
-        if (previewMode === 'anime') return context.plugin.settings.anime;
-        if (previewMode === 'series') return context.plugin.settings.series;
-        if (previewMode === 'book') return context.plugin.settings.books;
-        if (previewMode === 'manga') return context.plugin.settings.manga;
-        return null;
-    };
-
-    const getActiveCardStyleSettings = (): LorebaseSettings['games'] | null => getActiveProgressSettings();
-
-    const parseCssPixels = (value: string, fallback: number): number => {
-        const parsed = Number.parseInt(value, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-        return parsed;
-    };
-
-    const clampDimension = (value: number, min: number, max: number, fallback: number): number => {
-        if (!Number.isFinite(value)) return fallback;
-        return Math.max(min, Math.min(max, Math.round(value)));
-    };
-
-    const clampImageRatio = (value: number, fallback: number): number => {
-        if (!Number.isFinite(value) || value <= 0) return fallback;
-        return Math.max(0.4, Math.min(2.2, Math.round(value * 100) / 100));
-    };
-
-    const getPreviewDimensions = (
-        settings: LorebaseSettings['games'],
-        orientation: OverlayOrientationKey
-    ): { width: number; height: number } => {
-        if (orientation === 'horizontal') {
-            const horizontalWidth = settings.customCardSize
-                ? clampDimension(settings.customHorizontalCardMinWidth, 240, 700, DEFAULT_SETTINGS.games.customHorizontalCardMinWidth)
-                : DEFAULT_SETTINGS.games.customHorizontalCardMinWidth;
-            const horizontalHeight = settings.customCardSize
-                ? clampDimension(settings.customHorizontalCardHeight, 120, 520, DEFAULT_SETTINGS.games.customHorizontalCardHeight)
-                : parseCssPixels(HORIZONTAL_CARD_SIZES[settings.cardSize].height, DEFAULT_SETTINGS.games.customHorizontalCardHeight);
-            return { width: horizontalWidth, height: horizontalHeight };
-        }
-
-        const presetWidth = parseCssPixels(CARD_SIZES[settings.cardSize].maxWidth, MAX_PREVIEW_CARD_WIDTH);
-        const width = settings.customCardSize
-            ? clampDimension(settings.customCardMinWidth, 140, 480, DEFAULT_SETTINGS.games.customCardMinWidth)
-            : Math.min(presetWidth, MAX_PREVIEW_CARD_WIDTH);
-        const minHeight = settings.customCardSize
-            ? clampDimension(settings.customCardMinHeight, 180, 900, DEFAULT_SETTINGS.games.customCardMinHeight)
-            : parseCssPixels(CARD_SIZES[settings.cardSize].minHeight, DEFAULT_SETTINGS.games.customCardMinHeight);
-        const ratio = settings.customCardSize
-            ? clampImageRatio(settings.customCardImageRatio, DEFAULT_SETTINGS.games.customCardImageRatio)
-            : 2 / 3;
-        return { width, height: Math.max(minHeight, Math.round(width / ratio)) };
-    };
-
-    const applyPreviewDimensions = (): void => {
-        const settings = getActiveMediaSettings();
-        const isHorizontal = previewOrientation === 'horizontal';
-        const isProgressStyle = !isHorizontal && getActiveCardStyleSettings()?.cardStyle === 'progress';
-        const dimensions = getPreviewDimensions(settings, previewOrientation);
-        card.toggleClass('lorebase-card-horizontal', isHorizontal);
-        card.setCssStyles({
-            width: `${dimensions.width}px`,
-            height: isProgressStyle ? 'auto' : `${dimensions.height}px`,
-            maxWidth: isHorizontal ? '100%' : `${dimensions.width}px`,
-            minWidth: isHorizontal ? `${dimensions.width}px` : '',
-            minHeight: isHorizontal && !isProgressStyle ? `${dimensions.height}px` : '0',
-        });
-        imageContainer.setCssStyles({
-            height: isProgressStyle ? `${dimensions.height}px` : '100%',
-            flexBasis: isProgressStyle ? `${dimensions.height}px` : '',
-        });
-    };
-
-    const getOverlayDragReferenceHeight = (): number => {
-        const height = overlay.getBoundingClientRect().height;
-        return Number.isFinite(height) && height > 0 ? height : 380;
-    };
-
-    const applyOverlayLayout = (): void => {
-        const profile = getActiveOverlayProfile();
-        const layout = getOverlayLayout(profile);
-        const defaults = getDefaultLayout(profile);
-        (Object.keys(overlayElements) as OverlayFieldKey[]).forEach((field) => {
-            const point = layout[field];
-            const defaultPoint = defaults[field];
-            const normalizedX = normalizeOverlayPercent(point.x, defaultPoint.x);
-            const normalizedY = normalizeOverlayPercent(point.y, defaultPoint.y);
-            const clamped = clampOverlayPoint(field, normalizedX, normalizedY);
-            point.x = clamped.x;
-            point.y = clamped.y;
-
-            const el = overlayElements[field];
-            el.style.setProperty('--overlay-x', `${clamped.x}%`);
-            el.style.setProperty('--overlay-y', `${clamped.y}%`);
-            if (field === 'description') {
-                el.style.setProperty('--overlay-max-width', `${Math.max(30, 92 - clamped.x)}%`);
-            } else {
-                el.style.removeProperty('--overlay-max-width');
-            }
-        });
-        applyDescriptionClamp();
-        updateOverlayReadout();
-    };
-
-    let overlayLayoutFrame: number | null = null;
-    const scheduleOverlayLayout = (): void => {
-        if (overlayLayoutFrame !== null) return;
-        overlayLayoutFrame = window.requestAnimationFrame(() => {
-            overlayLayoutFrame = null;
-            applyOverlayLayout();
-        });
-    };
-    const flushOverlayLayoutNow = (): void => {
-        if (overlayLayoutFrame !== null) {
-            window.cancelAnimationFrame(overlayLayoutFrame);
-            overlayLayoutFrame = null;
-        }
-        applyOverlayLayout();
-    };
-
-    const bindOverlayDrag = (field: OverlayFieldKey): void => {
-        const element = overlayElements[field];
-        element.addEventListener('mouseenter', () => {
-            setActiveOverlayField(field);
-        });
-        if (field === 'description') {
-            element.addEventListener('mousemove', (event: MouseEvent) => {
-                const rect = element.getBoundingClientRect();
-                const inResizeCorner = event.clientX >= rect.right - 14 && event.clientY >= rect.bottom - 14;
-                element.toggleClass('is-resize-corner', inResizeCorner);
-            });
-            element.addEventListener('mouseleave', () => element.removeClass('is-resize-corner'));
-        }
-        element.addEventListener('dblclick', (event: MouseEvent) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setActiveOverlayField(field);
-            const nextVisible = !getOverlayVisibility(getActiveOverlayProfile())[field];
-            forPreviewTargets((profile, orientation) => {
-                getOverlayVisibility(profile, orientation)[field] = nextVisible;
-            });
-            applyOverlayVisibility();
-            updateOverlayReadout();
-            persistPreviewChanges();
-        });
-        element.addEventListener('mousedown', (event: MouseEvent) => {
-            if (event.button !== 0) return;
-            if (!getOverlayVisibility(getActiveOverlayProfile())[field]) return;
-
-            if (field === 'description') {
-                const rect = element.getBoundingClientRect();
-                const inResizeCorner = event.clientX >= rect.right - 14 && event.clientY >= rect.bottom - 14;
-                if (inResizeCorner) {
-                    event.preventDefault();
-                    event.stopPropagation();
-
-                    setActiveOverlayField('description');
-                    const startLines = normalizeDescriptionLines(getDescriptionLines(getActiveOverlayProfile()));
-                    const startMouseY = event.clientY;
-
-                    const onResizeMove = (moveEvent: MouseEvent): void => {
-                        const deltaY = moveEvent.clientY - startMouseY;
-                        const nextLines = normalizeDescriptionLines(startLines + Math.round(deltaY / 12));
-                        forPreviewTargets((profile, orientation) => {
-                            setDescriptionLines(profile, nextLines, orientation);
-                        });
-                        scheduleOverlayLayout();
-                    };
-
-                    const onResizeUp = (): void => {
-                        activeDocument.removeEventListener('mousemove', onResizeMove);
-                        activeDocument.removeEventListener('mouseup', onResizeUp);
-                        element.removeClass('is-resize-corner');
-                        flushOverlayLayoutNow();
-                        persistPreviewChanges();
-                    };
-
-                    activeDocument.addEventListener('mousemove', onResizeMove);
-                    activeDocument.addEventListener('mouseup', onResizeUp);
-                    return;
-                }
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            setActiveOverlayField(field);
-            const activeProfile = getActiveOverlayProfile();
-            const point = getOverlayLayout(activeProfile)[field];
-            const startMouseX = event.clientX;
-            const startMouseY = event.clientY;
-            const rect = overlay.getBoundingClientRect();
-            const dragReferenceHeight = getOverlayDragReferenceHeight();
-            const defaultPoint = getDefaultLayout(activeProfile)[field];
-            const startX = normalizeOverlayPercent(point.x, defaultPoint.x);
-            const startY = normalizeOverlayPercent(point.y, defaultPoint.y);
-
-            const onMouseMove = (moveEvent: MouseEvent): void => {
-                const nextX = startX + ((moveEvent.clientX - startMouseX) / rect.width) * 100;
-                const nextY = startY + ((moveEvent.clientY - startMouseY) / dragReferenceHeight) * 100;
-                const snapped = applySnap(field, nextX, nextY);
-                const clamped = clampOverlayPoint(field, snapped.x, snapped.y);
-                forPreviewTargets((profile, orientation) => {
-                    const targetPoint = getOverlayLayout(profile, orientation)[field];
-                    targetPoint.x = clamped.x;
-                    targetPoint.y = clamped.y;
-                });
-                scheduleOverlayLayout();
-            };
-
-            const onMouseUp = (): void => {
-                activeDocument.removeEventListener('mousemove', onMouseMove);
-                activeDocument.removeEventListener('mouseup', onMouseUp);
-                flushOverlayLayoutNow();
-                persistPreviewChanges();
-            };
-
-            activeDocument.addEventListener('mousemove', onMouseMove);
-            activeDocument.addEventListener('mouseup', onMouseUp);
-        });
-    };
-
-    (Object.keys(overlayElements) as OverlayFieldKey[]).forEach((field) => bindOverlayDrag(field));
-
-    overlayReset.addEventListener('click', () => {
-        forPreviewTargets((profile, orientation) => {
-            const layout = getOverlayLayout(profile, orientation);
-            const layoutDefaults = getDefaultLayout(profile, orientation);
-            layout.title = Object.assign({}, layoutDefaults.title);
-            layout.year = Object.assign({}, layoutDefaults.year);
-            layout.format = Object.assign({}, layoutDefaults.format);
-            layout.description = Object.assign({}, layoutDefaults.description);
-
-            const visibility = getOverlayVisibility(profile, orientation);
-            const visibilityDefaults = getDefaultVisibility(profile, orientation);
-            visibility.title = visibilityDefaults.title;
-            visibility.year = visibilityDefaults.year;
-            visibility.format = visibilityDefaults.format;
-            visibility.description = visibilityDefaults.description;
-
-            setDescriptionLines(profile, normalizeDescriptionLines(getDefaultDescriptionLines(profile, orientation)), orientation);
-
-            const badgeDefaults = getDefaultBadges(profile, orientation);
-            const badges = getBadges(profile, orientation);
-            badges.status = Object.assign({}, badgeDefaults.status);
-            badges.rating = Object.assign({}, badgeDefaults.rating);
-            badges.favorite = Object.assign({}, badgeDefaults.favorite);
-        });
-        renderPreview();
-        applyOverlayLayout();
-        applyOverlayVisibility();
-        container.dispatchEvent(new CustomEvent('lorebase-preview-state-change', { detail: previewMode }));
-        persistPreviewChanges();
-    });
-
-    const badgeElements = new Map<BadgeKey, HTMLButtonElement>();
-
-    const formatPreviewCompletionDate = (): string => {
-        const locale = i18n.getLanguage() === 'ru' ? 'ru-RU' : 'en-US';
-        const profile: MediaTypeKey = previewMode === 'game'
-            ? 'games'
-            : previewMode === 'movie'
-                ? 'movies'
-                : previewMode === 'book'
-                    ? 'books'
-                    : previewMode;
-        const format = context.plugin.settings.completionDateBadgeFormats?.[profile]
-            ?? context.plugin.settings.completionDateBadgeFormat
-            ?? 'short';
-        const options: Intl.DateTimeFormatOptions = format === 'full'
-            ? { month: 'short', day: 'numeric', year: 'numeric' }
-            : { month: 'short', day: 'numeric' };
-        return new Intl.DateTimeFormat(locale, options).format(new Date(Date.UTC(2025, 6, 22)));
-    };
-
-    const renderBadgeContent = (
-        badge: HTMLButtonElement,
-        badgeKey: BadgeKey,
-        activeBadges: LorebaseSettings['badges']
-    ): void => {
-        badge.replaceChildren();
-
-        if (badgeKey === 'status') {
-            const previewStatus = 'completed';
-            const statusBadge = createDiv({ cls: `lorebase-card-status lorebase-status-${previewStatus}` });
-            const iconPath = STATUS_CONFIG[previewStatus].pathD;
-            statusBadge.appendChild(createSvgPathIcon(iconPath));
-            if (activeBadges.status.iconOnly) {
-                statusBadge.classList.add('is-icon-only');
-            } else {
-                const statusLabel = previewMode === 'game'
-                    ? t('statusPlayed')
-                    : previewMode === 'book' || previewMode === 'manga'
-                        ? t('statusReadCompleted')
-                        : t('statusCompleted');
-                statusBadge.createSpan({
-                    text: `${statusLabel} | ${formatPreviewCompletionDate()}`,
-                });
-            }
-            badge.appendChild(statusBadge);
-            return;
-        }
-
-        if (badgeKey === 'rating') {
-            const ratingBadge = createDiv({ cls: 'lorebase-card-rating' });
-            if (activeBadges.rating.mode === 'emoji') {
-                ratingBadge.classList.add('is-emoji');
-                ratingBadge.textContent = RATING_EMOJI[4];
-            } else {
-                ratingBadge.textContent = '\u26054';
-            }
-            badge.appendChild(ratingBadge);
-            return;
-        }
-
-        const favoriteBadge = createDiv({ cls: 'lorebase-card-favorite-badge' });
-        if (activeBadges.favorite.subtlePulse) {
-            favoriteBadge.classList.add('is-subtle-pulse');
-        }
-        favoriteBadge.appendChild(createSvgPathIcon(FAVORITE_BADGE_PATH, { fill: '#ffffff', stroke: 'none', width: '12', height: '12' }));
-        badge.appendChild(favoriteBadge);
-    };
-
-    const getOrCreateBadgeElement = (badgeKey: BadgeKey): HTMLButtonElement => {
-        const existing = badgeElements.get(badgeKey);
-        if (existing) return existing;
-
-        const badge = createEl('button', {
-            cls: 'lorebase-badges-editor-chip',
-            attr: { type: 'button' },
-        });
-        badge.draggable = true;
-
-        badge.addEventListener('click', () => {
-            const activeBadges = getBadges(getActiveOverlayProfile());
-            const nextEnabled = !activeBadges[badgeKey].enabled;
-            forPreviewTargets((profile, orientation) => {
-                getBadges(profile, orientation)[badgeKey].enabled = nextEnabled;
-            });
-            renderPreview();
-            persistPreviewChanges();
-        });
-
-        badge.addEventListener('dragstart', (event) => {
-            event.dataTransfer?.setData('text/plain', badgeKey);
-            event.dataTransfer?.setDragImage(badge, 8, 8);
-            badge.classList.add('is-dragging');
-            setBadgeDragging(true);
-        });
-
-        badge.addEventListener('dragend', () => {
-            badge.classList.remove('is-dragging');
-            setBadgeDragging(false);
-        });
-
-        badgeElements.set(badgeKey, badge);
-        return badge;
-    };
-
-    positions.forEach((position) => {
-        const zone = imageContainer.createDiv({
-            cls: 'lorebase-badges-editor-zone',
-            attr: { 'data-label': zoneLabels[position] }
-        });
-        zone.addClass(`is-${position}`);
-        zone.addEventListener('dragover', (event) => {
-            event.preventDefault();
-            zone.addClass('is-over');
-        });
-        zone.addEventListener('dragleave', () => zone.removeClass('is-over'));
-        zone.addEventListener('drop', (event) => {
-            event.preventDefault();
-            zone.removeClass('is-over');
-            setBadgeDragging(false);
-            const badgeKey = event.dataTransfer?.getData('text/plain') as BadgeKey;
-            if (!BADGE_KEYS.includes(badgeKey)) return;
-            let changed = false;
-            forPreviewTargets((profile, orientation) => {
-                const badgeSettings = getBadges(profile, orientation)[badgeKey];
-                if (badgeSettings.position !== position) {
-                    badgeSettings.position = position;
-                    changed = true;
-                }
-            });
-            if (!changed) return;
-            renderPreview();
-            persistPreviewChanges();
-        });
-        zones.set(position, zone);
-    });
-
-    const applyPreviewMode = (): void => {
-        const isAnime = previewMode === 'anime';
-        const previewTitleText = previewMode === 'anime'
-            ? 'LOREBASE Anime Preview'
-            : previewMode === 'movie'
-                ? 'LOREBASE Movie Preview'
-                : previewMode === 'series'
-                    ? 'LOREBASE Series Preview'
-                    : previewMode === 'book'
-                        ? 'LOREBASE Book Preview'
-                        : previewMode === 'manga'
-                            ? 'LOREBASE Manga Preview'
-                            : 'LOREBASE Preview Card';
-        const progressSettings = getActiveProgressSettings();
-        const isProgressStyle = getActiveCardStyleSettings()?.cardStyle === 'progress';
-        card.toggleClass('is-anime', isAnime);
-        card.toggleClass('is-series', previewMode === 'series');
-        card.toggleClass('is-book', previewMode === 'book');
-        card.toggleClass('is-manga', previewMode === 'manga');
-        card.toggleClass('lorebase-card-progress-style', isProgressStyle);
-        applyPreviewDimensions();
-        previewTitle.textContent = previewTitleText;
-        previewProgressTitle.textContent = previewTitleText;
-        previewYear.textContent = '2026';
-        previewFormat.textContent = 'TV';
-        previewFormat.setCssStyles({ display: isAnime ? '' : 'none' });
-        if (!isAnime && activeOverlayField === 'format') {
-            setActiveOverlayField(null);
-        }
-        previewDescription.textContent = previewMode === 'anime'
-            ? previewDescriptionAnime
-            : previewMode === 'movie'
-                ? previewDescriptionMovie
-                : previewMode === 'series'
-                    ? previewDescriptionSeries
-                    : previewMode === 'book'
-                        ? previewDescriptionBook
-                        : previewMode === 'manga'
-                            ? previewDescriptionManga
-                            : previewDescriptionGame;
-        const showSeason = previewMode === 'book' ? false : Boolean(progressSettings?.showAnimeSeasonProgress);
-        const showEpisode = Boolean(progressSettings?.showAnimeEpisodeProgress);
-        const showProgress = Boolean(progressSettings && (showSeason || showEpisode));
-        previewSeasonBadge.textContent = previewMode === 'series'
-            ? 'S 2/4'
-            : previewMode === 'manga'
-                ? 'Vol. 8/15'
-                : 'S 2/3';
-        previewEpisodeBadge.textContent = previewMode === 'book'
-            ? 'Pg 120/310'
-            : previewMode === 'manga'
-                ? 'Ch. 19/80'
-                : 'EP 8/12';
-        previewAnimeProgress.toggleClass('is-hidden', !showProgress);
-        const hasEpisodeBadge = showProgress && showEpisode;
-        previewSeasonBadge.setCssStyles({ display: showProgress && showSeason ? '' : 'none' });
-        previewEpisodeBadge.setCssStyles({ display: showProgress && showEpisode ? 'inline' : 'none' });
-        previewSeasonBadge.toggleClass('is-hover-only', showProgress && showSeason && hasEpisodeBadge);
-        previewSeasonBadge.toggleClass('is-only', showProgress && showSeason && !hasEpisodeBadge);
-        const progressMetaParts = [
-            showSeason ? previewSeasonBadge.textContent : null,
-            showEpisode ? previewEpisodeBadge.textContent : null,
-        ].filter((value): value is string => Boolean(value));
-        overlay.setCssStyles({ display: isProgressStyle ? 'none' : '' });
-        previewAnimeProgress.toggleClass('is-hidden', isProgressStyle || !showProgress);
-        previewProgressFooter.toggleClass('is-hidden', !isProgressStyle);
-        previewProgressMeta.textContent = progressMetaParts.join(' \u00B7  ');
-        previewProgressMeta.setCssStyles({ display: progressMetaParts.length ? '' : 'none' });
-        const fillPercent = previewMode === 'book'
-            ? 39
-            : previewMode === 'manga'
-                ? 24
-                : previewMode === 'series'
-                    ? 50
-                    : 67;
-        previewProgressFill.setCssStyles({ width: `${fillPercent}%` });
-    };
-
-    const renderPreview = (): void => {
-        const activeBadges = getBadges(getActiveOverlayProfile());
-        card.toggleClass(
-            'lorebase-card-favorite-pulse',
-            activeBadges.favorite.enabled && activeBadges.favorite.subtlePulse
-        );
-        BADGE_KEYS.forEach((badgeKey) => {
-            const settings = activeBadges[badgeKey];
-            const zone = zones.get(settings.position);
-            if (!zone) return;
-
-            const badge = getOrCreateBadgeElement(badgeKey);
-            badge.setAttribute('aria-pressed', String(settings.enabled));
-            badge.classList.toggle('is-disabled', !settings.enabled);
-            renderBadgeContent(badge, badgeKey, activeBadges);
-            if (badge.parentElement !== zone) {
-                zone.appendChild(badge);
-            }
-        });
-        zones.forEach((zone) => {
-            zone.toggleClass('has-badge', zone.children.length > 0);
-        });
-    };
-
-    applyPreviewMode();
-    renderPreview();
-    applyOverlayLayout();
-    applyOverlayVisibility();
-    overlayHint.addClass('is-ready');
-    return () => {
-        applyPreviewMode();
-        renderPreview();
-        applyOverlayLayout();
-        applyOverlayVisibility();
-    };
-}
-
-function renderStatusLabelAndPlanSettings(context: SettingsSectionContext, container: HTMLElement): void {
-    const group = context.createCollapsibleGroup(
-        container,
-        t('settingsStatusPlans'),
-        t('settingsStatusPlansDesc'),
-        false
-    );
-    group.root.addClass('lorebase-status-plans-group');
-
-    const gameStatuses: Array<{
-        key: keyof LorebaseSettings['statusLabels']['games'];
-        label: string;
-        icon: string;
-    }> = [
-        { key: 'completed', label: t('statusPlayed'), icon: 'circle-check-big' },
-        { key: 'playing', label: t('statusPlaying'), icon: 'play' },
-        { key: 'dropped', label: t('statusDropped'), icon: 'circle-x' },
-        { key: 'wishlist', label: t('statusWishlist'), icon: 'bookmark' },
-        { key: 'not_started', label: t('statusNotStarted'), icon: 'circle-dashed' },
-        { key: 'sandbox', label: t('statusSandbox'), icon: 'box' },
-    ];
-
-    const animeStatuses: Array<{
-        key: keyof LorebaseSettings['statusLabels']['anime'];
-        label: string;
-        icon: string;
-    }> = [
-        { key: 'planned', label: t('statusPlanned'), icon: 'calendar-clock' },
-        { key: 'watching', label: t('statusWatching'), icon: 'eye' },
-        { key: 'completed', label: t('statusCompleted'), icon: 'circle-check-big' },
-        { key: 'dropped', label: t('statusDropped'), icon: 'circle-x' },
-        { key: 'paused', label: t('statusPaused'), icon: 'pause' },
-    ];
-    const readingStatuses: Array<{
-        key: keyof LorebaseSettings['statusLabels']['anime'];
-        label: string;
-        icon: string;
-    }> = [
-        { key: 'planned', label: t('statusPlanToRead'), icon: 'calendar-clock' },
-        { key: 'watching', label: t('statusReading'), icon: 'book-open' },
-        { key: 'completed', label: t('statusReadCompleted'), icon: 'circle-check-big' },
-        { key: 'dropped', label: t('statusDropped'), icon: 'circle-x' },
-        { key: 'paused', label: t('statusPaused'), icon: 'pause' },
-    ];
-
-    const statusEditor = group.body.createDiv({ cls: 'lorebase-status-editor' });
-    const tabsHost = statusEditor.createDiv({ cls: 'lorebase-status-media-tabs-host' });
-    const cards = statusEditor.createDiv({ cls: 'lorebase-status-editor-panels' });
-    const cardPanels = new Map<MediaTypeKey, HTMLElement>();
-
-    const selectMediaTab = (media: MediaTypeKey): void => {
-        context.setActiveMediaTab('statusLabels', media);
-        cardPanels.forEach((panel, key) => {
-            const selected = key === media;
-            panel.toggleClass('is-active', selected);
-            panel.toggleAttribute('hidden', !selected);
-        });
-    };
-
-    const mediaOptions: Array<{
-        key: MediaTypeKey;
-        label: string;
-        icon: string;
-    }> = [
-        { key: 'games', label: t('settingsGames'), icon: 'gamepad-2' },
-        { key: 'anime', label: t('settingsAnime'), icon: 'clapperboard' },
-        { key: 'movies', label: t('settingsMovies'), icon: 'film' },
-        { key: 'series', label: t('settingsSeries'), icon: 'tv' },
-        { key: 'books', label: t('settingsBooks'), icon: 'book-open' },
-        { key: 'manga', label: t('settingsManga'), icon: 'panels-top-left' },
-    ];
-
-    createMediaTabs(
-        tabsHost,
-        mediaOptions.map((option) => ({
-            value: option.key,
-            label: option.label,
-            icon: option.icon,
-        })),
-        context.getActiveMediaTab('statusLabels'),
-        t('settingsStatusMediaTabs'),
-        selectMediaTab
-    );
-
-    const renderStatusCard = (
-        media: MediaTypeKey,
-        title: string,
-        cardIcon: string,
-        statuses: Array<{
-            key: keyof LorebaseSettings['statusLabels']['games'] | keyof LorebaseSettings['statusLabels']['anime'];
-            label: string;
-            icon: string;
-        }>
-    ): void => {
-        const card = cards.createDiv({ cls: `lorebase-status-editor-card is-${media}` });
-        card.setAttribute('role', 'tabpanel');
-        cardPanels.set(media, card);
-        const header = card.createDiv({ cls: 'lorebase-status-editor-card-header' });
-        const headerIcon = header.createSpan({ cls: 'lorebase-status-editor-card-icon' });
-        setIcon(headerIcon, cardIcon);
-        header.createSpan({ cls: 'lorebase-status-editor-card-title', text: title });
-
-        const list = card.createDiv({ cls: 'lorebase-status-editor-list' });
-        for (const status of statuses) {
-            const row = list.createDiv({
-                cls: 'lorebase-status-editor-row',
-                attr: { 'data-status': String(status.key) },
-            });
-            const marker = row.createSpan({ cls: 'lorebase-status-editor-marker' });
-            setIcon(marker, status.icon);
-            row.createSpan({ cls: 'lorebase-status-editor-label', text: status.label });
-
-            const control = row.createDiv({ cls: 'lorebase-status-editor-control' });
-            const input = control.createEl('input', {
-                type: 'text',
-                cls: 'lorebase-status-editor-input',
-                attr: {
-                    placeholder: status.label,
-                    'aria-label': `${title}: ${status.label}`,
-                },
-            });
-            input.value = media === 'games'
-                ? context.plugin.settings.statusLabels.games[status.key as keyof LorebaseSettings['statusLabels']['games']] ?? ''
-                : context.plugin.settings.statusLabels[media][status.key as keyof LorebaseSettings['statusLabels']['anime']] ?? '';
-
-            const reset = control.createEl('button', {
-                cls: 'lorebase-status-editor-reset',
-                attr: {
-                    type: 'button',
-                    title: t('settingsStatusReset'),
-                    'aria-label': `${t('settingsStatusReset')}: ${status.label}`,
-                },
-            });
-            setIcon(reset, 'rotate-ccw');
-
-            const syncResetVisibility = (): void => {
-                reset.toggleClass('is-visible', input.value.trim().length > 0);
-            };
-            const persist = async (): Promise<void> => {
-                const trimmed = input.value.trim();
-                if (media === 'games') {
-                    const key = status.key as keyof LorebaseSettings['statusLabels']['games'];
-                    if (trimmed) context.plugin.settings.statusLabels.games[key] = trimmed;
-                    else delete context.plugin.settings.statusLabels.games[key];
-                } else {
-                    const key = status.key as keyof LorebaseSettings['statusLabels']['anime'];
-                    if (trimmed) context.plugin.settings.statusLabels[media][key] = trimmed;
-                    else delete context.plugin.settings.statusLabels[media][key];
-                }
-                syncResetVisibility();
-                await context.plugin.saveSettings();
-                context.plugin.refreshViews();
-            };
-
-            input.addEventListener('change', () => void persist());
-            input.addEventListener('input', syncResetVisibility);
-            reset.addEventListener('click', () => {
-                input.value = '';
-                void persist();
-                input.focus();
-            });
-            syncResetVisibility();
-        }
-    };
-
-    renderStatusCard('games', t('settingsGameStatusLabels'), 'gamepad-2', gameStatuses);
-    renderStatusCard('anime', t('settingsAnimeStatusLabels'), 'clapperboard', animeStatuses);
-    renderStatusCard('movies', t('settingsMovieStatusLabels'), 'film', animeStatuses);
-    renderStatusCard('series', t('settingsSeriesStatusLabels'), 'tv', animeStatuses);
-    renderStatusCard('books', t('settingsBookStatusLabels'), 'book-open', readingStatuses);
-    renderStatusCard('manga', t('settingsMangaStatusLabels'), 'panels-top-left', readingStatuses);
-    selectMediaTab(context.getActiveMediaTab('statusLabels'));
-
-    const plansCard = group.body.createDiv({ cls: 'lorebase-plan-editor-card' });
+function renderStatusLabelAndPlanSettings(context: SettingsSectionContext, container: HTMLElement, updatePreview: () => void): void {
+    const panel = container.createDiv({ cls: 'lorebase-status-plans-group' });
+    const gamesPanel = renderStatusSettings(context, panel, updatePreview);
+
+    const plansCard = gamesPanel.createDiv({ cls: 'lorebase-plan-editor-card' });
     const plansHeader = plansCard.createDiv({ cls: 'lorebase-plan-editor-header' });
     const plansHeading = plansHeader.createDiv({ cls: 'lorebase-plan-editor-heading' });
     const plansIcon = plansHeading.createSpan({ cls: 'lorebase-status-editor-card-icon' });
@@ -1714,8 +527,13 @@ function renderStatusLabelAndPlanSettings(context: SettingsSectionContext, conta
         plansList.empty();
         context.plugin.settings.tagPresets.games.forEach((preset, index) => {
             const row = plansList.createDiv({ cls: 'lorebase-plan-editor-row' });
-            const icon = row.createSpan({ cls: 'lorebase-plan-editor-icon' });
+            const icon = row.createEl('button', { cls: 'lorebase-plan-editor-icon', attr: { type: 'button', 'aria-label': t('settingsGamePlanTags') } });
             setIcon(icon, preset.icon || 'tag');
+            icon.addEventListener('click', () => {
+                new LucideIconPickerModal(context.app, preset.icon || 'tag', value => {
+                    preset.icon = value; renderPlans(); void persistPlans();
+                }).open();
+            });
 
             const input = row.createEl('input', {
                 type: 'text',
@@ -1726,6 +544,9 @@ function renderStatusLabelAndPlanSettings(context: SettingsSectionContext, conta
                 },
             });
             input.value = getPlanPresetLabel(preset.id, preset.label);
+            const fitLabel = (): void => { input.style.width = `${Math.max(10, Math.min(36, input.value.length + 2))}ch`; };
+            fitLabel();
+            input.addEventListener('input', fitLabel);
             input.addEventListener('change', () => {
                 const trimmed = input.value.trim();
                 if (!trimmed) {
@@ -1799,342 +620,4 @@ function createUniquePlanPreset(existing: TagPreset[]): TagPreset {
     }
 
     return { id, label, tag, icon: 'tag' };
-}
-
-function renderBadgeOptions(
-    context: SettingsSectionContext,
-    container: HTMLElement,
-    renderBadgesPreview: () => void
-): void {
-    type BadgeProfileKey = 'games' | 'anime' | 'movies' | 'series' | 'books' | 'manga';
-    type BadgeOrientationKey = 'vertical' | 'horizontal';
-
-    const getPreviewMode = (): PreviewMode => {
-        const mode = container.dataset.previewMode;
-        return mode === 'anime'
-            || mode === 'movie'
-            || mode === 'series'
-            || mode === 'book'
-            || mode === 'manga'
-            ? mode
-            : 'game';
-    };
-
-    const getActiveProfile = (): BadgeProfileKey => {
-        const mode = getPreviewMode();
-        if (mode === 'anime') return 'anime';
-        if (mode === 'movie') return 'movies';
-        if (mode === 'series') return 'series';
-        if (mode === 'book') return 'books';
-        if (mode === 'manga') return 'manga';
-        return 'games';
-    };
-
-    const getActiveProgressSettings = (): LorebaseSettings['games'] | null => {
-        const mode = getPreviewMode();
-        if (mode === 'anime') return context.plugin.settings.anime;
-        if (mode === 'series') return context.plugin.settings.series;
-        if (mode === 'book') return context.plugin.settings.books;
-        if (mode === 'manga') return context.plugin.settings.manga;
-        return null;
-    };
-
-    const getActiveCardStyleSettings = (): LorebaseSettings['games'] | null => {
-        const mode = getPreviewMode();
-        if (mode === 'anime') return context.plugin.settings.anime;
-        if (mode === 'series') return context.plugin.settings.series;
-        if (mode === 'book') return context.plugin.settings.books;
-        if (mode === 'manga') return context.plugin.settings.manga;
-        return null;
-    };
-
-    const getActiveBookCoverSettings = (): LorebaseSettings['games'] | null => {
-        const mode = getPreviewMode();
-        if (mode === 'book') return context.plugin.settings.books;
-        if (mode === 'manga') return context.plugin.settings.manga;
-        return null;
-    };
-
-    const getActiveCompletionDateFormat = (): CompletionDateBadgeFormat => {
-        const profile = getActiveProfile();
-        return context.plugin.settings.completionDateBadgeFormats?.[profile]
-            ?? context.plugin.settings.completionDateBadgeFormat
-            ?? 'short';
-    };
-
-    const getActiveOrientation = (): BadgeOrientationKey => (
-        container.dataset.previewOrientation === 'horizontal' ? 'horizontal' : 'vertical'
-    );
-
-    const getBadgeSettings = (
-        profile: BadgeProfileKey,
-        orientation: BadgeOrientationKey = getActiveOrientation()
-    ): LorebaseSettings['badges'] => {
-        if (profile === 'anime') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.animeHorizontalBadges
-                : context.plugin.settings.animeBadges;
-        }
-        if (profile === 'movies') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.movieHorizontalBadges
-                : context.plugin.settings.movieBadges;
-        }
-        if (profile === 'series') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.seriesHorizontalBadges
-                : context.plugin.settings.seriesBadges;
-        }
-        if (profile === 'books') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.bookHorizontalBadges
-                : context.plugin.settings.bookBadges;
-        }
-        if (profile === 'manga') {
-            return orientation === 'horizontal'
-                ? context.plugin.settings.mangaHorizontalBadges
-                : context.plugin.settings.mangaBadges;
-        }
-        return orientation === 'horizontal'
-            ? context.plugin.settings.horizontalBadges
-            : context.plugin.settings.badges;
-    };
-
-    const badgeProfiles: BadgeProfileKey[] = ['games', 'anime', 'movies', 'series', 'books', 'manga'];
-    const badgeOrientations: BadgeOrientationKey[] = ['vertical', 'horizontal'];
-
-    const forBadgeTargets = (fn: (profile: BadgeProfileKey, orientation: BadgeOrientationKey) => void): void => {
-        const active = getActiveProfile();
-        const orientation = getActiveOrientation();
-        if (!context.plugin.settings.overlayApplyToAllMedia) {
-            fn(active, orientation);
-            return;
-        }
-        for (const profile of badgeProfiles) {
-            for (const targetOrientation of badgeOrientations) {
-                fn(profile, targetOrientation);
-            }
-        }
-    };
-
-    const refreshVisualsSoon = (): void => {
-        window.requestAnimationFrame(() => {
-            context.plugin.refreshViewsVisuals();
-        });
-    };
-
-    let syncingControls = false;
-    let statusIconOnlyToggle: ToggleComponent | null = null;
-    let favoritePulseToggle: ToggleComponent | null = null;
-    let ratingModeDropdown: LorebaseDropdownHandle<RatingBadgeMode> | null = null;
-    let cardStyleDropdown: LorebaseDropdownHandle<CardStyle> | null = null;
-    let bookCoverEffectToggle: ToggleComponent | null = null;
-    let completionDateFormatDropdown: LorebaseDropdownHandle<CompletionDateBadgeFormat> | null = null;
-
-    const syncBadgeOptionControls = (): void => {
-        syncingControls = true;
-        const badges = getBadgeSettings(getActiveProfile());
-        statusIconOnlyToggle?.setValue(badges.status.iconOnly);
-        favoritePulseToggle?.setValue(badges.favorite.subtlePulse);
-        ratingModeDropdown?.setValue(badges.rating.mode);
-        syncingControls = false;
-    };
-
-    new Setting(container)
-        .setName(t('settingsBadgesStatusIconOnly'))
-        .addToggle(toggle => {
-            statusIconOnlyToggle = toggle;
-            const badges = getBadgeSettings(getActiveProfile());
-            toggle
-                .setValue(badges.status.iconOnly)
-                .onChange((value) => {
-                    if (syncingControls) return;
-                    forBadgeTargets((profile, orientation) => {
-                        getBadgeSettings(profile, orientation).status.iconOnly = value;
-                    });
-                    renderBadgesPreview();
-                    refreshVisualsSoon();
-                    void context.plugin.saveSettings();
-                });
-        });
-
-    new Setting(container)
-        .setName(t('settingsBadgesFavoritePulse'))
-        .addToggle(toggle => {
-            favoritePulseToggle = toggle;
-            const badges = getBadgeSettings(getActiveProfile());
-            toggle
-                .setValue(badges.favorite.subtlePulse)
-                .onChange((value) => {
-                    if (syncingControls) return;
-                    forBadgeTargets((profile, orientation) => {
-                        getBadgeSettings(profile, orientation).favorite.subtlePulse = value;
-                    });
-                    renderBadgesPreview();
-                    refreshVisualsSoon();
-                    void context.plugin.saveSettings();
-                });
-        });
-
-    const ratingModeSetting = new Setting(container)
-        .setName(t('settingsBadgesRatingMode'));
-    const badges = getBadgeSettings(getActiveProfile());
-    ratingModeDropdown = addLorebaseDropdown<RatingBadgeMode>(
-        ratingModeSetting,
-        [
-            { value: 'star', label: t('settingsBadgesRatingModeStar') },
-            { value: 'emoji', label: t('settingsBadgesRatingModeEmoji') },
-        ],
-        badges.rating.mode,
-        (value) => {
-            if (syncingControls) return;
-            forBadgeTargets((profile, orientation) => {
-                getBadgeSettings(profile, orientation).rating.mode = value;
-            });
-            renderBadgesPreview();
-            refreshVisualsSoon();
-            void context.plugin.saveSettings();
-        }
-    );
-
-    const cardStyleSetting = new Setting(container)
-        .setName(t('settingsCardStyle'))
-        .setDesc(t('settingsCardStyleDesc'));
-    cardStyleDropdown = addLorebaseDropdown<CardStyle>(
-        cardStyleSetting,
-        [
-            { value: 'hover', label: t('settingsCardStyleHover') },
-            { value: 'progress', label: t('settingsCardStyleProgress') },
-        ],
-        getActiveCardStyleSettings()?.cardStyle ?? 'hover',
-        (value) => {
-            if (syncingControls) return;
-            const settings = getActiveCardStyleSettings();
-            if (!settings) return;
-            settings.cardStyle = value;
-            renderBadgesPreview();
-            context.plugin.refreshViews();
-            void context.plugin.saveSettings();
-        }
-    );
-
-    const bookCoverEffectSetting = new Setting(container)
-        .setName(t('settingsBookCoverEffect'))
-        .setDesc(t('settingsBookCoverEffectDesc'))
-        .addToggle(toggle => {
-            bookCoverEffectToggle = toggle;
-            toggle
-                .setValue(getActiveBookCoverSettings()?.bookCoverEffect ?? false)
-                .onChange((value) => {
-                    if (syncingControls) return;
-                    const settings = getActiveBookCoverSettings();
-                    if (!settings) return;
-                    settings.bookCoverEffect = value;
-                    refreshVisualsSoon();
-                    void context.plugin.saveSettings();
-                });
-        });
-
-    const completionDateFormatSetting = new Setting(container)
-        .setName(t('settingsCompletionDateBadgeFormat'));
-    completionDateFormatDropdown = addLorebaseDropdown<CompletionDateBadgeFormat>(
-        completionDateFormatSetting,
-        [
-            { value: 'short', label: t('settingsCompletionDateBadgeFormatShort') },
-            { value: 'full', label: t('settingsCompletionDateBadgeFormatFull') },
-        ],
-        getActiveCompletionDateFormat(),
-        (value) => {
-            if (syncingControls) return;
-            context.plugin.settings.completionDateBadgeFormats[getActiveProfile()] = value;
-            renderBadgesPreview();
-            refreshVisualsSoon();
-            void context.plugin.saveSettings();
-        }
-    );
-
-    let seasonProgressToggle: ToggleComponent | null = null;
-    let episodeProgressToggle: ToggleComponent | null = null;
-
-    const getSeasonProgressLabel = (): string => {
-        const mode = getPreviewMode();
-        if (mode === 'manga') return t('settingsVolumeProgress');
-        return t('settingsSeasonProgress');
-    };
-
-    const getEpisodeProgressLabel = (): string => {
-        const mode = getPreviewMode();
-        if (mode === 'book') return t('settingsPageProgress');
-        if (mode === 'manga') return t('settingsChapterProgress');
-        return t('settingsEpisodeProgress');
-    };
-
-    const seasonProgressSetting = new Setting(container)
-        .setName(getSeasonProgressLabel())
-        .addToggle(toggle => {
-            seasonProgressToggle = toggle;
-            toggle
-                .setValue(getActiveProgressSettings()?.showAnimeSeasonProgress ?? true)
-                .onChange((value) => {
-                    const settings = getActiveProgressSettings();
-                    if (!settings) return;
-                    settings.showAnimeSeasonProgress = value;
-                    renderBadgesPreview();
-                    refreshVisualsSoon();
-                    void context.plugin.saveSettings();
-                });
-        });
-
-    const episodeProgressSetting = new Setting(container)
-        .setName(getEpisodeProgressLabel())
-        .addToggle(toggle => {
-            episodeProgressToggle = toggle;
-            toggle
-                .setValue(getActiveProgressSettings()?.showAnimeEpisodeProgress ?? true)
-                .onChange((value) => {
-                    const settings = getActiveProgressSettings();
-                    if (!settings) return;
-                    settings.showAnimeEpisodeProgress = value;
-                    renderBadgesPreview();
-                    refreshVisualsSoon();
-                    void context.plugin.saveSettings();
-                });
-        });
-
-    const syncAnimeProgressSettingsVisibility = (): void => {
-        const settings = getActiveProgressSettings();
-        const mode = getPreviewMode();
-        const isProgressPreview = Boolean(settings);
-        const showSeasonControl = isProgressPreview && mode !== 'book';
-        seasonProgressSetting.setName(getSeasonProgressLabel());
-        episodeProgressSetting.setName(getEpisodeProgressLabel());
-        seasonProgressSetting.settingEl.setCssStyles({ display: showSeasonControl ? '' : 'none' });
-        episodeProgressSetting.settingEl.setCssStyles({ display: isProgressPreview ? '' : 'none' });
-        if (!settings) return;
-        seasonProgressToggle?.setValue(settings.showAnimeSeasonProgress);
-        episodeProgressToggle?.setValue(settings.showAnimeEpisodeProgress);
-    };
-
-    const syncCardCustomizationSettingsVisibility = (): void => {
-        const cardStyleSettings = getActiveCardStyleSettings();
-        const bookCoverSettings = getActiveBookCoverSettings();
-        cardStyleSetting.settingEl.setCssStyles({ display: cardStyleSettings ? '' : 'none' });
-        bookCoverEffectSetting.settingEl.setCssStyles({ display: bookCoverSettings ? '' : 'none' });
-        syncingControls = true;
-        if (cardStyleSettings) cardStyleDropdown?.setValue(cardStyleSettings.cardStyle ?? 'hover');
-        if (bookCoverSettings) bookCoverEffectToggle?.setValue(bookCoverSettings.bookCoverEffect);
-        completionDateFormatDropdown?.setValue(getActiveCompletionDateFormat());
-        syncingControls = false;
-    };
-
-    const syncPreviewLinkedControls = (): void => {
-        syncAnimeProgressSettingsVisibility();
-        syncCardCustomizationSettingsVisibility();
-        syncBadgeOptionControls();
-    };
-
-    container.addEventListener('lorebase-preview-mode-change', syncPreviewLinkedControls);
-    container.addEventListener('lorebase-preview-orientation-change', syncPreviewLinkedControls);
-    container.addEventListener('lorebase-preview-state-change', syncPreviewLinkedControls);
-    syncPreviewLinkedControls();
 }

@@ -1,13 +1,14 @@
 import type { TemplateFieldDef } from './types';
 
-export const ICON_GENERAL = String.fromCodePoint(0x2699);
-export const ICON_CARD_CUSTOMIZATION = String.fromCodePoint(0x1F6E0);
-export const ICON_MEDIA = String.fromCodePoint(0x1F5C2);
-export const ICON_INTEGRATIONS = String.fromCodePoint(0x1F50C);
+export const ICON_GENERAL = 'lucide:settings';
+export const ICON_CARD_CUSTOMIZATION = 'lucide:panels-top-left';
+export const ICON_MEDIA = 'lucide:library';
+export const ICON_INTEGRATIONS = 'lucide:plug';
 export const LABEL_RU = '\u0420\u0443\u0441\u0441\u043a\u0438\u0439';
 export const LABEL_UK = '\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430';
 
 export const GAME_TEMPLATE_FIELDS: TemplateFieldDef[] = [
+    { key: 'workType', label: 'templateFieldWorkType' },
     { key: 'type', label: 'templateFieldType' },
     { key: 'name', label: 'templateFieldName' },
     { key: 'poster', label: 'templateFieldPoster' },
@@ -37,13 +38,18 @@ export const GAME_TEMPLATE_FIELDS_HLTB: TemplateFieldDef[] = [
 ];
 
 export const ANIME_TEMPLATE_FIELDS: TemplateFieldDef[] = [
+    { key: 'countryOfOrigin', label: 'templateFieldCountryOfOrigin' },
+    { key: 'adult', label: 'filterAdult' },
     { key: 'type', label: 'templateFieldType' },
     { key: 'name', label: 'templateFieldName' },
+    { key: 'alternativeTitles', label: 'templateFieldAlternativeTitles' },
     { key: 'image', label: 'templateFieldImage' },
     { key: 'imageHorizontal', label: 'templateFieldImageHorizontal' },
     { key: 'plot', label: 'templateFieldPlot' },
+    { key: 'genres', label: 'templateFieldGenres' },
     { key: 'tags', label: 'templateFieldTags' },
     { key: 'year', label: 'templateFieldYear' },
+    { key: 'released', label: 'templateFieldReleased' },
     { key: 'studios', label: 'templateFieldStudios' },
     { key: 'format', label: 'templateFieldFormat' },
     { key: 'animeParts', label: 'templateFieldAnimeParts' },
@@ -58,6 +64,7 @@ export const ANIME_TEMPLATE_FIELDS: TemplateFieldDef[] = [
 ];
 
 export const MOVIE_TEMPLATE_FIELDS: TemplateFieldDef[] = [
+    { key: 'workType', label: 'templateFieldWorkType' },
     { key: 'type', label: 'templateFieldType' },
     { key: 'name', label: 'templateFieldName' },
     { key: 'poster', label: 'templateFieldPoster' },
@@ -81,6 +88,7 @@ export const MOVIE_TEMPLATE_FIELDS: TemplateFieldDef[] = [
 ];
 
 export const SERIES_TEMPLATE_FIELDS: TemplateFieldDef[] = [
+    { key: 'workType', label: 'templateFieldWorkType' },
     { key: 'type', label: 'templateFieldType' },
     { key: 'name', label: 'templateFieldName' },
     { key: 'poster', label: 'templateFieldPoster' },
@@ -134,7 +142,9 @@ export const BOOK_TEMPLATE_FIELDS: TemplateFieldDef[] = [
 
 export const MANGA_TEMPLATE_FIELDS: TemplateFieldDef[] = [
     { key: 'type', label: 'templateFieldType' },
+    { key: 'workType', label: 'templateFieldWorkType' },
     { key: 'name', label: 'templateFieldName' },
+    { key: 'alternativeTitles', label: 'templateFieldAlternativeTitles' },
     { key: 'poster', label: 'templateFieldPoster' },
     { key: 'posterHorizontal', label: 'templateFieldPosterHorizontal' },
     { key: 'plot', label: 'templateFieldPlot' },
@@ -143,6 +153,7 @@ export const MANGA_TEMPLATE_FIELDS: TemplateFieldDef[] = [
     { key: 'genres', label: 'templateFieldGenres' },
     { key: 'tags', label: 'templateFieldTags' },
     { key: 'year', label: 'templateFieldYear' },
+    { key: 'released', label: 'templateFieldReleased' },
     { key: 'chapterCurrent', label: 'templateFieldChapterCurrent' },
     { key: 'chapterTotal', label: 'templateFieldChapterTotal' },
     { key: 'volumeCurrent', label: 'templateFieldVolumeCurrent' },

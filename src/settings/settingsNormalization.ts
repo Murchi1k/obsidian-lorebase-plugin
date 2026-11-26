@@ -44,6 +44,17 @@ export function normalizeDescriptionLines(value: unknown, fallback: number): num
     return Math.max(1, Math.min(70, Math.round(value)));
 }
 
+export function migrateUpdatedEditorSetting(settings: Record<string, unknown>): boolean {
+    const legacyKeys = ['compactGameEditor', 'compactAnimeEditor', 'compactVideoEditor', 'compactReadingEditor'];
+    if (!legacyKeys.some(key => Object.prototype.hasOwnProperty.call(settings, key))) return false;
+
+    if (typeof settings.updatedEditor !== 'boolean') {
+        settings.updatedEditor = legacyKeys.some(key => settings[key] === true);
+    }
+    for (const key of legacyKeys) delete settings[key];
+    return true;
+}
+
 export function normalizeTagPresets(raw: unknown): TagPreset[] {
     if (!Array.isArray(raw)) {
         return DEFAULT_SETTINGS.tagPresets.games.map((preset) => ({ ...preset }));
@@ -120,6 +131,20 @@ export function migrateLegacyJikanMangaSettings(
     return true;
 }
 
+/** Move search preferences, never rewrite note IDs across catalog namespaces. */
+export function migrateKitsuProviderSettings(settings: LorebaseSettings, saved: LorebaseSettings['integrations'] | undefined): boolean {
+    const integrations = settings.integrations;
+    if (!integrations) return false;
+    let changed = false;
+    if (saved?.providers.jikan && !saved.providers.kitsu) {
+        integrations.providers.kitsu = { enabled: saved.providers.jikan.enabled };
+        changed = true;
+    }
+    if (integrations.media.anime.provider === 'jikan') { integrations.media.anime.provider = 'kitsu'; changed = true; }
+    if (integrations.providers.jikan.enabled) { integrations.providers.jikan.enabled = false; changed = true; }
+    return changed;
+}
+
 function normalizeNoteImportMappings(
     raw: unknown,
     defaults: NoteImportFieldMapping[]
@@ -170,6 +195,7 @@ function readMediaTypeKey(value: unknown): NoteImportSettings['targetMedia'] | u
         || value === 'series'
         || value === 'books'
         || value === 'manga'
+        || value === 'music'
     ) {
         return value;
     }
@@ -226,6 +252,8 @@ export function parseBadges(
                 enabled: readBoolean(rawBadges.status) ?? defaults.status.enabled,
                 position: sharedPosition,
                 iconOnly: defaults.status.iconOnly,
+                showReleaseCountdown: defaults.status.showReleaseCountdown ?? true,
+                alwaysShowCompletionDate: defaults.status.alwaysShowCompletionDate ?? false,
                 x: statusCoords.x,
                 y: statusCoords.y,
             },
@@ -243,12 +271,18 @@ export function parseBadges(
                 x: favoriteCoords.x,
                 y: favoriteCoords.y,
             },
+            workType: Object.assign({}, defaults.workType),
+            communityRating: { ...defaults.communityRating, position: 'top-left', x: 8, y: 10 },
         };
     }
 
     const rawStatus = readRecord(rawBadges.status);
     const rawRating = readRecord(rawBadges.rating);
+    const rawCommunity = readRecord(rawBadges.communityRating);
+    const legacyCommunityEnabled = readBoolean(rawRating?.showCommunityRating);
+    if (rawRating) delete rawRating.showCommunityRating;
     const rawFavorite = readRecord(rawBadges.favorite);
+    const rawWorkType = readRecord(rawBadges.workType);
     const rawRatingMode = typeof rawRating?.mode === 'string' ? rawRating.mode : undefined;
     const normalizedRatingMode = rawRatingMode === 'both' ? 'star' : rawRatingMode;
     return {
@@ -257,6 +291,8 @@ export function parseBadges(
             defaults.status,
             rawStatus ?? {},
             {
+                showReleaseCountdown: readBoolean(rawStatus?.showReleaseCountdown) ?? defaults.status.showReleaseCountdown ?? true,
+                alwaysShowCompletionDate: readBoolean(rawStatus?.alwaysShowCompletionDate) ?? defaults.status.alwaysShowCompletionDate ?? false,
                 iconOnly: readBoolean(rawStatus?.completedIconOnly)
                     ?? readBoolean(rawStatus?.iconOnly)
                     ?? defaults.status.iconOnly,
@@ -266,6 +302,16 @@ export function parseBadges(
             mode: normalizedRatingMode ?? defaults.rating.mode,
         }),
         favorite: Object.assign({}, defaults.favorite, rawFavorite ?? {}),
+        workType: Object.assign({}, defaults.workType, rawWorkType ?? {}),
+        communityRating: {
+            ...defaults.communityRating,
+            icon: rawCommunity?.icon === 'users' || rawCommunity?.icon === 'star' || rawCommunity?.icon === 'tomato'
+                ? rawCommunity.icon : defaults.communityRating.icon,
+            enabled: readBoolean(rawCommunity?.enabled) ?? legacyCommunityEnabled ?? defaults.communityRating.enabled,
+            position: 'top-left',
+            x: 8,
+            y: 10,
+        },
     };
 }
 
@@ -299,6 +345,8 @@ function cloneBadges(badges: LorebaseSettings['badges']): LorebaseSettings['badg
         status: Object.assign({}, badges.status),
         rating: Object.assign({}, badges.rating),
         favorite: Object.assign({}, badges.favorite),
+        workType: Object.assign({}, badges.workType),
+        communityRating: { ...badges.communityRating, position: 'top-left', x: 8, y: 10 },
     };
 }
 

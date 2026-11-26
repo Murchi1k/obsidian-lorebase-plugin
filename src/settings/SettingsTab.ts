@@ -1,13 +1,19 @@
+
 /**
  * LOREBASE - Settings Tab
  * Plugin settings interface integrated with Obsidian Settings
  */
 
-import { App, PluginSettingTab, Setting, setIcon } from 'obsidian';
+import { App, PluginSettingTab, Setting, setIcon, getIconIds } from 'obsidian';
 import { t } from '../localization';
 import type LorebasePlugin from '../main';
 import type { SettingsLayoutMode } from '../types';
 import { renderAboutSection } from './sections/about';
+import { DEFAULT_COMMUNITY_BUTTONS } from '../services/CommunityLinksService';
+import type { CommunityLink } from '../types';
+import { resolveLucideIcon } from '../utils/lucideIcon';
+import { highlightReleaseTarget } from '../releases/navigation';
+import { renderReleaseLauncher } from '../releases/launcher';
 import {
     ICON_CARD_CUSTOMIZATION,
     ICON_GENERAL,
@@ -15,16 +21,19 @@ import {
     ICON_MEDIA,
 } from './sections/constants';
 import { renderCardCustomizationSettings, renderGeneralSettings } from './sections/general';
+import { requestCardSettings } from './sections/cardCustomization';
+import { requestSyncProvider } from './sections/sync';
 import { getImportSectionDesc, getImportSectionLabel, renderImportSection } from './sections/import';
-import { renderIntegrationsSection } from './sections/integrations';
+import { renderIntegrationsSection, renderTemplatesSection, requestIntegrationsPane, requestProviderSettings } from './sections/integrations';
 import { renderMediaSettings } from './sections/library';
-import type { CollapsibleGroupElements, MediaTabScope, MediaTypeKey, SettingsSectionContext } from './sections/types';
+import type { CollapsibleGroupElements, MediaTabValues, SettingsSectionContext } from './sections/types';
 
-type SettingsSectionId =
+export type SettingsSectionId =
     | 'general'
     | 'customization'
     | 'media'
     | 'integrations'
+    | 'templates'
     | 'import'
     | 'about';
 
@@ -38,12 +47,13 @@ interface SettingsSectionDefinition {
 
 export class LorebaseSettingTab extends PluginSettingTab {
     plugin: LorebasePlugin;
-    private activeMediaTabs: Record<MediaTabScope, MediaTypeKey> = {
+    private activeMediaTabs: MediaTabValues = {
         statusLabels: 'games',
-        mediaSettings: 'games',
         integrationTemplates: 'games',
     };
     private activeSettingsSection: SettingsSectionId = 'general';
+    private onMangaWorkTypesChanged?: () => void;
+    private renderLifetime = new AbortController();
     private openAccordionSections = new Set<SettingsSectionId>();
 
     constructor(app: App, plugin: LorebasePlugin) {
@@ -51,11 +61,65 @@ export class LorebaseSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
+    openSection(section: SettingsSectionId, selector?: string): void {
+        if (section === 'integrations' && selector === '.lorebase-provider-picker') {
+            requestIntegrationsPane(this.plugin, 'providers');
+        }
+        this.activeSettingsSection = section;
+        this.openAccordionSections.add(section);
+        this.display();
+        requestAnimationFrame(() => {
+            const target = this.containerEl.querySelector<HTMLElement>(selector
+                ?? `#lorebase-settings-panel-${section}, .lorebase-settings-accordion-section.is-${section}`);
+            if (!target) return;
+            let parent: HTMLElement | null = target;
+            while (parent && parent !== this.containerEl) {
+                if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true;
+                parent = parent.parentElement;
+            }
+            target.scrollIntoView({ block: 'start' });
+            highlightReleaseTarget(target);
+        });
+    }
+
+    openMangaWorkTypes(onChanged?: () => void, media: 'games' | 'movies' | 'series' | 'manga' | 'anime' = 'manga'): void {
+        this.onMangaWorkTypesChanged = onChanged;
+        requestCardSettings(this.plugin, media, 'types');
+        this.openSection('customization', '.lorebase-media-work-types-settings');
+    }
+
+    openFeatureSettings(target: 'ratings' | 'anilist' | 'bookshelf' | 'alternativeTitles' | 'tmdb' | 'music' | 'animeOrigin' | 'parts'): void {
+        if (target === 'ratings') this.openSection('general', '.lorebase-rating-scale-settings');
+        else if (target === 'animeOrigin' || target === 'parts') {
+            requestCardSettings(this.plugin, 'anime', target === 'parts' ? 'progress' : 'types');
+            this.openSection('customization', target === 'parts'
+                ? '.lorebase-part-poster-setting'
+                : '.lorebase-media-work-types-settings');
+        } else if (target === 'anilist') {
+            requestIntegrationsPane(this.plugin, 'sync');
+            requestSyncProvider(this.plugin, 'anilist');
+            this.openSection('integrations', '.lorebase-sync-settings-content');
+        } else if (target === 'music') {
+            this.openSection('media', '.lorebase-media-library-row.is-music');
+        } else if (target === 'bookshelf') {
+            requestCardSettings(this.plugin, 'books');
+            this.openSection('customization', '.lorebase-bookshelf-settings');
+        } else if (target === 'tmdb') {
+            requestProviderSettings(this.plugin, 'tmdb');
+            this.openSection('integrations', '.lorebase-tmdb-language-setting');
+        } else {
+            requestProviderSettings(this.plugin, 'anilist');
+            this.openSection('integrations', '.lorebase-alternative-title-languages');
+        }
+    }
+
     getSettingDefinitions(): [] {
         return [];
     }
 
     display(): void {
+        this.renderLifetime.abort();
+        this.renderLifetime = new AbortController();
         const scrollState = this.captureScrollState();
         const { containerEl } = this;
         containerEl.empty();
@@ -66,7 +130,9 @@ export class LorebaseSettingTab extends PluginSettingTab {
             .setName(t('settingsTitle'))
             .setHeading()
             .settingEl.addClass('lorebase-settings-main-heading');
-        this.renderLayoutModeToggle(topbar);
+        const actions = topbar.createDiv({ cls: 'lorebase-settings-topbar-actions' });
+        renderReleaseLauncher(actions, this.plugin.settings.language, this.plugin.manifest.version, () => this.plugin.showWhatsNew());
+        this.renderLayoutModeToggle(actions);
         this.renderSupportBlock(containerEl);
 
         const layoutMode = this.plugin.settings.settingsLayoutMode;
@@ -90,6 +156,9 @@ export class LorebaseSettingTab extends PluginSettingTab {
     }
 
     hide(): void {
+        this.renderLifetime.abort();
+        this.onMangaWorkTypesChanged?.();
+        this.onMangaWorkTypesChanged = undefined;
         this.openAccordionSections.clear();
         void this.plugin.saveSettings();
         super.hide();
@@ -101,8 +170,9 @@ export class LorebaseSettingTab extends PluginSettingTab {
             { id: 'customization', label: t('settingsBadges'), description: t('settingsSectionCustomizationDesc'), icon: ICON_CARD_CUSTOMIZATION, render: (container) => renderCardCustomizationSettings(context, container) },
             { id: 'media', label: t('settingsMedia'), description: t('settingsSectionMediaDesc'), icon: ICON_MEDIA, render: (container) => renderMediaSettings(context, container) },
             { id: 'integrations', label: t('settingsIntegrations'), description: t('settingsSectionIntegrationsDesc'), icon: ICON_INTEGRATIONS, render: (container) => renderIntegrationsSection(context, container) },
-            { id: 'import', label: getImportSectionLabel(this.plugin.settings.language), description: getImportSectionDesc(this.plugin.settings.language), icon: String.fromCodePoint(0x1F4E6), render: (container) => renderImportSection(context, container) },
-            { id: 'about', label: t('settingsAbout'), description: t('settingsSectionAboutDesc'), icon: String.fromCodePoint(0x1F9E9), render: (container) => renderAboutSection(context, container) },
+            { id: 'templates', label: t('settingsIntegrationsTemplates'), description: t('settingsTemplatesDesc'), icon: 'lucide:file-code', render: (container) => renderTemplatesSection(context, container) },
+            { id: 'import', label: getImportSectionLabel(this.plugin.settings.language), description: getImportSectionDesc(this.plugin.settings.language), icon: 'lucide:folder-input', render: (container) => renderImportSection(context, container) },
+            { id: 'about', label: t('settingsAbout'), description: t('settingsSectionAboutDesc'), icon: 'lucide:info', render: (container) => renderAboutSection(context, container) },
         ];
     }
 
@@ -134,7 +204,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
             button.addEventListener('click', () => {
                 if (this.plugin.settings.settingsLayoutMode === option.mode) return;
                 this.plugin.settings.settingsLayoutMode = option.mode;
-                if (option.mode === 'accordion') this.openAccordionSections.clear();
+                if (option.mode === 'accordion') this.openAccordionSections = new Set([this.activeSettingsSection]);
                 void this.plugin.saveSettings();
                 this.display();
             });
@@ -159,6 +229,7 @@ export class LorebaseSettingTab extends PluginSettingTab {
         const panels = container.createDiv({ cls: 'lorebase-settings-section-panels' });
         const buttons = new Map<SettingsSectionId, HTMLButtonElement>();
         const panelMap = new Map<SettingsSectionId, HTMLElement>();
+        const renderedPanels = new Set<SettingsSectionId>();
 
         for (const section of sections) {
             const panelId = `lorebase-settings-panel-${section.id}`;
@@ -167,16 +238,17 @@ export class LorebaseSettingTab extends PluginSettingTab {
                 attr: {
                     id: panelId,
                     role: 'tabpanel',
+                    'aria-labelledby': panelId + '-tab',
                 },
             });
             panelMap.set(section.id, panel);
-            section.render(panel);
 
             const button = tabs.createEl('button', {
                 cls: 'lorebase-settings-section-tab',
                 attr: {
                     type: 'button',
                     role: 'tab',
+                    id: panelId + '-tab',
                     'aria-controls': panelId,
                 },
             });
@@ -201,9 +273,15 @@ export class LorebaseSettingTab extends PluginSettingTab {
             });
             panelMap.forEach((panel, key) => {
                 const active = key === id;
+                if (!active && !panel.hidden) panel.dispatchEvent(new Event('lorebase-settings-section-hide'));
                 panel.toggleClass('is-active', active);
-                panel.toggleAttribute('hidden', !active);
+                panel.hidden = !active;
             });
+            const panel = panelMap.get(id);
+            if (panel && !renderedPanels.has(id)) {
+                renderedPanels.add(id);
+                sections.find(section => section.id === id)?.render(panel);
+            }
             if (resetScroll) {
                 const scrollHost = this.findScrollHost();
                 scrollHost.scrollTop = 0;
@@ -261,10 +339,23 @@ export class LorebaseSettingTab extends PluginSettingTab {
             setIcon(caret, 'chevron-right');
 
             const body = details.createDiv({ cls: 'lorebase-settings-accordion-body' });
-            section.render(body);
+            let rendered = false;
+            const render = (): void => {
+                if (rendered) return;
+                rendered = true;
+                section.render(body);
+            };
+            if (details.open) render();
             details.addEventListener('toggle', () => {
-                if (details.open) this.openAccordionSections.add(section.id);
-                else this.openAccordionSections.delete(section.id);
+                if (!details.isConnected) return;
+                if (details.open) {
+                    if (!this.openAccordionSections.has(section.id)) this.activeSettingsSection = section.id;
+                    this.openAccordionSections.add(section.id);
+                    render();
+                } else {
+                    this.openAccordionSections.delete(section.id);
+                    body.dispatchEvent(new Event('lorebase-settings-section-hide'));
+                }
             });
         }
     }
@@ -272,13 +363,16 @@ export class LorebaseSettingTab extends PluginSettingTab {
     private getSectionContext(): SettingsSectionContext {
         return {
             app: this.app,
+            signal: this.renderLifetime.signal,
             plugin: this.plugin,
+            onMangaWorkTypesChanged: () => this.onMangaWorkTypesChanged?.(),
             display: () => this.display(),
             createSectionHeader: (container, icon, text) => this.createSectionHeader(container, icon, text),
             createCollapsibleGroup: (container, title, description, open) => this.createCollapsibleGroup(container, title, description, open),
             getActiveMediaTab: (scope) => this.activeMediaTabs[scope],
             setActiveMediaTab: (scope, media) => {
-                this.activeMediaTabs[scope] = media;
+                if (scope === 'integrationTemplates') this.activeMediaTabs[scope] = media;
+                else if (media !== 'music') this.activeMediaTabs[scope] = media;
             },
             applyAccentColor: (color) => this.applyAccentColor(color),
         };
@@ -289,47 +383,51 @@ export class LorebaseSettingTab extends PluginSettingTab {
     }
 
     private renderSupportBlock(container: HTMLElement): void {
-        const block = container.createDiv({ cls: 'lorebase-settings-support' });
+        const block = container.createDiv({ cls: 'lorebase-settings-support lorebase-settings-quick-links', attr: { role: 'group', 'aria-label': t('settingsSupportTitle') } });
         const actions = block.createDiv({ cls: 'lorebase-settings-support-actions' });
-        const links = [
-            {
-                label: 'Ko-fi',
-                brand: 'kofi',
-                url: 'https://ko-fi.com/murch1k',
-            },
-            {
-                label: 'Discord',
-                brand: 'discord',
-                url: 'https://discord.gg/eTcw8v8c4',
-            },
-            {
-                label: 'Patreon',
-                brand: 'patreon',
-                url: 'https://www.patreon.com/c/Murch1k',
-            },
-        ];
-
-        for (const link of links) {
-            const button = actions.createEl('button', {
-                cls: `lorebase-settings-support-button is-${link.brand}`,
-                attr: {
-                    type: 'button',
-                    title: link.url,
-                    'aria-label': link.label,
-                },
-            });
-            const icon = button.createSpan({ cls: 'lorebase-settings-support-icon' });
-            icon.appendChild(this.createSupportIcon(link.brand));
-            button.createSpan({ text: link.label });
-            button.addEventListener('click', (event) => {
-                event.preventDefault();
-                window.open(link.url, '_blank', 'noopener');
-            });
-        }
-
+        const service = this.plugin.getCommunityLinksService?.();
         const text = block.createDiv({ cls: 'lorebase-settings-support-text' });
         text.createDiv({ cls: 'lorebase-settings-support-title', text: t('settingsSupportTitle') });
-        text.createDiv({ cls: 'lorebase-settings-support-desc', text: t('settingsSupportDesc') });
+        let rendered = '';
+        const render = (links: readonly CommunityLink[]): void => {
+            const next = JSON.stringify(links);
+            if (next === rendered) return;
+            rendered = next;
+            const focusedId = actions.contains(actions.ownerDocument.activeElement)
+                ? (actions.ownerDocument.activeElement as HTMLElement).dataset.linkId : undefined;
+            actions.empty();
+            block.hidden = links.length === 0;
+            for (const link of links) {
+                const brand = link.icon.startsWith('brand:') ? link.icon.slice(6) : '';
+                const button = actions.createEl('a', {
+                    cls: `lorebase-settings-support-button${brand ? ` is-${brand}` : ''}`,
+                    attr: { href: link.url, target: '_blank', rel: 'noopener noreferrer',
+                        title: `${link.label}\n${link.url}`, 'aria-label': `${link.label} — ${link.url}` },
+                });
+                button.dataset.linkId = link.id;
+                const icon = button.createSpan({ cls: 'lorebase-settings-support-icon', attr: { 'aria-hidden': 'true' } });
+                if (brand) icon.appendChild(this.createSupportIcon(brand));
+                else if (link.icon.startsWith('emoji:')) icon.setText(link.icon.slice(6));
+                else if (link.icon.startsWith('https://')) {
+                    const image = icon.createEl('img', { attr: { src: link.icon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' } });
+                    image.addEventListener('error', () => { icon.empty(); setIcon(icon, 'link'); }, { once: true });
+                } else {
+                    setIcon(icon, resolveLucideIcon(link.icon.replace(/^lucide:/, ''), getIconIds()) ?? 'link');
+                }
+                button.createSpan({ text: link.label });
+                button.addEventListener('click', event => {
+                    event.preventDefault();
+                    const current = service ? service.current.find(item => item.id === link.id) : link;
+                    if (current) window.open(current.url, '_blank', 'noopener,noreferrer');
+                });
+                if (link.id === focusedId) button.focus();
+            }
+        };
+        render(service?.current ?? DEFAULT_COMMUNITY_BUTTONS);
+        const signal = this.renderLifetime.signal;
+        void service?.refresh().then(links => {
+            if (!signal.aborted && actions.isConnected) render(links);
+        });
     }
 
     private createSectionHeader(container: HTMLElement, icon: string, text: string): void {

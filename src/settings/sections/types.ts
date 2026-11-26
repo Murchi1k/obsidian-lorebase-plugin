@@ -3,7 +3,11 @@ import type { TranslationKey } from '../../localization';
 import type LorebasePlugin from '../../main';
 
 export type MediaTypeKey = 'games' | 'anime' | 'movies' | 'series' | 'books' | 'manga';
-export type MediaTabScope = 'statusLabels' | 'mediaSettings' | 'integrationTemplates';
+export interface MediaTabValues {
+    statusLabels: MediaTypeKey;
+    integrationTemplates: MediaTypeKey | 'music';
+}
+export type MediaTabScope = keyof MediaTabValues;
 
 export interface TemplateFieldDef {
     key: string;
@@ -17,8 +21,10 @@ export interface CollapsibleGroupElements {
 
 export interface SettingsSectionContext {
     app: App;
+    signal?: AbortSignal;
     plugin: LorebasePlugin;
     display: () => void;
+    onMangaWorkTypesChanged?: () => void;
     createSectionHeader: (container: HTMLElement, icon: string, text: string) => void;
     createCollapsibleGroup: (
         container: HTMLElement,
@@ -26,7 +32,7 @@ export interface SettingsSectionContext {
         description?: string,
         open?: boolean
     ) => CollapsibleGroupElements;
-    getActiveMediaTab: (scope: MediaTabScope) => MediaTypeKey;
-    setActiveMediaTab: (scope: MediaTabScope, media: MediaTypeKey) => void;
+    getActiveMediaTab: <Scope extends MediaTabScope>(scope: Scope) => MediaTabValues[Scope];
+    setActiveMediaTab: (scope: MediaTabScope, media: MediaTypeKey | 'music') => void;
     applyAccentColor: (color: string) => void;
 }

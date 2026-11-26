@@ -1,284 +1,198 @@
-import { Setting } from 'obsidian';
+import { mt } from '../../localization/music';
+import { Notice, setIcon } from 'obsidian';
 import { DEFAULT_SETTINGS } from '../../constants';
-import { t } from '../../localization';
-import type { CardSize } from '../../types';
+import { i18n, t } from '../../localization';
+import { MangaWorkTypesEditor } from '../../components/MangaWorkTypesEditor';
+import { AnimeCountriesEditor } from '../../components/AnimeCountriesEditor';
 import { FolderSuggest } from '../../components/FolderSuggest';
 import { ICON_MEDIA } from './constants';
-import { addLorebaseDropdown } from './customDropdown';
 import { renderLocalImageSettings } from './experiment';
-import { createMediaTabs } from './mediaTabs';
+import { renderMediaSwitch } from './mediaSwitch';
 import type { MediaTypeKey, SettingsSectionContext } from './types';
+import { MEDIA_SETTINGS_ICONS } from '../../mediaPresentation';
 
-const MEDIA_SETTINGS_OPTIONS: Array<{
-    key: MediaTypeKey;
+export type LibraryMediaKey = MediaTypeKey | 'music';
+export const MEDIA_SETTINGS_OPTIONS: Array<{
+    key: LibraryMediaKey;
     label: () => string;
     icon: string;
 }> = [
-    { key: 'games', label: () => t('settingsGames'), icon: 'gamepad-2' },
-    { key: 'anime', label: () => t('settingsAnime'), icon: 'clapperboard' },
-    { key: 'movies', label: () => t('settingsMovies'), icon: 'film' },
-    { key: 'series', label: () => t('settingsSeries'), icon: 'tv' },
-    { key: 'books', label: () => t('settingsBooks'), icon: 'book-open' },
-    { key: 'manga', label: () => t('settingsManga'), icon: 'book-open-text' },
+    { key: 'games', label: () => t('settingsGames'), icon: MEDIA_SETTINGS_ICONS.games },
+    { key: 'anime', label: () => t('settingsAnime'), icon: MEDIA_SETTINGS_ICONS.anime },
+    { key: 'movies', label: () => t('settingsMovies'), icon: MEDIA_SETTINGS_ICONS.movies },
+    { key: 'series', label: () => t('settingsSeries'), icon: MEDIA_SETTINGS_ICONS.series },
+    { key: 'books', label: () => t('settingsBooks'), icon: MEDIA_SETTINGS_ICONS.books },
+    { key: 'manga', label: () => t('settingsManga'), icon: MEDIA_SETTINGS_ICONS.manga },
+    { key: 'music', label: () => mt('music'), icon: 'music' },
 ];
 
 export function renderMediaSettings(context: SettingsSectionContext, container: HTMLElement): void {
     context.createSectionHeader(container, ICON_MEDIA, t('settingsMedia'));
 
-    const root = container.createDiv({ cls: 'lorebase-media-settings' });
+    const { plugin } = context;
+    const root = container.createDiv({ cls: 'lorebase-media-settings lorebase-media-directory' });
     root.createDiv({ cls: 'lorebase-settings-section-description', text: t('settingsMediaDesc') });
-    const tabsHost = root.createDiv({ cls: 'lorebase-media-settings-tabs' });
-    const panels = root.createDiv({ cls: 'lorebase-media-settings-panels' });
-    const panelMap = new Map<MediaTypeKey, HTMLElement>();
+    const directory = root.createEl('section', { cls: 'lorebase-media-card' });
+    const header = directory.createDiv({ cls: 'lorebase-media-card-header' });
+    const heading = header.createEl('h3');
+    setIcon(heading.createSpan({ attr: { 'aria-hidden': 'true' } }), 'library');
+    heading.createSpan({ text: t('settingsMediaLibraries') });
+    const counter = header.createSpan({ cls: 'lorebase-media-count', attr: { role: 'status' } });
+    const list = directory.createDiv({ cls: 'lorebase-media-library-list' });
 
-    const selectMedia = (media: MediaTypeKey): void => {
-        context.setActiveMediaTab('mediaSettings', media);
-        panelMap.forEach((panel, key) => {
-            const active = key === media;
-            panel.toggleClass('is-active', active);
-            panel.toggleAttribute('hidden', !active);
-        });
+    const enabled = plugin.settings.enabledMedia;
+    const updateCount = (): void => {
+        const count = MEDIA_SETTINGS_OPTIONS.filter(option => enabled[option.key]).length;
+        counter.setText(t('settingsMediaShown').replace('{count}', String(count)).replace('{total}', String(MEDIA_SETTINGS_OPTIONS.length)));
     };
-
-    for (const option of MEDIA_SETTINGS_OPTIONS) {
-        const panel = panels.createDiv({ cls: `lorebase-media-settings-panel is-${option.key}` });
-        panel.setAttribute('role', 'tabpanel');
-        panelMap.set(option.key, panel);
-        renderLibrarySettingsPanel(context, panel, option.key);
+    const save = async (): Promise<void> => {
+        await plugin.saveSettings();
+        plugin.refreshViews();
+    };
+    for (const { key, label, icon } of MEDIA_SETTINGS_OPTIONS) {
+        const name = label();
+        const row = list.createDiv({ cls: 'lorebase-media-library-row is-' + key });
+        row.toggleClass('is-hidden-library', !enabled[key]);
+        const top = row.createDiv({ cls: 'lorebase-media-library-top' });
+        const identity = top.createDiv({ cls: 'lorebase-media-library-identity' });
+        setIcon(identity.createSpan({ cls: 'lorebase-media-library-icon', attr: { 'aria-hidden': 'true' } }), icon);
+        identity.createSpan({ cls: 'lorebase-media-library-name', text: name });
+        const visibility = top.createDiv({ cls: 'lorebase-media-library-visibility' });
+        renderMediaSwitch(visibility, name + ' · ' + t('settingsMediaVisibility'), enabled[key], value => {
+            if (!value && !MEDIA_SETTINGS_OPTIONS.some(option => option.key !== key && enabled[option.key])) {
+                new Notice(t('settingsMediaKeepOne'));
+                return false;
+            }
+            enabled[key] = value;
+            row.toggleClass('is-hidden-library', !value);
+            updateCount();
+            void save();
+            return true;
+        });
+        renderLibraryFolder(context, row, key, name, save);
     }
+    updateCount();
+    directory.createDiv({ cls: 'lorebase-media-folder-help', text: t('settingsMediaFolderHelp') });
 
-    createMediaTabs(
-        tabsHost,
-        MEDIA_SETTINGS_OPTIONS.map((option) => ({
-            value: option.key,
-            label: option.label(),
-            icon: option.icon,
-        })),
-        context.getActiveMediaTab('mediaSettings'),
-        t('settingsMediaTabs'),
-        selectMedia
-    );
-    selectMedia(context.getActiveMediaTab('mediaSettings'));
-    renderLocalImageSettings(context, root);
+    const extras = root.createDiv({ cls: 'lorebase-media-extras' });
+    const adult = extras.createEl('section', { cls: 'lorebase-media-card lorebase-media-adult' });
+    const adultHeader = adult.createDiv({ cls: 'lorebase-media-card-header' }).createEl('h3');
+    setIcon(adultHeader.createSpan({ attr: { 'aria-hidden': 'true' } }), 'shield');
+    adultHeader.createSpan({ text: t('settingsShowAdult') });
+    adult.createDiv({ cls: 'lorebase-media-card-description', text: t('settingsDescShowAdult') });
+    const filters = adult.createDiv({ cls: 'lorebase-media-adult-filters' });
+    for (const [key, name] of [['games', t('settingsGames')], ['anime', t('settingsAnime')], ['manga', t('settingsManga')]] as const) {
+        const row = filters.createDiv({ cls: 'lorebase-media-adult-option' });
+        row.createSpan({ text: name });
+        renderMediaSwitch(row, name + ' · ' + t('settingsShowAdult'), plugin.settings[key].showAdultInAll, value => {
+            plugin.settings[key].showAdultInAll = value;
+            void save();
+            return true;
+        });
+    }
+    renderLocalImageSettings(context, extras);
 }
 
-function renderLibrarySettingsPanel(
-    context: SettingsSectionContext,
-    container: HTMLElement,
-    key: MediaTypeKey
+function renderLibraryFolder(
+    context: SettingsSectionContext, row: HTMLElement, key: LibraryMediaKey, name: string, save: () => Promise<void>
 ): void {
     const settings = context.plugin.settings[key];
-    const mediaToggleLabel = key === 'games'
-        ? t('settingsMediaGames')
-        : key === 'anime'
-            ? t('settingsMediaAnime')
-            : key === 'movies'
-                ? t('settingsMediaMovies')
-                : key === 'series'
-                    ? t('settingsMediaSeries')
-                    : key === 'books'
-                        ? t('settingsMediaBooks')
-                        : t('settingsMediaManga');
-    const mediaToggleValue = context.plugin.settings.enabledMedia[key];
-
-    new Setting(container)
-        .setName(mediaToggleLabel)
-        .addToggle(toggle => {
-            toggle
-                .setValue(mediaToggleValue)
-                .onChange(async (value) => {
-                    const nextEnabled = { ...context.plugin.settings.enabledMedia };
-                    nextEnabled[key] = value;
-
-                    if (!Object.values(nextEnabled).some(Boolean)) {
-                        nextEnabled[key] = true;
-                        toggle.setValue(true);
-                    }
-
-                    context.plugin.settings.enabledMedia = nextEnabled;
-                    await context.plugin.saveSettings();
-                    context.plugin.refreshViews();
-                });
-        });
-
-    const folderSetting = new Setting(container)
-        .setName(t('settingsFolder'))
-        .setDesc(t('settingsDescFolder'));
-    folderSetting.addText(text => {
-        const persistFolderPath = async (value: string): Promise<void> => {
-            context.plugin.settings[key].folderPath = value.trim();
-            await context.plugin.saveSettings();
-            context.plugin.refreshViews();
-        };
-
-        text
-            .setPlaceholder(DEFAULT_SETTINGS[key].folderPath)
-            .setValue(settings.folderPath)
-            .onChange((value) => {
-                void persistFolderPath(value);
-            });
-
-        new FolderSuggest(context.app, text.inputEl, (path) => {
-            void persistFolderPath(path);
-        });
+    const folder = row.createDiv({ cls: 'lorebase-media-library-folder' });
+    const edit = folder.createEl('button', {
+        cls: 'lorebase-media-path',
+        attr: {
+            type: 'button', 'aria-label': t('settingsMediaFolderEdit') + ' · ' + name,
+            'aria-expanded': 'false', 'aria-controls': 'lorebase-media-folder-' + key,
+        },
     });
+    setIcon(edit.createSpan({ cls: 'lorebase-media-path-icon', attr: { 'aria-hidden': 'true' } }), 'folder');
+    const path = edit.createSpan({ cls: 'lorebase-media-path-label' });
+    setIcon(edit.createSpan({ cls: 'lorebase-media-path-edit', attr: { 'aria-hidden': 'true' } }), 'pencil');
+    const updatePath = (): void => {
+        path.setText(settings.folderPath || t('settingsFolder'));
+        edit.title = settings.folderPath || t('settingsMediaFolderEdit');
+    };
+    updatePath();
 
-    new Setting(container)
-        .setName(t('settingsColumns'))
-        .setDesc(t('settingsDescColumns'))
-        .addSlider(slider => {
-            slider
-                .setLimits(3, 8, 1)
-                .setValue(settings.columns)
+    const editor = folder.createEl('form', {
+        cls: 'lorebase-media-path-editor', attr: { id: 'lorebase-media-folder-' + key },
+    });
+    editor.hidden = true;
+    const input = editor.createEl('input', {
+        type: 'text', attr: { placeholder: DEFAULT_SETTINGS[key].folderPath, 'aria-label': t('settingsFolder') + ' · ' + name, spellcheck: 'false' },
+    });
+    const confirm = editor.createEl('button', {
+        cls: 'lorebase-media-path-save',
+        attr: { type: 'submit', 'aria-label': t('settingsMediaFolderSave'), title: t('settingsMediaFolderSave') },
+    });
+    setIcon(confirm, 'check');
+    const cancel = editor.createEl('button', {
+        attr: { type: 'button', 'aria-label': t('deleteCancel'), title: t('deleteCancel') },
+    });
+    setIcon(cancel, 'x');
 
-                .onChange(async (value) => {
-                    context.plugin.settings[key].columns = value;
-                    await context.plugin.saveSettings();
-                    context.plugin.refreshViews();
-                });
-        });
+    const close = (): void => {
+        editor.hidden = true;
+        edit.hidden = false;
+        edit.setAttribute('aria-expanded', 'false');
+        edit.focus();
+        suggestion.close();
+    };
+    const commit = (value: string): void => {
+        if (editor.hidden) return;
+        const next = value.trim();
+        close();
+        if (settings.folderPath === next) return;
+        settings.folderPath = next;
+        updatePath();
+        void save();
+    };
+    const suggestion = new FolderSuggest(context.app, input, commit);
+    edit.addEventListener('click', () => {
+        input.value = settings.folderPath;
+        edit.setAttribute('aria-expanded', 'true');
+        editor.hidden = false;
+        edit.hidden = true;
+        input.focus();
+        input.select();
+    });
+    editor.addEventListener('submit', event => {
+        event.preventDefault();
+        commit(input.value);
+    });
+    editor.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.stopPropagation();
+        close();
+    });
+    cancel.addEventListener('click', close);
+}
 
-    const cardSizeSetting = new Setting(container)
-        .setName(t('settingsCardSize'));
-    addLorebaseDropdown<CardSize>(
-        cardSizeSetting,
-        [
-            { value: 'small', label: t('settingsSizeSmall') },
-            { value: 'medium', label: t('settingsSizeMedium') },
-            { value: 'large', label: t('settingsSizeLarge') },
-        ],
-        settings.cardSize,
-        async (value) => {
-            context.plugin.settings[key].cardSize = value;
-            await context.plugin.saveSettings();
-            context.plugin.refreshViews();
-        }
-    );
+const typeNames = {
+    en: { games: 'Game types', movies: 'Movie types', series: 'Series types', manga: 'Manga types', anime: 'Anime countries' },
+    ru: { games: 'Типы игр', movies: 'Типы фильмов', series: 'Типы сериалов', manga: 'Типы манги', anime: 'Страны аниме' },
+    uk: { games: 'Типи ігор', movies: 'Типи фільмів', series: 'Типи серіалів', manga: 'Типи манґи', anime: 'Країни аніме' },
+    'zh-CN': { games: '游戏类型', movies: '电影类型', series: '剧集类型', manga: '漫画类型', anime: '动漫国家' },
+};
 
-    new Setting(container)
-        .setName(t('settingsCustomCardSize'))
-        .setDesc(t('settingsCustomCardSizeDesc'))
-        .addToggle(toggle => {
-            toggle
-                .setValue(settings.customCardSize)
-                .onChange(async (value) => {
-                    context.plugin.settings[key].customCardSize = value;
-                    await context.plugin.saveSettings();
-                    context.plugin.refreshViews();
-                    context.display();
-                });
-        });
+export function getCardTypeSettingsTitle(media: Exclude<MediaTypeKey, 'books'>): string {
+    return typeNames[i18n.getLanguage()][media];
+}
 
-    if (settings.customCardSize) {
-        new Setting(container)
-            .setName(t('settingsCardMinWidth'))
-            .setDesc(t('settingsCardMinWidthDesc'))
-            .addSlider(slider => {
-                slider
-                    .setLimits(140, 480, 5)
-                    .setValue(settings.customCardMinWidth)
-
-                    .onChange(async (value) => {
-                        context.plugin.settings[key].customCardMinWidth = value;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                    });
-            });
-
-        new Setting(container)
-            .setName(t('settingsCardMinHeight'))
-            .setDesc(t('settingsCardMinHeightDesc'))
-            .addSlider(slider => {
-                slider
-                    .setLimits(180, 900, 5)
-                    .setValue(settings.customCardMinHeight)
-
-                    .onChange(async (value) => {
-                        context.plugin.settings[key].customCardMinHeight = value;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                    });
-            });
-
-        new Setting(container)
-            .setName(t('settingsCardImageRatio'))
-            .setDesc(t('settingsCardImageRatioDesc'))
-            .addSlider(slider => {
-                slider
-                    .setLimits(0.4, 2.2, 0.01)
-                    .setValue(settings.customCardImageRatio)
-
-                    .onChange(async (value) => {
-                        context.plugin.settings[key].customCardImageRatio = value;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                    });
-            });
-
-        new Setting(container)
-            .setName(t('settingsHorizontalCardMinWidth'))
-            .setDesc(t('settingsHorizontalCardMinWidthDesc'))
-            .addSlider(slider => {
-                slider
-                    .setLimits(240, 700, 5)
-                    .setValue(settings.customHorizontalCardMinWidth)
-
-                    .onChange(async (value) => {
-                        context.plugin.settings[key].customHorizontalCardMinWidth = value;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                    });
-            });
-
-        new Setting(container)
-            .setName(t('settingsHorizontalCardHeight'))
-            .setDesc(t('settingsHorizontalCardHeightDesc'))
-            .addSlider(slider => {
-                slider
-                    .setLimits(120, 520, 5)
-                    .setValue(settings.customHorizontalCardHeight)
-
-                    .onChange(async (value) => {
-                        context.plugin.settings[key].customHorizontalCardHeight = value;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                    });
-            });
-
-        new Setting(container)
-            .setName(t('settingsCustomCardReset'))
-            .addButton(button => {
-                button
-                    .setButtonText(t('resetConfirm'))
-                    .onClick(() => {
-                        void (async (): Promise<void> => {
-                        const defaults = DEFAULT_SETTINGS[key];
-                        context.plugin.settings[key].customCardSize = false;
-                        context.plugin.settings[key].customCardMinWidth = defaults.customCardMinWidth;
-                        context.plugin.settings[key].customCardMinHeight = defaults.customCardMinHeight;
-                        context.plugin.settings[key].customCardImageRatio = defaults.customCardImageRatio;
-                        context.plugin.settings[key].customHorizontalCardMinWidth = defaults.customHorizontalCardMinWidth;
-                        context.plugin.settings[key].customHorizontalCardHeight = defaults.customHorizontalCardHeight;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                        context.display();
-                        })();
-                    });
-            });
-    }
-
-    if (key === 'games' || key === 'manga') {
-        new Setting(container)
-            .setName(t('settingsShowAdult'))
-            .setDesc(t('settingsDescShowAdult'))
-            .addToggle(toggle => {
-                toggle
-                    .setValue(settings.showAdultInAll)
-                    .onChange(async (value) => {
-                        context.plugin.settings[key].showAdultInAll = value;
-                        await context.plugin.saveSettings();
-                        context.plugin.refreshViews();
-                    });
-            });
+export function renderCardTypeSettings(
+    context: SettingsSectionContext,
+    container: HTMLElement,
+    media: MediaTypeKey,
+    updatePreview: () => void,
+): void {
+    if (media === 'books') return;
+    const panel = container.createDiv({ cls: 'lorebase-media-work-types-settings' });
+    const editor = panel.createDiv();
+    const onChanged = (): void => { context.onMangaWorkTypesChanged?.(); updatePreview(); };
+    if (media === 'anime') {
+        new AnimeCountriesEditor(editor, context.plugin, onChanged);
+    } else {
+        new MangaWorkTypesEditor(editor, context.plugin, onChanged,
+            media === 'games' ? 'game' : media === 'movies' ? 'movie' : media === 'series' ? 'series' : 'manga');
     }
 }

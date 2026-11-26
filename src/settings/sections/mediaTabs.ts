@@ -50,6 +50,8 @@ export function createMediaTabs<T extends string>(
                 type: 'button',
                 role: 'tab',
                 'aria-selected': String(option.value === currentValue),
+                'aria-label': option.label,
+                title: option.label,
             },
         });
         button.tabIndex = option.value === currentValue ? 0 : -1;
