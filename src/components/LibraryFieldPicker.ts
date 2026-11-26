@@ -101,9 +101,11 @@ export function createLibraryFieldPicker(container: HTMLElement, fields: FieldDe
         const openAbove = below < 180 && above > below;
         panel.setCssStyles({ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px`,
             maxHeight: `${Math.min(320, Math.max(120, openAbove ? above : below))}px`,
-            left: `${Math.max(8, Math.min(rect.left, view.innerWidth - width - 8))}px`, top: '0px', visibility: 'hidden' });
+            left: `${Math.max(8, Math.min(rect.left, view.innerWidth - width - 8))}px` });
+        panel.classList.add('is-measuring');
         const height = panel.getBoundingClientRect().height;
-        panel.setCssStyles({ top: `${Math.max(8, openAbove ? rect.top - height - 4 : Math.min(rect.bottom + 4, view.innerHeight - height - 8))}px`, visibility: '' });
+        panel.setCssStyles({ top: `${Math.max(8, openAbove ? rect.top - height - 4 : Math.min(rect.bottom + 4, view.innerHeight - height - 8))}px` });
+        panel.classList.remove('is-measuring');
     };
     const close = (): void => {
         lifecycle.stop();

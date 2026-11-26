@@ -338,7 +338,7 @@ export class ReleaseCalendarModal extends Modal {
             cls: 'lorebase-release-choice', attr: { type: 'button', 'aria-pressed': String(active) },
         });
         button.toggleClass('is-active', active);
-        if (icon) setIcon(button.createSpan(), icon);
+        if (icon) setIcon(button.createSpan({ cls: 'lorebase-release-button-icon' }), icon);
         button.createSpan({ text: label });
         button.addEventListener('click', onClick);
         return button;

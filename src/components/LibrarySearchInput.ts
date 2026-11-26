@@ -71,7 +71,7 @@ export class LibrarySearchInput {
         this.input.setAttribute('aria-describedby', this.help.id);
         this.close();
         this.input.addEventListener('input', event => {
-            if (this.composing || (event as InputEvent).isComposing) return;
+            if (this.composing || ('isComposing' in event && event.isComposing === true)) return;
             this.changed();
         });
         this.input.addEventListener('compositionstart', () => this.composing = true);
@@ -137,6 +137,7 @@ export class LibrarySearchInput {
             this.optionButtons.push(option);
         });
         this.panel.hidden = !this.optionButtons.length;
+        this.root.closest('.lorebase-toolbar')?.classList.toggle('has-search-suggestions', !this.panel.hidden);
         this.input.setAttribute('aria-expanded', String(this.optionButtons.length > 0));
         this.input.removeAttribute('aria-activedescendant');
     }
@@ -178,6 +179,7 @@ export class LibrarySearchInput {
 
     private closeSuggestions(): void {
         this.panel.hidden = true;
+        this.root.closest('.lorebase-toolbar')?.classList.remove('has-search-suggestions');
         this.selected = -1;
         this.input.setAttribute('aria-expanded', 'false');
         this.input.removeAttribute('aria-activedescendant');
@@ -187,6 +189,7 @@ export class LibrarySearchInput {
         this.destroyed = true;
         this.root.ownerDocument.removeEventListener('pointerdown', this.outside);
         if (this.blurTimer !== null) window.clearTimeout(this.blurTimer);
+        this.closeSuggestions();
         this.root.remove();
     }
 }

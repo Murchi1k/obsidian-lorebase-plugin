@@ -41,7 +41,6 @@ export function applyGridLayout(gridEl: HTMLElement, layout: LibraryLayout): voi
     const columns = Math.max(1, layout.columns);
     const gap = layout.gap ?? 16;
     gridEl.setCssStyles({
-        position: 'relative',
         gridTemplateColumns: `repeat(${columns}, minmax(0, ${layout.targetCardWidth ? cardGridWidthCss(columns, gap, 0, layout.targetCardWidth) : '1fr'}))`,
         gap: `${gap}px`,
         padding: `${layout.padding ?? 16}px`,

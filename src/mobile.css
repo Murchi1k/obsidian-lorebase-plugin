@@ -29,7 +29,6 @@
         width: 100%;
         max-width: 100vw;
         height: 100%;
-        height: min(100%, 100dvh);
         max-height: 100dvh;
         min-width: 0;
         margin: 0;
@@ -371,7 +370,7 @@
     .lorebase-dashboard .lb-stat-layout-toggle > span:not(.lb-stat-icon),
     .lorebase-dashboard .lb-stat-filter-toggle > span:not(.lb-stat-icon):not(.lb-stat-filter-count) {
         position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
     }
     .lorebase-dashboard .lb-stat-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px; }
     .lorebase-dashboard .lb-stat-tab { justify-content: center; font-size: 13px; gap: 5px; padding: 8px 2px; }
@@ -387,10 +386,10 @@
     .lorebase-dashboard .lb-stat-extra-filters > .lb-stat-select { flex: 1 1 130px; min-width: 0; }
     .lorebase-dashboard .lb-stat-body { padding: 12px 12px calc(16px + var(--lb-phone-bottom)); scrollbar-gutter: auto; }
     .lorebase-dashboard .lb-stat-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .lorebase-dashboard .lb-stat-widget { grid-column: span 2 !important; }
-    .lorebase-dashboard .lb-stat-widget[data-widget*="-kpi-"] { grid-column: span 1 !important; }
+    .lorebase-dashboard .lb-stat-widget { grid-column: span 2; }
+    .lorebase-dashboard .lb-stat-widget[data-widget*="-kpi-"] { grid-column: span 1; }
     /* Desktop resize preferences must not leave 500px empty phone panels. */
-    .lorebase-dashboard .lb-stat-widget > :is(.lb-stat-panel, .lb-stat-quality-details) { height: auto !important; min-height: 0 !important; padding: 12px; flex: 0 0 auto; }
+    .lorebase-dashboard .lb-stat-widget > :is(.lb-stat-panel, .lb-stat-quality-details) { height: auto; min-height: 0; padding: 12px; flex: 0 0 auto; }
     .lorebase-dashboard .lb-stat-widget .lb-stat-panel-heading { gap: 8px; margin-bottom: 14px; }
     .lorebase-dashboard .lb-stat-widget h3 { font-size: 15px; }
     .lorebase-dashboard .lb-stat-widget-resize { display: none; }

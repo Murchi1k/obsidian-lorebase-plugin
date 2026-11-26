@@ -69,7 +69,7 @@ export class MusicSearchModal extends Modal {
         const controls = shell.createDiv({ cls: 'lorebase-select-search-controls' });
         const providers = controls.createDiv({ cls: 'lorebase-select-providers' });
         const kinds = controls.createDiv({ cls: 'lorebase-music-search-kind' });
-        const reset = (): void => { this.page = 1; this.seen.clear(); this.results.empty(); this.more.hidden = true; this.updateSelection(); this.generation++; };
+        const reset = (): void => { this.page = 1; this.seen.clear(); this.results.empty(); this.setMoreVisible(false); this.updateSelection(); this.generation++; };
         const run = (): void => { if (this.selecting) return; this.query = query.value.trim(); reset(); if (this.query) void this.search(); };
         for (const value of ['musicbrainz', 'lastfm', 'deezer'] as const) {
             if (this.settings.music.providerEnabled?.[value] === false) continue;
@@ -87,7 +87,7 @@ export class MusicSearchModal extends Modal {
         this.results = root.createDiv({ cls: 'lorebase-select-grid lorebase-select-search-grid', attr: { 'aria-live': 'polite' } });
         const pagination = root.createDiv({ cls: 'lorebase-select-pagination' });
         this.more = pagination.createEl('button', { cls: 'lorebase-flow-btn lorebase-flow-btn-secondary', text: mt('more') });
-        this.more.hidden = true;
+        this.setMoreVisible(false);
         this.more.addEventListener('click', () => { this.page++; void this.search(); });
         const footer = root.createDiv({ cls: 'lorebase-modal-actions lorebase-select-footer' });
         const manual = footer.createEl('button', { cls: 'lorebase-select-manual-action', attr: { type: 'button', 'aria-label': mt('manual') } });
@@ -120,7 +120,7 @@ export class MusicSearchModal extends Modal {
     }
     private async search(): Promise<void> {
         const generation = ++this.generation;
-        this.more.hidden = true;
+        this.setMoreVisible(false);
         const loading = this.results.createDiv({ text: '…', attr: { role: 'status' } });
         try {
             const ref = parseCatalogReference(this.query, { kind: 'music', provider: this.provider, musicKind: this.kind });
@@ -180,11 +180,11 @@ export class MusicSearchModal extends Modal {
                 row.addEventListener('click', choose);
                 row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } });
             }
-            this.more.hidden = Boolean(ref) || results.length < 20;
+            this.setMoreVisible(!ref && results.length >= 20);
         } catch (error) {
             if (!this.alive || generation !== this.generation) return;
             loading.remove(); this.results.createDiv({ text: error instanceof CatalogReferenceError || error instanceof Error && error.message === mt('keyRequired') ? error.message : mt('error'), attr: { role: 'alert' } });
-            if (this.page > 1) { this.page--; this.more.hidden = false; }
+            if (this.page > 1) { this.page--; this.setMoreVisible(true); }
         }
     }
     private resultKey(result: MusicSearchResult): string { return result.provider + ':' + result.kind + ':' + result.id; }
@@ -211,6 +211,11 @@ export class MusicSearchModal extends Modal {
         this.addButton.addEventListener('click',()=>{void this.addSelected();});
         this.updateSelection();back.focus();
     }
+    private setMoreVisible(visible: boolean): void {
+        this.more.hidden = !visible;
+        if (this.more.parentElement) this.more.parentElement.hidden = !visible;
+    }
+
     private updateSelection(): void {
         if (!this.addButton) return;
         this.addButton.disabled = this.selecting || this.selected.size === 0;

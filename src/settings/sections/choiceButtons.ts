@@ -7,6 +7,7 @@ export function renderChoiceButtons<T extends string>(
     initial: T,
     onChange: (value: T) => void
 ): void {
+    container.closest('.setting-item')?.classList.add('has-lorebase-choices');
     const group = container.createDiv({
         cls: 'lorebase-settings-choices',
         attr: { role: 'group', 'aria-label': label },

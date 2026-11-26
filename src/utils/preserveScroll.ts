@@ -6,7 +6,7 @@ export function preserveScroll<T>(host: HTMLElement, update: () => T): T {
             positions.push({ node, top: node.scrollTop, left: node.scrollLeft });
             // These renders restore the viewport explicitly. Native anchoring would
             // apply a second adjustment after this task, once replacement nodes lay out.
-            node.style.overflowAnchor = 'none';
+            node.classList.add('lorebase-preserve-scroll');
         }
     }
     try { return update(); }

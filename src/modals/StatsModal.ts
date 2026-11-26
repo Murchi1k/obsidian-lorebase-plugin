@@ -160,10 +160,10 @@ export class StatsModal extends Modal {
     private closeResults(focus = true): void { this.results?.remove(); this.results = undefined; this.modalEl.classList.remove('has-stat-results'); if (focus && this.resultTrigger instanceof HTMLElement && this.resultTrigger.isConnected) this.resultTrigger.focus({ preventScroll: true }); }
     private widget(grid: HTMLElement, key: string, render: (host: HTMLElement) => void, span: 0.5 | 1 | 2 = 1): void {
         const id = this.page + '-' + key, saved = this.preferences.widgets[id];
-        const host = el(grid, 'div', 'lb-stat-widget'); host.dataset.widget = id; host.style.gridColumn = 'span ' + (saved?.span ?? span * 6); host.style.order = String(saved?.order ?? grid.childElementCount - 1);
+        const host = el(grid, 'div', 'lb-stat-widget'); host.dataset.widget = id; host.style.setProperty('--stat-widget-span', String(saved?.span ?? span * 6)); host.style.order = String(saved?.order ?? grid.childElementCount - 1);
         render(host); if (!host.childElementCount) { host.remove(); return; }
         const panel = host.firstElementChild as HTMLElement; const heading = panel.querySelector<HTMLElement>('.lb-stat-panel-heading');
-        const sizePanel = (height: number) => { panel.style.height = height + 'px'; panel.style.minHeight = height + 'px'; host.classList.add('has-explicit-size'); panel.style.setProperty('--stat-chart-height', Math.max(80, height - (key === 'ratings' ? 235 : 185)) + 'px'); };
+        const sizePanel = (height: number) => { panel.style.setProperty('--stat-widget-height', height + 'px'); host.classList.add('has-explicit-size'); panel.style.setProperty('--stat-chart-height', Math.max(80, height - (key === 'ratings' ? 235 : 185)) + 'px'); };
         if (saved?.height && !saved.collapsed) sizePanel(saved.height);
         host.classList.toggle('is-collapsed', saved?.collapsed ?? false);
         if (heading) { const toggle = button(heading, '', () => this.saveWidget(id, { collapsed: !saved?.collapsed }), 'lb-stat-fold', saved?.collapsed ? 'chevron-down' : 'chevron-up'); toggle.setAttribute('aria-label', st(saved?.collapsed ? 'expand' : 'collapse')); toggle.setAttribute('aria-expanded', String(!saved?.collapsed)); }
@@ -184,19 +184,19 @@ export class StatsModal extends Modal {
         button(controls, st('resetSize'), () => this.saveWidget(id, { height: null }));
         const resize = button(host, '', () => {}, 'lb-stat-widget-resize', 'move-diagonal-2'); resize.setAttribute('aria-label', st('resize')); resize.title = st('resize');
         resize.addEventListener('pointerdown', event => { event.preventDefault(); resize.setPointerCapture?.(event.pointerId); const start = { x: event.clientX, y: event.clientY, width: host.getBoundingClientRect().width, height: panel.getBoundingClientRect().height }; let nextSpan = saved?.span ?? span * 6, height = start.height;
-            const change = (value: PointerEvent) => { nextSpan = Math.max(3, Math.min(12, Math.round((start.width + value.clientX - start.x) / Math.max(1, grid.getBoundingClientRect().width) * 12))); height = Math.max(key.startsWith('kpi-') ? 80 : 120, Math.min(900, start.height + value.clientY - start.y)); host.style.gridColumn = 'span ' + nextSpan; sizePanel(height); };
+            const change = (value: PointerEvent) => { nextSpan = Math.max(3, Math.min(12, Math.round((start.width + value.clientX - start.x) / Math.max(1, grid.getBoundingClientRect().width) * 12))); height = Math.max(key.startsWith('kpi-') ? 80 : 120, Math.min(900, start.height + value.clientY - start.y)); host.style.setProperty('--stat-widget-span', String(nextSpan)); sizePanel(height); };
             const finish = () => { resize.removeEventListener('pointermove', change); resize.removeEventListener('pointerup', finish); resize.removeEventListener('pointercancel', finish); this.saveWidget(id, { span: nextSpan, height }); };
             resize.addEventListener('pointermove', change); resize.addEventListener('pointerup', finish); resize.addEventListener('pointercancel', finish);
         });
     }
     private saveWidget(id: string, patch: Partial<StatisticsPreferences['widgets'][string]>): void {
         const host = this.body?.querySelector<HTMLElement>('[data-widget="' + id + '"]');
-        this.changePreferences({ widgets: { ...this.preferences.widgets, [id]: { ...(this.preferences.widgets[id] ?? { order: Number(host?.style.order ?? 0), span: Number(host?.style.gridColumn.replace('span ', '') || 12), height: null, collapsed: false }), ...patch } } }, false);
+        this.changePreferences({ widgets: { ...this.preferences.widgets, [id]: { ...(this.preferences.widgets[id] ?? { order: Number(host?.style.order ?? 0), span: Number(host?.style.getPropertyValue('--stat-widget-span') || 12), height: null, collapsed: false }), ...patch } } }, false);
     }
     private moveWidget(id: string, target: string, after = false): void {
         const hosts = Array.from(this.body!.querySelectorAll<HTMLElement>('[data-widget]')).sort((a,b) => Number(a.style.order) - Number(b.style.order));
         const ids = hosts.map(host => host.dataset.widget!).filter(value => value !== id); ids.splice(ids.indexOf(target) + Number(after), 0, id);
-        const widgets = { ...this.preferences.widgets }; ids.forEach((key, order) => { const host = hosts.find(host => host.dataset.widget === key)!; widgets[key] = { ...(widgets[key] ?? { span: Number(host.style.gridColumn.replace('span ', '') || 12), height: null, collapsed: false }), order }; });
+        const widgets = { ...this.preferences.widgets }; ids.forEach((key, order) => { const host = hosts.find(host => host.dataset.widget === key)!; widgets[key] = { ...(widgets[key] ?? { span: Number(host.style.getPropertyValue('--stat-widget-span') || 12), height: null, collapsed: false }), order }; });
         this.changePreferences({ widgets }, false);
     }
     private renderTabs(count: number): void {
@@ -313,8 +313,6 @@ export class StatsModal extends Modal {
         const layout = el(panel, 'div', 'lb-stat-map-layout'), map = el(layout, 'div', 'lb-stat-map');
         const label = el(map, 'div', 'lb-stat-map-label', st('geographyHint')); label.setAttribute('aria-live', 'polite');
         const svg = map.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 1000 470'); svg.setAttribute('role', 'group'); svg.setAttribute('aria-label', st('geography')); map.appendChild(svg);
-        // Keep accessible SVG labels without invoking Obsidian's HTML-only tooltip.
-        svg.style.setProperty('--no-tooltip', 'true');
         const group = map.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g'); svg.appendChild(group);
         const controls = el(map, 'div', 'lb-stat-map-controls');
         const update = () => { this.mapView = boundedMapView(this.mapView); const { x, y, scale } = this.mapView; group.setAttribute('transform', 'translate(' + x + ' ' + y + ') scale(' + scale + ')'); zoomLabel.textContent = Math.round(scale * 100) + '%'; zoomIn.disabled = scale >= 6; zoomOut.disabled = scale <= 1; };
@@ -462,7 +460,7 @@ export class StatsModal extends Modal {
     }
     private renderTimeline(host: HTMLElement, rows: StatRecord[]): void {
         const panel = this.panel(host, st('timeline'), 'chart-column'); panel.classList.add('lb-stat-timeline-panel');
-        this.choice(panel.querySelector<HTMLElement>('.lb-stat-panel-heading')!, st('timeline'), [['month', st('month')], ['year', st('byYear')]], this.timeline, value => { this.timeline = value as 'month' | 'year'; this.redraw(); }).parentElement!.classList.add('is-inline');
+        this.choice(panel.querySelector<HTMLElement>('.lb-stat-panel-heading')!, st('timeline'), [['month', st('month')], ['year', st('byYear')]], this.timeline, value => { this.timeline = value as 'month' | 'year'; this.redraw(); }).parentElement.classList.add('is-inline');
         const events=deletionSelection(normalizeStatisticsDeletions(this.settings().statisticsDeletions),this.filters);
         const bins = statisticsTimelineWithDeletions(rows,events,this.timeline,this.filters.year), max = Math.max(1, ...bins.flatMap(bin => [bin.added, bin.finished, bin.deleted]));
         const legend = el(panel, 'div', 'lb-stat-legend'); el(legend, 'span', 'is-added', st('added')); el(legend, 'span', 'is-finished', st('finished')); el(legend,'span','is-deleted',st('deleted'));

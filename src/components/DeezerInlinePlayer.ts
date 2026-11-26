@@ -51,11 +51,12 @@ export class DeezerInlinePlayer {
     }
     private range(max: string, step: string, value: string, label: string): HTMLInputElement {
         const shell = this.controls.createDiv({ cls: 'lorebase-deezer-range' });
+        // A transparent native range retains keyboard, pointer and screen-reader behavior.
+        const input = shell.createEl('input', { attr: { type: 'range', min: '0', max, step, value, 'aria-label': label } });
         const rail = shell.createSpan({ cls: 'lorebase-deezer-range-rail', attr: { 'aria-hidden': 'true' } });
         rail.createSpan({ cls: 'lorebase-deezer-range-fill' });
         rail.createSpan({ cls: 'lorebase-deezer-range-thumb' });
-        // A transparent native range retains keyboard, pointer and screen-reader behavior.
-        return shell.createEl('input', { attr: { type: 'range', min: '0', max, step, value, 'aria-label': label } });
+        return input;
     }
     private paintRange(input: HTMLInputElement, percent: number): void {
         input.parentElement?.style.setProperty('--lorebase-seek-progress', `${Math.min(100, Math.max(0, percent))}%`);
@@ -109,7 +110,7 @@ export class DeezerInlinePlayer {
         if (!this.alive) return;
         this.releaseAudio(); this.status.textContent = mt('preview30'); this.controls.hidden = false;
         this.seek.value = '0'; this.paintRange(this.seek, 0); this.seek.disabled = true; this.elapsed.textContent = '0:00'; this.total.textContent = '0:30';
-        const audio = document.createElement('audio'); this.audio = audio; audio.preload = 'none'; audio.src = item.preview;
+        const audio = this.root.ownerDocument.createElement('audio'); this.audio = audio; audio.preload = 'none'; audio.src = item.preview;
         audio.addEventListener('loadedmetadata', () => { if (this.audio === audio) { this.seek.disabled = false; this.seek.max = String(this.duration()); this.updateTime(); } });
         audio.addEventListener('timeupdate', () => {
             if (this.audio !== audio) return;

@@ -374,7 +374,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
     onClose(): void {
         this.inlineSync?.abort();
         this.searchSeq++;
-        this.modalEl.removeClass('lorebase-select-modal-container');
+        this.modalEl.removeClass('lorebase-select-modal-container', 'is-lorebase-manual', 'is-lorebase-sync');
         this.modalEl.removeEventListener('keydown', this.onKeydown);
         this.manualEditor?.disposeInline();
         this.revokeObjectUrls();
@@ -394,6 +394,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.isManual = true;
         this.isReviewing = false;
         this.contentEl.removeClass('is-reviewing');
+        this.modalEl.addClass('is-lorebase-manual');
         this.contentEl.addClass('lorebase-add-workspace', 'is-manual');
         this.manualEditor ??= new ManualCreateModal(this.app, this.manualKind, this.manualRatingSettings);
         this.manualEditor.mountInline(this.contentEl, draft => {
@@ -418,6 +419,7 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.isSyncView = false;
         this.isManual = false;
         this.isReviewing = false;
+        this.modalEl.removeClass('is-lorebase-manual', 'is-lorebase-sync');
         this.contentEl.removeClass('is-manual', 'is-reviewing', 'is-steam-sync', 'is-inbox');
         this.contentEl.addClass('lorebase-add-workspace');
         const { contentEl } = this;
@@ -539,6 +541,8 @@ export class MultiSelectSearchModal<T extends SearchItem> extends Modal {
         this.inlineSync = new AbortController();
         const { signal } = this.inlineSync;
         this.contentEl.empty();
+        this.modalEl.removeClass('is-lorebase-manual');
+        this.modalEl.classList.toggle('is-lorebase-sync', !inbox);
         this.contentEl.removeClass('is-manual', 'is-reviewing');
         this.contentEl.addClass(inbox ? 'is-inbox' : 'is-steam-sync');
         const header = this.contentEl.createDiv({ cls: 'lorebase-select-header' });

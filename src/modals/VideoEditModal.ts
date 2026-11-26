@@ -1019,11 +1019,9 @@ export class VideoEditModal extends Modal {
             attr: { title: item.title || item.path, draggable: 'true', 'data-path': item.path },
         });
         this.bindRelatedDrag(row, item.path, order?.onDrop);
-        const image = row.createDiv({ cls: 'lorebase-editmode-related-image' });
+        const image = row.createDiv({ cls: 'lorebase-editmode-related-image lorebase-editmode-related-image-legacy' });
         image.setCssStyles({
             backgroundImage: `url("${imageUrl.replace(/"/g, '\\"')}")`,
-            height: '120px',
-            minHeight: '120px',
         });
         image.createSpan({ cls: 'lorebase-editmode-related-type', text: this.getRelatedTypeLabel(item.type) });
         row.createSpan({ cls: 'lorebase-editmode-related-title', text: item.title || item.path });

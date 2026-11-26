@@ -1,6 +1,5 @@
 /* Compact overview and self-contained result cards. */
 .modal.lorebase-dashboard-container > .modal-header-button,
-.modal.lorebase-dashboard-container .modal-close-button { display:none!important; }
 .lorebase-dashboard .lb-stat-header { padding:18px 48px 12px 24px; }
 .lorebase-dashboard .lb-stat-heading h2 { font-size:23px; }
 .lorebase-dashboard .lb-stat-heading p { font-size:12px; line-height:1.5; }
@@ -71,7 +70,8 @@
 .lb-stat-map-layout { display:grid; grid-template-columns:minmax(0,1fr) 230px; gap:24px; align-items:center; }
 .lb-stat-map { min-width:0; }
 .lb-stat-map-label { min-height:25px; font-size:12px; color:var(--text-muted); }
-.lb-stat-map svg { display:block; width:100%; height:auto; max-height:370px; overflow:hidden; }
+/* Keep accessible SVG labels without Obsidian's HTML-only tooltip. */
+.lb-stat-map svg { --no-tooltip: true; display:block; width:100%; height:auto; max-height:370px; overflow:hidden; }
 .lb-stat-map-country { fill:var(--background-modifier-border); stroke:var(--background-primary); stroke-width:.6; stroke-linejoin:round; }
 .lb-stat-map-country[data-level="1"] { fill:color-mix(in srgb,#a99bdf 30%,var(--background-modifier-border)); }
 .lb-stat-map-country[data-level="2"] { fill:color-mix(in srgb,#a99bdf 55%,var(--background-modifier-border)); }

@@ -38,7 +38,7 @@
 .lorebase-release-calendar button:focus-visible,
 .lorebase-release-search:focus-within { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
 .lorebase-release-calendar button svg { width: 15px; height: 15px; flex-shrink: 0; }
-.lorebase-release-calendar button span:has(> svg) { display: inline-flex; align-items: center; }
+.lorebase-release-calendar button .lorebase-release-button-icon { display: inline-flex; align-items: center; }
 .lorebase-release-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 20px; padding: 0 0 18px; }
 .lorebase-release-heading { display: flex; flex: 1; align-items: center; gap: 16px; min-width: 0; }
 .lorebase-release-heading-icon { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; color: var(--text-accent); border: 1px solid color-mix(in srgb, var(--interactive-accent) 30%, var(--background-modifier-border)); border-radius: 13px; background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-secondary)); }
@@ -97,7 +97,7 @@
 .lorebase-release-day-dots > span { width: 3px; height: 3px; border-radius: 50%; background: var(--release-color); }
 .lorebase-release-sidebar-foot { display: grid; grid-template-columns: max-content minmax(0, 1fr); grid-template-rows: 26px; flex: 0 0 26px; align-items: center; gap: 10px; height: 26px; margin-top: 14px; color: var(--text-muted); font-size: 10px; }
 .lorebase-release-date-action { display: grid; align-items: center; justify-items: end; min-width: 0; height: 26px; }
-.lorebase-release-date-action > [hidden] { display: none !important; }
+.lorebase-release-calendar .lorebase-release-date-action > [hidden] { display: none; }
 .lorebase-release-calendar .lorebase-release-all-dates { height: auto; min-height: 24px; padding: 2px 0; border: 0; box-shadow: none; background: transparent; color: var(--text-accent); font-size: 12px; font-weight: 600; }
 .lorebase-release-sidebar-hint { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: 10px; line-height: 1.6; }
 .lorebase-release-legend { display: flex; gap: 12px; font-size: 10px; white-space: nowrap; }
@@ -132,7 +132,7 @@
 .lorebase-release-calendar .lorebase-release-countdown-icon svg { width: 14px; height: 14px; }
 .lorebase-release-countdown-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lorebase-release-calendar .lorebase-release-show-more { display: block; min-height: 36px; height: auto; margin: 18px auto 0; padding: 8px 18px; border: 1px solid var(--background-modifier-border); border-radius: 9px; box-shadow: none; background: var(--background-secondary); font-size: 12px; }
-.lorebase-release-show-more[hidden], .lorebase-release-month-content[hidden] { display: none !important; }
+.lorebase-release-calendar :is(.lorebase-release-show-more, .lorebase-release-month-content)[hidden] { display: none; }
 .lorebase-release-timeline-scroll { padding: 28px 54px 40px 92px; }
 .lorebase-release-timeline-year { margin-bottom: 26px; padding-left: 24px; border-left: 1px solid color-mix(in srgb, var(--interactive-accent) 28%, var(--background-modifier-border)); }
 .lorebase-release-timeline-year-heading { position: relative; display: flex; align-items: center; gap: 12px; min-height: 34px; margin-bottom: 10px; }

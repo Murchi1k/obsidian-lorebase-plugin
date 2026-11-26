@@ -31,12 +31,14 @@ export function renderResetSettings(context: SettingsSectionContext, container: 
         confirmPanel.hidden = true;
         heading.hidden = trigger.hidden = false;
         trigger.setAttribute('aria-expanded', 'false');
+        block.classList.remove('is-confirming');
         trigger.focus();
     };
     trigger.addEventListener('click', () => {
         confirmPanel.hidden = false;
         heading.hidden = trigger.hidden = true;
         trigger.setAttribute('aria-expanded', 'true');
+        block.classList.add('is-confirming');
         cancel.focus({ preventScroll: true });
         confirmPanel.scrollIntoView({ block: 'nearest' });
     });

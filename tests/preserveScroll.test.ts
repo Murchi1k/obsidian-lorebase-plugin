@@ -11,7 +11,7 @@ it('restores nested scrolling columns after replacing a shrinking list', () => {
         list.append(document.createElement('button')); return 'updated';
     });
     expect(result).toBe('updated'); expect(column.scrollTop).toBe(740);
-    expect(column.style.overflowAnchor).toBe('none');
+    expect(column.classList.contains('lorebase-preserve-scroll')).toBe(true);
     expect(column.scrollLeft).toBe(12); expect(list.scrollTop).toBe(85);
 });
 it('restores scroll on failure without swallowing the rendering error', () => {

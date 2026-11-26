@@ -196,7 +196,6 @@ export class VirtualGrid<T> {
     private setup(): void {
         this.options.gridEl.addClass('lorebase-virtual-grid');
         this.spacer = this.options.gridEl.createDiv({ cls: 'lorebase-spacer' });
-        this.spacer.setCssStyles({ gridColumn: '1 / -1' });
         this.rebuildCardWidthCalc();
         this.updateSpacerHeight();
         this.updateVisibleCards();
@@ -294,7 +293,6 @@ export class VirtualGrid<T> {
         const cardEl = card.getElement();
 
         cardEl.setCssStyles({
-            position: 'absolute',
             width: cardWidthCalc,
             height: `${this.options.cardHeight}px`,
             top: `${padding + (row * (this.options.cardHeight + gap)) - this.scrollRange.offset}px`,
@@ -377,7 +375,7 @@ export class VirtualGroupedGrid<T> implements VirtualGridController {
         this.rebuild();
         if (preserve) {
             restoreVirtualTop(this.options.gridEl, this.options.scrollContainer, this.scrollRange,
-                this.positions[anchorIndex].top - (oldTop! - top));
+                this.positions[anchorIndex].top - (oldTop - top));
         }
         this.updateVisibleCards(true);
     }
@@ -422,7 +420,7 @@ export class VirtualGroupedGrid<T> implements VirtualGridController {
         // scrollTop to zero before the new layout is installed.
         this.spacer ??= this.options.gridEl.createDiv({ cls: 'lorebase-spacer' });
         this.scrollRange.height = top + padding;
-        this.spacer.setCssStyles({ height: `${Math.max(0, Math.min(MAX_SCROLL_HEIGHT, this.scrollRange.height) - padding * 2)}px`, gridColumn: '1 / -1' });
+        this.spacer.setCssStyles({ height: `${Math.max(0, Math.min(MAX_SCROLL_HEIGHT, this.scrollRange.height) - padding * 2)}px` });
     }
 
     private scheduleUpdate(): void {
@@ -460,7 +458,6 @@ export class VirtualGroupedGrid<T> implements VirtualGridController {
                 created = true;
             }
             if (created || reposition) card.getElement().setCssStyles({
-                position: 'absolute',
                 width: this.cardWidthCalc,
                 height: `${this.options.cardHeight}px`,
                 top: `${position.top - this.scrollRange.offset}px`,
@@ -496,7 +493,7 @@ export class VirtualGroupedGrid<T> implements VirtualGridController {
                 created = true;
             }
             if (created || reposition) header.setCssStyles({
-                position: 'absolute', top: `${position.top - this.scrollRange.offset}px`,
+                top: `${position.top - this.scrollRange.offset}px`,
                 left: `${this.options.padding ?? 16}px`, right: `${this.options.padding ?? 16}px`, height: `${headerHeight}px`,
             });
         }

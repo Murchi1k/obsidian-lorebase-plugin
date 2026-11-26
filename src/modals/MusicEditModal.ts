@@ -188,6 +188,7 @@ export class MusicEditModal extends Modal {
                 menu.addItem(item => item.setTitle(mt('addTrack')).setIcon('plus').onClick(() => this.addTrack()));
                 this.showMusicMenu(menu, overflow);
             });
+            overflow.classList.add('lorebase-music-tracklist-icon');
             this.trackList = tracks.createDiv({ cls: 'lorebase-music-tracklist' });
             this.player = this.createInlinePlayer();
             this.updateProgress(false);
@@ -730,7 +731,12 @@ export class MusicEditModal extends Modal {
         const input = host.createEl('input', { type: 'checkbox', attr: { 'aria-label': label } }); input.checked = value;
         input.addEventListener('click', event => event.stopPropagation());
         host.addEventListener('click', event => event.stopPropagation());
-        host.createSpan({ text: label }); input.addEventListener('change', () => change(input.checked));
+        host.classList.toggle('is-checked', input.checked);
+        host.createSpan({ text: label });
+        input.addEventListener('change', () => {
+            host.classList.toggle('is-checked', input.checked);
+            change(input.checked);
+        });
     }
     private button(parent: HTMLElement, text: string, action: () => void, primary = false): HTMLButtonElement {
         const button = parent.createEl('button', { text, cls: `lorebase-editmode-btn ${primary ? 'lorebase-editmode-btn-primary' : 'lorebase-editmode-btn-ghost'}`, attr: { type: 'button' } });

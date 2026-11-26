@@ -938,7 +938,7 @@ export class EditModal extends Modal {
     }
 
     private autoResizeNotes(notes: HTMLTextAreaElement): void {
-        notes.setCssStyles({ height: 'auto' });
+        notes.style.removeProperty('height');
         const nextHeight = Math.min(Math.max(notes.scrollHeight, 132), 320);
         notes.setCssStyles({ height: `${nextHeight}px` });
     }

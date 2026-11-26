@@ -1,7 +1,7 @@
 
-.lorebase-editmode-root .lorebase-game-tracking { display:flex; flex-direction:column; gap:18px; padding:16px!important; }
+.lorebase-editmode-root .lorebase-game-tracking { display:flex; flex-direction:column; gap:18px; padding:16px; }
 .lorebase-game-tracking-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; }
-.lorebase-game-tracking-heading h3 { margin:0!important; font-size:12px; letter-spacing:.04em; }
+.lorebase-editmode-root .lorebase-game-tracking-heading h3 { margin:0; font-size:12px; letter-spacing:.04em; }
 .lorebase-game-progress-score { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text-normal); }
 .lorebase-game-progress-bar { width:100%; height:8px; border-radius:8px; overflow:hidden; background:var(--background-modifier-border); }
 .lorebase-game-progress-fill { display:block; height:100%; border-radius:inherit; background:var(--interactive-accent); transition:width .18s ease; }
@@ -32,5 +32,5 @@
 .lorebase-editmode-root .lorebase-game-tracking button.lorebase-game-apply-progress { height:29px; color:var(--text-accent); background:color-mix(in srgb,var(--interactive-accent) 8%,transparent); }
 .lorebase-game-tracking-status { margin:0; font-size:11px; }
 .lorebase-game-tracking-status:empty { display:none; }
-@media(max-width:600px) { .lorebase-game-tracking-toolbar { column-gap:24px; } .lorebase-editmode-root .lorebase-game-tracking button.lorebase-game-steam-refresh { margin-left:0; } }
+@media(max-width:600px) { .lorebase-game-tracking-toolbar { gap:16px 24px; } .lorebase-editmode-root .lorebase-game-tracking button.lorebase-game-steam-refresh { margin-left:0; } }
 @media(prefers-reduced-motion:reduce) { .lorebase-game-progress-fill { transition:none; } }

@@ -219,7 +219,7 @@ export class InboxPanel {
             const source = this.button(details, `${origin.path}:${origin.line}${origin.section ? ' · ' + origin.section : ''}`, () => {
                 void this.app.workspace.openLinkText(origin.path, '', true);
             }, 'file-text'); source.classList.add('lorebase-inbox-source');
-            details.createEl('div', { cls: 'lorebase-inbox-original', text: origin.text });
+            details.createDiv({ cls: 'lorebase-inbox-original', text: origin.text });
         }
     }
     private renderFooter(): void {

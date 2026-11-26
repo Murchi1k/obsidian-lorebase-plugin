@@ -222,7 +222,7 @@
 .lorebase-compact-editor .lorebase-editmode-rating-meta .lorebase-editmode-rating-value { font-size: 14px; white-space: nowrap; }
 .lorebase-compact-editor .lorebase-tracking-secondary { margin-top: 8px; padding-top: 0; border: 0; }
 
-.lorebase-editmode-root.lorebase-compact-game-editor .lorebase-game-tracking { gap: 13px; padding: 12px 14px !important; }
+.lorebase-editmode-root.lorebase-compact-game-editor .lorebase-game-tracking { gap: 13px; padding: 12px 14px; }
 .lorebase-compact-game-editor .lorebase-game-tracking-heading { gap: 8px; }
 .lorebase-game-progress-help { position: relative; margin-inline-end: auto; }
 .lorebase-game-progress-help > summary {
@@ -380,7 +380,7 @@
 @media (prefers-reduced-motion: no-preference) {
     .lorebase-game-steam-refresh[data-state='loading'] svg { animation: lorebase-spin 1s linear infinite; }
 }
-.lorebase-game-tracking-status.is-steam-feedback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.lorebase-game-tracking-status.is-steam-feedback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .lorebase-compact-game-editor .lorebase-game-modes { grid-column: 1 / -1; gap: 5px; }
 .lorebase-game-mode-caption { margin-inline-end: 2px; color: var(--text-muted); font-size: 12px; }
 .lorebase-editmode-root.lorebase-compact-game-editor .lorebase-game-modes button.lorebase-game-action {
@@ -404,7 +404,7 @@
 }
 
 .lorebase-played-platforms { display: grid; gap: 5px; padding-top: 7px; border-top: 1px solid var(--background-modifier-border); }
-.lorebase-played-platforms > [data-role='platform-chips'] { display: contents; }
+.lorebase-played-platforms > [data-role='platform-chips']:not(:empty) { display: grid; gap: inherit; }
 .lorebase-played-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .lorebase-played-caption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
 .lorebase-played-label { font-weight: 650; font-size: 13px; }
@@ -625,7 +625,7 @@
     color: var(--text-muted);
 }
 .lorebase-compact-editor button.lorebase-game-tag-plus:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
-.lorebase-compact-editor .lorebase-editmode-tags:has([data-role='tag-composer']:only-child[hidden]) .lorebase-editmode-panel-title-row { margin-bottom: 0; }
+.lorebase-compact-editor .lorebase-editmode-tags.is-empty .lorebase-editmode-panel-title-row { margin-bottom: 0; }
 .lorebase-compact-editor .lorebase-game-tag-chips { --chip-height: 23px; position: relative; align-content: start; gap: 5px; }
 .lorebase-compact-editor .lorebase-game-tag-chips.is-genres { --chip-height: 27px; }
 .lorebase-game-tag-chips.is-collapsed { max-height: calc(2 * var(--chip-height) + 5px); overflow: hidden; }

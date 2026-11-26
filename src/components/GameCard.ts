@@ -206,10 +206,8 @@ export class GameCard {
             const verticalMaxWidth = this.dimensionOverrides?.verticalMinWidth
                 ?? this.parseCssPixels(sizes.maxWidth, 280);
             this.container.setCssStyles({
-                width: '100%',
                 maxWidth: `${verticalMaxWidth}px`,
                 minWidth: '',
-                minHeight: '0',
             });
         }
 
@@ -232,7 +230,7 @@ export class GameCard {
             } else {
                 // Default portrait ratio: 2/3 (standard game cover format, height = 1.5 x width).
                 // This ensures cards look like portrait covers at any column count.
-                imageContainer.setCssStyles({ aspectRatio: '2/3' });
+                imageContainer.classList.add('lorebase-card-portrait-image');
             }
             imageContainer.setCssStyles({ height: '' });
         } else {
@@ -419,7 +417,7 @@ export class GameCard {
         this.container.setAttribute('aria-label', label);
         this.container.title = label;
         this.container.style.setProperty('--spine-color', colors[seed % colors.length]);
-        this.container.style.setProperty('--spine-text-color', '#eee7d8');
+        this.container.style.removeProperty('--spine-text-color');
         void this.applyBookCoverColor(book);
         this.container.style.setProperty('--spine-height', `${220 + (seed >>> 4) % 49}px`);
         // pageTotal is the parsed page_total field. Bound the thickness so short
@@ -808,6 +806,7 @@ export class GameCard {
             title.push(Math.max(0, Math.trunc(votes)).toLocaleString(locale) + ' ' + t('communityRatingVotes'));
         }
         const label = title.join(' · ');
+        parent.classList.add('has-community-rating');
         const badge = parent.createDiv({
             cls: 'lorebase-card-community-rating',
             attr: { title: label, 'aria-label': label, role: 'img' },

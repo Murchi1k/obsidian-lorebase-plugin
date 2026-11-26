@@ -69,7 +69,7 @@ export function renderCardBadgeSettings(
     status.heading.classList.add('is-status');
     if (media !== 'music') {
         const dates = status.root.createDiv({ cls: 'lorebase-badge-date-options' });
-        const dateLabel = dates.createEl('span', { cls: 'lorebase-badge-date-label', text: text('Completion date', 'Дата завершения', 'Дата завершення', '完成日期') });
+        const dateLabel = dates.createSpan({ cls: 'lorebase-badge-date-label', text: text('Completion date', 'Дата завершения', 'Дата завершення', '完成日期') });
         const dateHelp = dateLabel.createEl('button', { cls: 'lorebase-inline-help', attr: { type: 'button', 'aria-label': text('When the date appears', 'Когда показывается дата', 'Коли відображається дата', '日期显示条件') } });
         setIcon(dateHelp, 'circle-help');
         setTooltip(dateHelp, text('Shown for completed items when grouped by completion month/year or sorted by completion date. Enable “Always show” to display it in any view.', 'Показывается у завершённых карточек при группировке по месяцу или году прохождения, а также при сортировке по дате завершения. Включите «Показывать всегда», чтобы видеть дату в любом виде.', 'Показується у завершених картках при групуванні за місяцем або роком завершення, а також при сортуванні за датою завершення. Увімкніть «Показувати завжди», щоб бачити дату в кожному вигляді.', '按完成月份/年份分组或按完成日期排序时显示。启用“始终显示”可在所有视图显示日期。'));

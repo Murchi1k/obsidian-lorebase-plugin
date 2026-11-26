@@ -8,7 +8,7 @@ class Element extends EventTarget {
     parentElement: Element | null = null;
     children: Element[] = [];
     attributes = new Map<string, string>();
-    style = { setProperty: vi.fn() };
+    style = { setProperty: vi.fn(), removeProperty: vi.fn() };
     src = '';
     tag = '';
     setAttribute(key: string, value: string) { this.attributes.set(key, value); }

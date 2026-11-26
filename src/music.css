@@ -242,7 +242,6 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-badges-bottom { position: absolute; bottom: 8px; right: 8px; left: 8px; display: flex; gap: 5px; justify-content: flex-end; align-items: center; }
 .lorebase-music-badges .lorebase-card-favorite-badge { position: absolute; right: 10px; top: 10px; }
 .lorebase-music-badges .lorebase-music-progress-badge { position: absolute; right: 8px; top: 8px; color: #fff; background: #111b; border-radius: 6px; padding: 5px 7px; font-size: 12px; }
-.lorebase-music-badges:has(.lorebase-music-progress-badge) .lorebase-card-favorite-badge { left: 10px; right: auto; }
 
 .lorebase-card-status.lorebase-status-listening {
     background: rgba(19, 19, 19, 0.652);
@@ -316,7 +315,7 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-edit-modal .lorebase-editmode-genres-field > .lorebase-editmode-chip-row { grid-column: 1; grid-row: 1; }
 .lorebase-music-edit-modal .lorebase-editmode-genres-field > .lorebase-editmode-title-meta-actions { grid-column: 2; grid-row: 1; }
 .lorebase-music-edit-modal .lorebase-editmode-genres-field > .lorebase-music-field { grid-column: 1 / -1; grid-row: 2; }
-.lorebase-music-search-modal .lorebase-select-pagination:has(button[hidden]) { display: none; }
+.lorebase-music-search-modal .lorebase-select-pagination[hidden] { display: none; }
 @media (max-width: 700px) {
     .lorebase-music-search-modal .lorebase-select-footer { left: 0; right: 0; }
     .lorebase-music-search-modal .lorebase-select-search-controls { flex-wrap: wrap; gap: 8px; }
@@ -409,7 +408,7 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-edit-modal .lorebase-music-track-heading .lorebase-music-checkbox { position: relative; display: grid; place-items: center; width: 30px; min-height: 30px; }
 .lorebase-music-track-heading .lorebase-music-checkbox input { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; padding: 0; border: 1px solid var(--background-modifier-border-hover, var(--text-faint)); border-radius: 50%; background: transparent; cursor: pointer; }
 .lorebase-music-track-heading .lorebase-music-checkbox input:checked { background: var(--lorebase-accent, var(--interactive-accent)); border-color: transparent; }
-.lorebase-music-track-heading .lorebase-music-checkbox:has(input:checked)::after { content: ''; width: 8px; height: 4px; border-left: 2px solid var(--text-on-accent); border-bottom: 2px solid var(--text-on-accent); transform: rotate(-45deg); position: absolute; pointer-events: none; top: 11px; left: 10px; }
+.lorebase-music-track-heading .lorebase-music-checkbox.is-checked::after { content: ''; width: 8px; height: 4px; border-left: 2px solid var(--text-on-accent); border-bottom: 2px solid var(--text-on-accent); transform: rotate(-45deg); position: absolute; pointer-events: none; top: 11px; left: 10px; }
 .lorebase-music-edit-modal .lorebase-music-track-row[open] { border-color: var(--background-modifier-border); background: var(--background-primary); }
 .lorebase-music-edit-modal .lorebase-music-track-row[open] > summary { background: var(--background-modifier-hover); }
 .lorebase-music-edit-modal .lorebase-music-track-body { border: 0; background: transparent; padding: 16px; }
@@ -484,21 +483,20 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-edit-modal .lorebase-music-track-row:hover > summary { background: var(--background-modifier-hover); }
 .lorebase-music-edit-modal .lorebase-music-track-heading .lorebase-music-checkbox input { width: 17px; height: 17px; }
 .lorebase-music-edit-modal .lorebase-music-track-heading .lorebase-music-checkbox { width: 28px; }
-.lorebase-music-track-heading .lorebase-music-checkbox:has(input:checked)::after { top: 11px; left: 9px; width: 7px; height: 4px; }
+.lorebase-music-track-heading .lorebase-music-checkbox.is-checked::after { top: 11px; left: 9px; width: 7px; height: 4px; }
 .lorebase-music-track-play { position: relative; display: grid; place-items: center; }
 .lorebase-music-track-play svg { width: 13px; height: 13px; opacity: 1; }
 .lorebase-music-track-row.is-favorite .lorebase-music-track-title::after { content: ' ♥'; color: var(--lorebase-favorite-color, #ed7897); font-size: 10px; }
 .lorebase-music-track-row.is-extract-queued .lorebase-music-track-credit::after { content: '↗'; color: var(--text-accent); padding-left: 6px; }
 .lorebase-music-edit-modal .lorebase-music-track-fields { grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) 98px 64px; gap: 12px; }
-.lorebase-music-edit-modal .lorebase-music-track-timing { display: contents; }
 .lorebase-music-edit-modal .lorebase-music-track-body { padding: 12px 14px; }
 .lorebase-music-edit-modal .lorebase-music-track-body .lorebase-editmode-rating-head button { width: 28px; height: 28px; min-height: 28px; padding: 6px; background: transparent; border: 0; box-shadow: none; }
-.lorebase-music-tracklist-tools > button:has(svg) { display: inline-flex; align-items: center; flex-direction: row-reverse; gap: 5px; }
+.lorebase-music-tracklist-tools > .lorebase-music-tracklist-icon { display: inline-flex; align-items: center; flex-direction: row-reverse; gap: 5px; }
 .lorebase-music-edit-modal .lorebase-music-tracklist-tools > button:last-child { padding: 5px 7px; border-color: transparent; }
 .lorebase-music-edit-modal .lorebase-music-tracklist-tools > button:last-child svg { width: 16px; height: 16px; }
 .lorebase-music-edit-modal .lorebase-editmode-column-right .lorebase-music-listening-panel { gap: 8px; padding: 12px; }
 .lorebase-music-listening-panel .lorebase-editmode-panel-title { font-size: 11px; }
-.lorebase-music-listening-body:has(.lorebase-music-count-row) { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lorebase-music-listening-body.has-listening-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .lorebase-music-listening-panel .lorebase-music-sidebar-hint { font-size: 11px; }
 @media (max-width: 1100px) {
     .lorebase-music-edit-modal .lorebase-music-track-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -536,11 +534,11 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-deezer-inline-controls[hidden] { display: none; }
 .lorebase-deezer-inline-controls > span { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .lorebase-deezer-range { position: relative; min-width: 0; width: 100%; height: 24px; }
-.lorebase-deezer-range-rail { position: absolute; left: 4px; right: 4px; top: 50%; height: 3px; border-radius: 3px; background: var(--background-modifier-border); transform: translateY(-50%); }
+.lorebase-deezer-range-rail { pointer-events: none; position: absolute; left: 4px; right: 4px; top: 50%; height: 3px; border-radius: 3px; background: var(--background-modifier-border); transform: translateY(-50%); }
 .lorebase-deezer-range-fill { position: absolute; inset: 0 auto 0 0; width: var(--lorebase-seek-progress, 0%); border-radius: inherit; background: var(--lorebase-accent, var(--interactive-accent)); }
 .lorebase-deezer-range-thumb { position: absolute; left: var(--lorebase-seek-progress, 0%); top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--lorebase-accent, var(--interactive-accent)); transform: translate(-50%, -50%); }
 .lorebase-deezer-range:focus-within .lorebase-deezer-range-rail { outline: 1px solid var(--text-accent); outline-offset: 3px; }
-.lorebase-deezer-range:has(input:disabled) { opacity: .45; }
+.lorebase-deezer-range input:disabled + .lorebase-deezer-range-rail { opacity: .45; }
 .lorebase-deezer-inline-controls .lorebase-deezer-range input[type=range] { position: absolute; inset: 0; appearance: none; -webkit-appearance: none; opacity: 0; width: 100%; min-width: 0; height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; transform: none; cursor: pointer; }
 .lorebase-music-edit-modal .lorebase-deezer-inline-controls button { display: grid; place-items: center; width: 24px; height: 24px; min-height: 24px; padding: 4px; border: 0; box-shadow: none; background: transparent; color: var(--text-muted); }
 .lorebase-deezer-inline-controls button svg { width: 14px; height: 14px; }
@@ -555,7 +553,7 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-track-body .lorebase-editmode-stars { order: 1; }
 .lorebase-music-track-body .lorebase-editmode-rating-value { order: 2; }
 .lorebase-music-edit-modal .lorebase-music-track-body .lorebase-editmode-rating-head { order: 3; flex: 0 0 auto; width: auto; }
-.lorebase-music-track-body .lorebase-editmode-rating-value.is-unrated:not(:has(input)) { display: none; }
+.lorebase-music-track-body .lorebase-editmode-rating-value.is-unrated:not(.lorebase-rating-tenths-readout) { display: none; }
 @keyframes lorebase-deezer-loading { to { transform: rotate(360deg); } }
 @media (max-width: 1100px) {
     .lorebase-music-edit-modal .lorebase-music-track-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -601,4 +599,4 @@ details.lorebase-note-tracklist { width: 100%; padding: 0; margin: 20px 0; borde
 .lorebase-music-edit-modal .lorebase-music-track-artist button:hover { color: var(--text-normal); text-decoration: underline; text-underline-offset: 3px; }
 .lorebase-music-edit-modal .lorebase-music-track-artist button:focus-visible { outline: 1px solid var(--text-accent); outline-offset: 3px; border-radius: 2px; }
 .lorebase-music-edit-modal .lorebase-music-track-artist button[aria-busy=true] { opacity: .5; cursor: progress; }
-.lorebase-music-track-heading:has(.lorebase-music-track-artist.is-expanded) { padding-top: 10px; padding-bottom: 10px; }
+.lorebase-music-track-heading.has-expanded-credits { padding-top: 10px; padding-bottom: 10px; }

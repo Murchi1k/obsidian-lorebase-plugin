@@ -470,6 +470,7 @@ function renderProviders(context: SettingsSectionContext, container: HTMLElement
             setting.settingEl.addClass('has-key');
             setting.settingEl.addClass('is-key-open');
             const keyRow = setting.settingEl.createDiv({ cls: 'lorebase-provider-key-row lorebase-provider-credentials' });
+            keyRow.classList.toggle('has-client-secret', needsClientSecret);
             const clientId = t('settingsIntegrationsProviderClientIdPlaceholder');
             createProviderCredential(keyRow, needsClientSecret ? clientId : providerApiKeyLabel(),
                 needsClientSecret ? clientId : t(id === 'steamgriddb'
@@ -824,6 +825,7 @@ export function renderTemplatesSection(context: SettingsSectionContext, containe
     const active = context.getActiveMediaTab('integrationTemplates');
     const selected = available.find(option => option.value === active) ?? available[0];
     if (selected) {
+        navigation.classList.toggle('has-seven-media', available.length >= 7);
         renderChoiceButtons(navigation, templateCopy('media'), available, selected.value, selectTemplateMedia);
         selectTemplateMedia(selected.value);
     }

@@ -43,6 +43,7 @@ export function bindCompactEditorChips(root: HTMLElement, lists: Record<ChipKind
     setIcon(toggle, 'plus');
 
     const updateOverflow = (): void => {
+        panel.classList.toggle('is-empty', composer.hidden && chips.childElementCount === 1);
         if (!chips.clientWidth) return;
         const items = Array.from(chips.querySelectorAll<HTMLElement>(':scope > :not([hidden])'));
         const rows = [...new Set(items.map(chip => chip.offsetTop))];

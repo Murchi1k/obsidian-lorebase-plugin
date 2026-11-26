@@ -65,9 +65,9 @@
 .lorebase-steam-progress-workspace .lorebase-sp-btn { min-width: 0; min-height: 34px; padding: 7px 13px; box-shadow: none; font-size: 13px; }
 .lorebase-steam-progress-workspace [hidden] { display: none; }
 /* Finished imports are a cover-led result, rather than a frozen progress screen. */
-.modal:has(.lorebase-steam-progress-workspace.is-finished) { width: 640px; max-width: min(94vw, 640px); }
-.modal:has(.lorebase-steam-progress-workspace.is-finished.is-single-result) { width: 520px; max-width: min(94vw, 520px); }
-.lorebase-add-workspace:has(.lorebase-steam-progress-workspace.is-finished) > .lorebase-select-header { display: none; }
+.modal.has-lorebase-sync-result { width: 640px; max-width: min(94vw, 640px); }
+.modal.has-lorebase-single-sync-result { width: 520px; max-width: min(94vw, 520px); }
+.lorebase-add-workspace.has-lorebase-sync-result > .lorebase-select-header { display: none; }
 .lorebase-steam-progress-workspace.is-finished .lorebase-sp-progress { display: none; }
 .lorebase-steam-progress-workspace.is-finished .lorebase-sp-header { gap: 10px; padding-right: 22px; }
 .lorebase-steam-progress-workspace.is-finished .lorebase-sp-title { font-size: 17px; font-weight: 600; color: var(--text-normal); }
@@ -88,7 +88,7 @@
 .lorebase-steam-progress-workspace.is-finished .lorebase-sp-row[data-status="failed"] .lorebase-sp-row-status { color: var(--text-error); }
 .lorebase-steam-progress-workspace.is-finished .lorebase-sp-footer { margin-top: 4px; padding-top: 14px; }
 @media (max-width: 620px) {
-    .modal.lorebase-select-modal-container:has(.lorebase-add-workspace.is-steam-sync) { position: fixed; inset: 0; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 0; border: 0; border-radius: 0; }
+    .modal.lorebase-select-modal-container.is-lorebase-sync { position: fixed; inset: 0; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 0; border: 0; border-radius: 0; }
     .modal.lorebase-select-modal-container .lorebase-add-workspace.is-steam-sync.modal-content { box-sizing: border-box; height: 100%; max-height: none; padding: 16px; }
     .lorebase-add-workspace.is-steam-sync .lorebase-steam-gallery { flex: 1 1 auto; min-height: 0; max-height: none; }
     .lorebase-add-workspace .lorebase-steam-filters { flex-wrap: wrap; justify-content: flex-start; gap: 14px; }
@@ -100,8 +100,8 @@
     .lorebase-add-workspace .lorebase-steam-sync-mode { padding-inline-start: 7px; font-size: 12px; }
     .lorebase-steam-progress-modal.lorebase-steam-progress-workspace { max-height: none; }
     .lorebase-steam-progress-workspace .lorebase-sp-list { max-height: 45vh; }
-    .modal.lorebase-select-modal-container:has(.lorebase-steam-progress-workspace.is-finished) { position: relative; inset: auto; width: calc(100vw - 28px); max-width: 520px; height: auto; max-height: 90dvh; border: 1px solid var(--background-modifier-border); border-radius: 12px; }
-    .modal.lorebase-select-modal-container .lorebase-add-workspace.is-steam-sync.modal-content:has(.is-finished) { height: auto; max-height: 90dvh; padding: 28px 20px 20px; }
+    .modal.lorebase-select-modal-container.has-lorebase-sync-result { position: relative; inset: auto; width: calc(100vw - 28px); max-width: 520px; height: auto; max-height: 90dvh; border: 1px solid var(--background-modifier-border); border-radius: 12px; }
+    .modal.lorebase-select-modal-container .lorebase-add-workspace.is-steam-sync.modal-content.has-lorebase-sync-result { height: auto; max-height: 90dvh; padding: 28px 20px 20px; }
     .lorebase-steam-progress-workspace.is-single-result .lorebase-sp-row[data-status] { grid-template-columns: 64px minmax(0, 1fr); gap: 14px; }
     .lorebase-steam-progress-workspace.is-single-result .lorebase-sp-art { width: 64px; height: 96px; }
     .lorebase-steam-progress-workspace.is-single-result .lorebase-sp-game { font-size: 17px; }

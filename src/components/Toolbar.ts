@@ -653,7 +653,7 @@ export class Toolbar {
             const spaceBelow = viewportHeight - rect.bottom - 12;
             const maxHeight = Math.min(360, Math.max(120, spaceBelow));
             panel.setCssStyles({
-                position: 'fixed', width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px`,
+                width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px`,
                 left: `${Math.max(8, Math.min(rect.left, viewportWidth - width - 8))}px`,
                 top: `${Math.min(rect.bottom + 4, viewportHeight - maxHeight - 8)}px`, maxHeight: `${maxHeight}px`,
             });

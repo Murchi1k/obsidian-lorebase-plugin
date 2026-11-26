@@ -152,8 +152,11 @@ export function reviewNoteImportInline(
             return;
         }
         const content = host.createDiv();
+        const settings = host.closest('.lorebase-import-settings');
+        settings?.classList.add('is-reviewing');
         const finish = (result: NoteImportReviewResult | null): void => {
             signal.removeEventListener('abort', cancel);
+            settings?.classList.remove('is-reviewing');
             content.remove();
             resolve(result);
         };

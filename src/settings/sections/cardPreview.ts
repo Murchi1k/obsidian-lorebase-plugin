@@ -347,7 +347,7 @@ export function createCardPreview(
         drawing.style.lineHeight = reference?.lineHeight ?? '';
         if (media === 'book' && view.bookshelfEffect) {
             drawing.addClass('is-bookshelf-preview');
-            drawing.style.width = '340px';
+            drawing.style.removeProperty('width');
             const shelf = drawing.createDiv({ cls: 'lorebase-bookshelf' });
             const books = loaded.filter(item => item.type === 'book').slice(0, 4);
             if (real?.type === 'book' && !books.some(book => book.filePath === real.filePath)) books.unshift(real);

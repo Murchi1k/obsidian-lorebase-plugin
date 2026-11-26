@@ -369,14 +369,16 @@ describe('global statistics window', () => {
         resize.dispatchEvent(new PointerEvent('pointerdown', { clientX: 1000, clientY: 220, pointerId: 1 }));
         resize.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 420, pointerId: 1 }));
         resize.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1 }));
-        expect(widget().style.gridColumn).toBe('span 6'); expect(widget().querySelector<HTMLElement>('.lb-stat-panel')!.style.minHeight).toBe('420px'); expect(widget().querySelector<HTMLElement>('.lb-stat-panel')!.style.height).toBe('420px');
-        widget().querySelector<HTMLButtonElement>('.lb-stat-widget-width')!.click(); expect(widget().style.gridColumn).toBe('span 12');
-        widget().querySelector<HTMLButtonElement>('.lb-stat-widget-width')!.click(); expect(widget().style.gridColumn).toBe('span 6');
+        const span = (element: HTMLElement) => element.style.getPropertyValue('--stat-widget-span');
+        expect(span(widget())).toBe('6');
+        expect(widget().querySelector<HTMLElement>('.lb-stat-panel')!.style.getPropertyValue('--stat-widget-height')).toBe('420px');
+        widget().querySelector<HTMLButtonElement>('.lb-stat-widget-width')!.click(); expect(span(widget())).toBe('12');
+        widget().querySelector<HTMLButtonElement>('.lb-stat-widget-width')!.click(); expect(span(widget())).toBe('6');
         widget().querySelector<HTMLButtonElement>('.lb-stat-fold')!.click();
         await vi.waitFor(() => expect(settings.statisticsDashboard?.widgets['overview-time']).toMatchObject({ order, span: 6, height: 420, collapsed: true }));
         modal.onClose(); const reopened = mount(); await vi.waitFor(() => expect(reopened.contentEl.querySelector('.lb-stat-kpi')).not.toBeNull());
         const restored = reopened.contentEl.querySelector<HTMLElement>('[data-widget="overview-time"]')!;
-        expect(restored.classList.contains('is-collapsed')).toBe(true); expect(restored.style.gridColumn).toBe('span 6'); expect(Number(restored.style.order)).toBe(order);
+        expect(restored.classList.contains('is-collapsed')).toBe(true); expect(span(restored)).toBe('6'); expect(Number(restored.style.order)).toBe(order);
         expect(reopened.contentEl.querySelector('.lb-stat-widget-tools')).toBeNull();
     });
     it('zooms and pans the map, suppresses country activation after dragging and resets the view', async () => {

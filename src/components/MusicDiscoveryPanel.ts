@@ -40,6 +40,7 @@ export class MusicDiscoveryPanel {
     private paintStats(message?: string): void {
         this.stats.empty();
         const stats = this.draft.listeningStats;
+        this.stats.classList.toggle('has-listening-stats', !!stats);
         if (stats) {
             for (const [key, label, icon] of [['listeners', 'listeners', 'users'], ['plays', 'plays', 'headphones']] as const) {
                 const row = this.stats.createDiv({ cls: 'lorebase-music-count-row' });

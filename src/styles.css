@@ -98,7 +98,7 @@
    TOOLBAR - Minimal zones
    ============================================================================= */
 
-.lorebase-toolbar:has(.lorebase-search-suggestions:not([hidden])) { z-index: 100; }
+.lorebase-toolbar.has-search-suggestions { z-index: 100; }
 .lorebase-search-container { position: relative; }
 .lorebase-search-suggestions { position: absolute; top: calc(100% + 7px); left: 0; width: 100%; z-index: 100; padding: 5px; max-height: 300px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 12px; background: var(--background-secondary); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }
 .lorebase-search-suggestions[hidden] { display: none; }
@@ -617,6 +617,8 @@
     z-index: 1200;
 }
 
+.lorebase-settings-dropdown-panel.is-measuring { top: 0; visibility: hidden; }
+
 .lorebase-view-dropdown.is-filter-picker .lorebase-settings-dropdown-btn {
     color: var(--lorebase-accent);
 }
@@ -1078,6 +1080,7 @@
    ============================================================================= */
 
 .lorebase-grid {
+    position: relative;
     display: grid;
     /* Column count is set dynamically via inline styles from TypeScript */
     grid-template-columns: repeat(5, 1fr);
@@ -1095,8 +1098,9 @@
 
 /* The virtualizer already bounds the DOM. Browser size placeholders here can
    change the scroll extent when a recycled card enters the viewport. */
+.lorebase-spacer { grid-column: 1 / -1; }
 .lorebase-grid.lorebase-virtual-grid { overflow-anchor: none; }
-.lorebase-virtual-grid > .lorebase-card { content-visibility: visible; contain-intrinsic-size: none; }
+.lorebase-virtual-grid > .lorebase-card { position: absolute; content-visibility: visible; contain-intrinsic-size: none; }
 
 
 /* =============================================================================
@@ -1120,7 +1124,7 @@
 .lorebase-content > .lorebase-view-group-section { display: flow-root; margin-bottom: var(--lorebase-group-margin, 24px); }
 .lorebase-view-group-section:first-child { padding-top: var(--lorebase-group-padding, 16px); }
 .lorebase-view-group-section > .lorebase-view-group-title { height: 36px; line-height: 36px; margin: 0 var(--lorebase-group-padding, 16px); }
-.lorebase-virtual-group-grid > .lorebase-virtual-group-title { margin: 0; line-height: 36px; }
+.lorebase-virtual-group-grid > .lorebase-virtual-group-title { position: absolute; margin: 0; line-height: 36px; }
 
 /* Scrolling under a stationary pointer should not animate every passing cover. */
 .lorebase-view.is-scrolling .lorebase-card,
@@ -1219,6 +1223,8 @@
     flex: 0 0 auto;
     background-color: var(--lorebase-bg-tertiary);
 }
+
+.lorebase-card-image.lorebase-card-portrait-image { aspect-ratio: 2 / 3; }
 
 .lorebase-card-horizontal .lorebase-card-image {
     flex: 1 1 auto;
@@ -1768,6 +1774,15 @@
     border-bottom: 1px solid var(--lorebase-border);
 }
 
+.lorebase-preserve-scroll { overflow-anchor: none; }
+
+.lorebase-editmode-related-image-compact { height: 76px; min-height: 76px; }
+
+.lorebase-editmode-related-image-legacy {
+    height: 120px;
+    min-height: 120px;
+}
+
 .lorebase-editmode-related-type {
     position: absolute;
     left: 6px;
@@ -1920,10 +1935,6 @@
 
 .lorebase-editmode-dlc-star:hover {
     transform: translateY(-1px);
-}
-
-.lorebase-editmode-dlc-rating:has(.lorebase-editmode-dlc-star.is-custom-scale) {
-    flex-wrap: wrap;
 }
 
 .lorebase-editmode-dlc-star.is-custom-scale {
@@ -2193,7 +2204,7 @@
     top: 10px;
     left: 10px;
 }
-.lorebase-card-badge-group.is-top-left:has(> .lorebase-card-community-rating) {
+.lorebase-card-badge-group.is-top-left.has-community-rating {
     justify-content: flex-start;
 }
 
@@ -3236,7 +3247,7 @@
     grid-auto-flow: column;
     place-content: center;
     align-items: baseline;
-    column-gap: 4px;
+    gap: 0 4px;
     min-height: 74px;
     border: 1px solid color-mix(in srgb, var(--interactive-accent) 34%, transparent);
     border-radius: 8px;
@@ -4556,8 +4567,9 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    color: #ffd98b;
-    clip-path: inset(0 var(--lorebase-rating-star-clip, 50%) 0 0);
+    background: linear-gradient(to right, #ffd98b calc(100% - var(--lorebase-rating-star-clip, 50%)), transparent 0);
+    background-clip: text;
+    color: transparent;
     pointer-events: none;
 }
 
@@ -7051,7 +7063,7 @@ input.lorebase-rating-tenths-input:invalid {
     }
 
     .lorebase-template-media-nav .lorebase-settings-choices button { grid-column: span 4; }
-    .lorebase-template-media-nav .lorebase-settings-choices:has(> button:nth-child(7)) button:nth-child(-n+4) {
+    .lorebase-template-media-nav.has-seven-media .lorebase-settings-choices button:nth-child(-n+4) {
         grid-column: span 3;
     }
 }
@@ -8958,7 +8970,6 @@ input.lorebase-rating-tenths-input:invalid {
 
 .lorebase-steam-sync-tab.is-active {
     background: var(--background-primary);
-    color: var(--text-normal);
     color: var(--text-accent);
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.09), 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
 }
@@ -15195,10 +15206,12 @@ a.lorebase-about-meta-value:hover {
     top: 0;
     left: 12px;
     padding: 3px 4px 9px;
-    background: #5b302b;
+    background:
+        linear-gradient(#5b302b, #5b302b) top / 100% 78% no-repeat,
+        linear-gradient(to bottom right, #5b302b 50%, transparent 51%) bottom left / 50% 22% no-repeat,
+        linear-gradient(to bottom left, #5b302b 50%, transparent 51%) bottom right / 50% 22% no-repeat;
     color: #f5db97;
     font-size: 11px;
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
 }
 @keyframes lorebase-book-reveal {
     from { opacity: .25; transform: perspective(600px) rotateY(-16deg); }
@@ -15357,7 +15370,7 @@ a.lorebase-about-meta-value:hover {
 .lorebase-status-color-control:focus-within { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
 .lorebase-status-compact-list .lorebase-status-compact-row { position: relative; border: 0; border-radius: 8px; }
 .lorebase-status-compact-list .lorebase-status-compact-row:not(:last-child)::after { content: ''; position: absolute; left: 38px; right: 8px; bottom: 0; height: 1px; background: color-mix(in srgb, var(--background-modifier-border) 35%, transparent); pointer-events: none; }
-.lorebase-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.lorebase-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @container (max-width: 520px) {
     .lorebase-status-two-columns .lorebase-status-compact-panel .lorebase-status-compact-list,
     .lorebase-status-two-columns .lorebase-status-compact-panel .lorebase-plan-editor-list { grid-template-columns: minmax(0, 1fr); }
@@ -16196,7 +16209,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
 }
 
 @container lorebase-settings (max-width: 480px) {
-    .lorebase-settings .setting-item:has(.lorebase-settings-choices) {
+    .lorebase-settings .setting-item.has-lorebase-choices {
         flex-direction: column;
         align-items: flex-start;
     }
@@ -16254,7 +16267,6 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
     gap: 8px;
     margin: 0;
     padding: 0;
-    text-indent: 0;
     color: var(--text-normal);
     font-size: 0.94em;
     font-weight: 600;
@@ -16480,7 +16492,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    column-gap: 8px;
+    gap: 0 8px;
     color: var(--text-muted);
     font-size: 0.85em;
 }
@@ -16703,7 +16715,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
     cursor: ew-resize;
 }
 
-.lorebase-rating-ruler:has(.lorebase-rating-preview-input:focus-visible) {
+.lorebase-rating-ruler:focus-within {
     outline: 2px solid var(--lorebase-accent);
     outline-offset: 7px;
     border-radius: 3px;
@@ -16834,7 +16846,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
     background: var(--settings-surface);
 }
 
-.lorebase-settings-reset:has(.lorebase-reset-trigger[aria-expanded="true"]) {
+.lorebase-settings-reset.is-confirming {
     border-color: color-mix(in srgb, var(--text-error) 62%, var(--settings-border));
     background: color-mix(in srgb, var(--text-error) 8%, var(--settings-surface));
 }
@@ -17306,9 +17318,9 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
 .lorebase-import-summary dd { margin: 6px 0 0; color: var(--text-normal); overflow-wrap: anywhere; }
 .lorebase-import-summary > div:last-child dd { margin: 0; }
 .lorebase-import-overview.is-replace .lorebase-import-summary > div:last-child dd { color: var(--text-error); }
-.lorebase-import-preview:has(.lorebase-note-import-review) .lorebase-import-overview .lorebase-import-heading,
-.lorebase-import-settings:has(.lorebase-note-import-review) .lorebase-import-scan { display: none; }
-.lorebase-import-preview:has(.lorebase-note-import-review) .lorebase-import-summary { margin-top: 0; }
+.lorebase-import-settings.is-reviewing .lorebase-import-preview .lorebase-import-overview .lorebase-import-heading,
+.lorebase-import-settings.is-reviewing .lorebase-import-scan { display: none; }
+.lorebase-import-settings.is-reviewing .lorebase-import-preview .lorebase-import-summary { margin-top: 0; }
 
 .lorebase-inline-import-review .lorebase-note-import-review { gap: 9px; }
 .lorebase-inline-import-review .lorebase-nir-title-text { font-size: 1em; }
@@ -17320,7 +17332,10 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
     border-radius: 5px;
     background: var(--settings-surface);
 }
-.lorebase-inline-import-review .lorebase-nir-path { display: contents; }
+.lorebase-inline-import-review .lorebase-nir-path { display: grid; grid-column: 1 / -1; grid-template-columns: max-content minmax(0, 1fr); gap: inherit; }
+@supports (grid-template-columns: subgrid) {
+    .lorebase-inline-import-review .lorebase-nir-path { grid-template-columns: subgrid; }
+}
 .lorebase-inline-import-review .lorebase-nir-path-value { overflow-wrap: anywhere; white-space: normal; }
 .lorebase-inline-import-review .lorebase-nir-path-label { color: var(--text-muted); font-size: 0.78em; }
 .lorebase-inline-import-review .lorebase-nir-row.is-selected {
@@ -17975,7 +17990,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
 }
 
 @container (min-width: 480px) {
-    .lorebase-settings .lorebase-provider-directory .lorebase-provider-setting .lorebase-provider-credentials:has(> .lorebase-provider-credential:nth-child(2)) {
+    .lorebase-settings .lorebase-provider-directory .lorebase-provider-setting .lorebase-provider-credentials.has-client-secret {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
@@ -18308,7 +18323,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
 
 .lorebase-steam-import-option input { margin: 0; flex: none; }
 .lorebase-steam-import-option .setting-item-description { display: block; }
-.lorebase-steam-import-option:is(:hover, :has(input:checked)) { color: var(--text-normal); }
+.lorebase-steam-import-option:hover, .lorebase-steam-import-option input:checked + span { color: var(--text-normal); }
 
 .lorebase-steam-sync .lorebase-steam-import-row select.lorebase-sync-select { width: min(100%, 300px); min-width: 0; }
 
@@ -18343,7 +18358,7 @@ button.lorebase-criterion-action:hover { color: var(--text-normal); background: 
 .lorebase-card-appearance .lorebase-music-cover-setting { padding: 0 0 16px; margin: 0 0 16px; }
 .lorebase-card-mini-drawing.is-bookshelf-preview .lorebase-bookshelf { display: flex; align-items: flex-end; justify-content: center; flex-wrap: nowrap; gap: 5px; padding: 0 8px; min-height: 300px; height: 300px; box-sizing: border-box; }
 .lorebase-card-mini-drawing.is-bookshelf-preview .lorebase-book-spine { flex-shrink: 0; min-width: 0; }
-.lorebase-card-mini-drawing.is-bookshelf-preview { position: absolute; }
+.lorebase-card-mini-drawing.is-bookshelf-preview { position: absolute; width: 340px; }
 .lorebase-card-mini-drawing :is(.lorebase-music-card-title, .lorebase-music-card-meta) { cursor: move; touch-action: none; user-select: none; }
 .lorebase-card-mini-drawing .is-music .lorebase-card-badge-group { pointer-events: auto; }
 .lorebase-card-preview-toolbar[hidden] { display: none; }

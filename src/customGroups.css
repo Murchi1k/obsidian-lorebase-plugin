@@ -30,7 +30,7 @@
 .lorebase-group-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--group-color) 40%, var(--background-modifier-border)); border-radius: 12px; background: linear-gradient(125deg, color-mix(in srgb, var(--group-color) 34%, var(--background-secondary)), color-mix(in srgb, var(--group-color) 9%, var(--background-primary))); }
 .lorebase-group-card:focus-within, .lorebase-group-card:hover { border-color: color-mix(in srgb, var(--group-color) 80%, var(--background-modifier-border)); }
 .lorebase-custom-groups .lorebase-group-card-open { display: block; position: relative; width: 100%; height: 222px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: left; color: var(--text-normal); }
-.lorebase-group-card-open:focus-visible { outline-offset: -3px !important; }
+.lorebase-custom-groups .lorebase-group-card-open:focus-visible { outline-offset: -3px; }
 .lorebase-group-card-covers { position: absolute; top: 16px; right: 24px; width: 174px; height: 156px; pointer-events: none; }
 .lorebase-group-cover { display: grid; position: absolute; top: 0; right: 0; width: 94px; height: 141px; overflow: hidden; place-items: center; border: 1px solid color-mix(in srgb, var(--group-color) 60%, var(--background-modifier-border)); border-radius: 6px; background: linear-gradient(145deg, color-mix(in srgb, var(--group-color) 24%, var(--background-secondary)), var(--background-primary)); color: var(--group-color); box-shadow: 0 9px 18px rgb(0 0 0 / 24%); transform-origin: center 85%; transform: translate(-5px, 4px) rotate(11deg); }
 .lorebase-group-cover:nth-child(1) { z-index: 3; transform: translate(-72px, 12px) rotate(-17deg); }
@@ -52,7 +52,7 @@
 .lorebase-group-card-description.is-empty { color: var(--text-faint); }
 .lorebase-group-card-footer { display: flex; position: absolute; left: 0; right: 0; bottom: 0; align-items: center; gap: 8px; height: 40px; padding: 0 18px 12px; color: var(--text-normal); font-size: 11px; }
 .lorebase-custom-groups .lorebase-groups-pin[aria-pressed="true"] { border-color: color-mix(in srgb, var(--group-color, var(--interactive-accent)) 65%, var(--background-modifier-border)); background: color-mix(in srgb, var(--group-color, var(--interactive-accent)) 15%, var(--background-secondary)); color: var(--text-normal); }
-.lorebase-groups-show-more { display: flex !important; margin: 18px auto 0; }
+.lorebase-custom-groups .lorebase-groups-show-more:not([hidden]) { display: flex; margin: 18px auto 0; }
 .lorebase-groups-toolbar { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; margin-bottom: 16px; }
 .lorebase-groups-title { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
 .lorebase-groups-title h3 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; font-weight: 600; color: var(--text-normal); }

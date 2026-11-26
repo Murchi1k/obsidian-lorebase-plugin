@@ -23,7 +23,7 @@ export function mountTenthsRating(
     input.autocomplete = 'off';
     input.addEventListener('focus', () => input.select());
     input.addEventListener('click', () => input.select());
-    readout.createEl('span', { text: '/ ' + max, attr: { 'aria-hidden': 'true' } });
+    readout.createSpan({ text: '/ ' + max, attr: { 'aria-hidden': 'true' } });
 
     input.addEventListener('input', () => {
         const value = parseInput(input.value, max, step);

@@ -164,11 +164,19 @@ export class SteamSyncProgressModal extends Modal {
         this.unsubscribeController = this.controller.onChange(() => this.syncControls());
     }
 
+    private syncResultLayout(finished: boolean, single: boolean): void {
+        const modal = this.inline ? this.root.closest('.modal') : this.modalEl;
+        modal?.classList.toggle('has-lorebase-sync-result', finished);
+        modal?.classList.toggle('has-lorebase-single-sync-result', single);
+        this.root.closest('.lorebase-add-workspace')?.classList.toggle('has-lorebase-sync-result', finished);
+    }
+
     onClose(): void {
         if (!this.finished) this.controller.cancel();
         this.unsubscribeController?.();
         this.removeAbort?.();
         if (!this.inline) this.modalEl.removeClass('lorebase-steam-progress-modal-container');
+        this.syncResultLayout(false, false);
         this.root.empty();
     }
 
@@ -315,8 +323,10 @@ export class SteamSyncProgressModal extends Modal {
         const state = this.finished ? this.fatalError ? 'failed' : this.haltReason ?? (this.controller.isCancelled() ? 'cancelled' : this.results.failed ? 'errors' : 'complete')
             : this.controller.isCancelled() ? 'cancelling' : this.controller.isPaused() ? 'paused' : 'running';
         this.root.setAttribute('data-state', state);
+        const singleResult = this.finished && this.candidates.length === 1;
         this.root.toggleClass('is-finished', this.finished);
-        this.root.toggleClass('is-single-result', this.finished && this.candidates.length === 1);
+        this.root.toggleClass('is-single-result', singleResult);
+        this.syncResultLayout(this.finished, singleResult);
         if (this.headerIcon) {
             this.headerIcon.empty();
             setIcon(this.headerIcon, this.finished ? (state === 'complete' ? 'circle-check' : state === 'cancelled' ? 'circle-stop' : 'circle-alert') : state === 'paused' ? 'pause' : 'loader-circle');

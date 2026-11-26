@@ -20,12 +20,12 @@ export class TrackArtistCredits {
         this.generation++;
         this.root.replaceChildren();
         this.root.classList.toggle('is-expanded', this.expanded);
+        this.root.closest('.lorebase-music-track-heading')?.classList.toggle('has-expanded-credits', this.expanded);
         if (!this.names.length) return;
-        const prefix = document.createElement('span'); prefix.textContent = `${mt('creditFeat')} `;
-        this.root.append(prefix);
+        this.root.createSpan({ text: `${mt('creditFeat')} ` });
         const visible = this.expanded ? this.names : this.names.slice(0, 2);
         visible.forEach((name, index) => {
-            if (index) this.root.append(document.createTextNode(', '));
+            if (index) this.root.append(this.root.ownerDocument.createTextNode(', '));
             const link = this.button(name, 'lorebase-music-artist-link');
             link.disabled = !areOnlineExtrasEnabled();
             link.title = `${mt('discography')}: ${name}`;
@@ -39,15 +39,15 @@ export class TrackArtistCredits {
             });
         });
         if (this.names.length > 2) {
-            this.root.append(document.createTextNode(' · '));
+            this.root.append(this.root.ownerDocument.createTextNode(' · '));
             const more = this.button(this.expanded ? mt('fewerArtists') : `${mt('moreArtists')} +${this.names.length - 2}`, 'lorebase-music-artists-more');
             more.setAttribute('aria-expanded', String(this.expanded));
             more.addEventListener('click', () => { this.expanded = !this.expanded; this.render(); });
         }
     }
     private button(text: string, cls: string): HTMLButtonElement {
-        const button = document.createElement('button'); button.type = 'button'; button.className = cls; button.textContent = text;
+        const button = this.root.createEl('button', { cls, text, attr: { type: 'button' } });
         button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
-        this.root.append(button); return button;
+        return button;
     }
 }

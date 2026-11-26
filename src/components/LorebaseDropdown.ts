@@ -80,8 +80,8 @@ export function createLorebaseDropdown<T extends string>(
             Math.max(160, viewportWidth - edge * 2)
         );
 
+        panel.classList.add('is-measuring');
         panel.setCssStyles({
-            position: 'fixed',
             width: `${width}px`,
             minWidth: `${width}px`,
             maxWidth: `${width}px`,
@@ -89,8 +89,6 @@ export function createLorebaseDropdown<T extends string>(
                 Math.max(edge, buttonRect.left),
                 Math.max(edge, viewportWidth - width - edge)
             )}px`,
-            top: '0px',
-            visibility: 'hidden',
         });
 
         const spaceBelow = Math.max(0, viewportHeight - buttonRect.bottom - gap - edge);
@@ -103,7 +101,8 @@ export function createLorebaseDropdown<T extends string>(
         const top = openAbove
             ? Math.max(edge, buttonRect.top - gap - panelHeight)
             : Math.min(buttonRect.bottom + gap, viewportHeight - edge - panelHeight);
-        panel.setCssStyles({ top: `${Math.max(edge, top)}px`, visibility: '' });
+        panel.setCssStyles({ top: `${Math.max(edge, top)}px` });
+        panel.classList.remove('is-measuring');
     };
 
     const close = (): void => {

@@ -93,8 +93,7 @@ export class RelatedMediaEditor {
             return;
         }
         image.createSpan({ cls: 'lorebase-editmode-related-type', text: typeLabel });
-        image.style.height = '120px';
-        image.style.minHeight = '120px';
+        image.classList.add('lorebase-editmode-related-image-legacy');
         row.createSpan({ cls: 'lorebase-editmode-related-title', text: item.title || item.path });
         if (readonly) return;
 

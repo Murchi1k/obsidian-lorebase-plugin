@@ -1089,11 +1089,9 @@ export class AnimeEditModal extends Modal {
                 this.reorderRelatedMedia(item.path);
                 this.renderRelatedMedia(root);
             });
-            const image = row.createDiv({ cls: 'lorebase-editmode-related-image' });
+            const image = row.createDiv({ cls: 'lorebase-editmode-related-image lorebase-editmode-related-image-compact' });
             image.setCssStyles({
                 backgroundImage: `url("${imageUrl.replace(/"/g, '\\"')}")`,
-                height: '76px',
-                minHeight: '76px',
             });
             image.createSpan({ cls: 'lorebase-editmode-related-type', text: this.getRelatedTypeLabel(item.type) });
             row.createSpan({ cls: 'lorebase-editmode-related-title', text: item.title || item.path });

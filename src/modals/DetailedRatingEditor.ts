@@ -26,8 +26,8 @@ export class DetailedRatingEditor {
         const labels = copy[i18n.getLanguage()] ?? copy.en;
         const details = parent.createEl('details', { cls: 'lorebase-detailed-rating' });
         const toggle = details.createEl('summary', { cls: 'lorebase-editmode-btn lorebase-editmode-btn-ghost lorebase-detailed-rating-toggle' });
-        toggle.createEl('span', { text: labels.toggle });
-        setIcon(toggle.createEl('span', { cls: 'lorebase-detailed-rating-chevron', attr: { 'aria-hidden': 'true' } }), 'chevron-down');
+        toggle.createSpan({ text: labels.toggle });
+        setIcon(toggle.createSpan({ cls: 'lorebase-detailed-rating-chevron', attr: { 'aria-hidden': 'true' } }), 'chevron-down');
         const body = details.createDiv({ cls: 'lorebase-detailed-rating-body' });
         details.addEventListener('toggle', () => {
             if (details.open && this.rows === undefined) {
@@ -43,7 +43,7 @@ export class DetailedRatingEditor {
                 const caption = line.createDiv({ cls: 'lorebase-criterion-caption' });
                 const name = caption.createEl('input', { cls: 'lorebase-criterion-name', attr: { type: 'text', 'aria-label': labels.name } });
                 name.value = row.name;
-                const value = line.createEl('span', { cls: 'lorebase-criterion-value', attr: { 'aria-live': 'polite' } });
+                const value = line.createSpan({ cls: 'lorebase-criterion-value', attr: { 'aria-live': 'polite' } });
                 const stars = line.createDiv({ cls: `lorebase-editmode-stars lorebase-criterion-stars${this.settings.mode === 'custom' ? ' is-custom-scale' : ''}`, attr: { role: 'group', 'aria-label': row.name } });
                 const actions = line.createDiv({ cls: 'lorebase-criterion-actions' });
                 const clear = actions.createEl('button', { cls: 'lorebase-criterion-action', attr: { type: 'button', 'aria-label': t('editClear'), title: t('editClear') } });
